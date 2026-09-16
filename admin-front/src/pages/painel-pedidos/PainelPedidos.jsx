@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import Card from '@mui/material/Card'
 import CardContent from '@mui/material/CardContent'
 import CardActionArea from '@mui/material/CardActionArea'
@@ -8,41 +8,15 @@ import Stack from '@mui/material/Stack'
 import Alert from '@mui/material/Alert'
 import Snackbar from '@mui/material/Snackbar'
 import CircularProgress from '@mui/material/CircularProgress'
-import { getPedidos, updatePedidoStatus } from './service/pedidos.service.js'
 import { PEDIDO_STATUS, formatarHorario } from './service/pedidos.model.js'
+import { usePedidos } from './usePedidos.js'
 import PedidoDetalhe from './components/PedidoDetalhe.jsx'
 import PageHeader from '../../components/layout/PageHeader.jsx'
 
 function PainelPedidos() {
-  const [pedidos, setPedidos] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState(null)
-  const [pedidoSelecionado, setPedidoSelecionado] = useState(null)
-  const [toast, setToast] = useState({ open: false, message: '', severity: 'success' })
-
-  useEffect(() => {
-    getPedidos()
-      .then(setPedidos)
-      .catch((err) => setError(err.message))
-      .finally(() => setLoading(false))
-  }, [])
-
-  async function handleStatusChange(id, status) {
-    try {
-      const pedidoAtualizado = await updatePedidoStatus(id, status)
-      setPedidos((atuais) =>
-        atuais.map((pedido) => (pedido.id === id ? pedidoAtualizado : pedido)),
-      )
-      setPedidoSelecionado(pedidoAtualizado)
-      setToast({ open: true, message: 'Status atualizado.', severity: 'success' })
-    } catch (err) {
-      setToast({ open: true, message: `Erro ao atualizar status: ${err.message}`, severity: 'error' })
-    }
-  }
-
-  function handleCloseToast() {
-    setToast((atual) => ({ ...atual, open: false }))
-  }
+  const { pedidos, loading, error, toast, handleStatusChange, handleCloseToast } = usePedidos()
+  const [pedidoSelecionadoId, setPedidoSelecionadoId] = useState(null)
+  const pedidoSelecionado = pedidos.find((pedido) => pedido.id === pedidoSelecionadoId) ?? null
 
   if (loading) {
     return <CircularProgress />
@@ -58,7 +32,7 @@ function PainelPedidos() {
       <Stack spacing={2}>
         {pedidos.map((pedido) => (
           <Card key={pedido.id}>
-            <CardActionArea onClick={() => setPedidoSelecionado(pedido)}>
+            <CardActionArea onClick={() => setPedidoSelecionadoId(pedido.id)}>
               <CardContent>
                 <Stack spacing={1}>
                   <Typography variant="subtitle1">
@@ -86,7 +60,7 @@ function PainelPedidos() {
       <PedidoDetalhe
         pedido={pedidoSelecionado}
         open={Boolean(pedidoSelecionado)}
-        onClose={() => setPedidoSelecionado(null)}
+        onClose={() => setPedidoSelecionadoId(null)}
         onStatusChange={handleStatusChange}
       />
 
