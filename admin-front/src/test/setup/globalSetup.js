@@ -31,7 +31,12 @@ export default async function setup() {
     stdio: 'ignore',
   })
 
-  await waitForServer(`http://localhost:${PORT}/pedidos`)
+  try {
+    await waitForServer(`http://localhost:${PORT}/pedidos`)
+  } catch (err) {
+    child.kill()
+    throw err
+  }
 
   return async () => {
     child.kill()
