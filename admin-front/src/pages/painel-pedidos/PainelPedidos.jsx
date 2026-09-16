@@ -9,7 +9,7 @@ import Alert from '@mui/material/Alert'
 import Snackbar from '@mui/material/Snackbar'
 import CircularProgress from '@mui/material/CircularProgress'
 import { getPedidos, updatePedidoStatus } from './service/pedidos.service.js'
-import { PEDIDO_STATUS } from './service/pedidos.model.js'
+import { PEDIDO_STATUS, formatarHorario } from './service/pedidos.model.js'
 import PedidoDetalhe from './components/PedidoDetalhe.jsx'
 import PageHeader from '../../components/layout/PageHeader.jsx'
 
@@ -68,7 +68,7 @@ function PainelPedidos() {
                     {pedido.servico}
                   </Typography>
                   <Typography variant="body2" color="text.secondary">
-                    {new Date(pedido.horario).toLocaleString('pt-BR')}
+                    {formatarHorario(pedido.horario)}
                   </Typography>
                   <Chip
                     label={PEDIDO_STATUS[pedido.status]?.label ?? pedido.status}

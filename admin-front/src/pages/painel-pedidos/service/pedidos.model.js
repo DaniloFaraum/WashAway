@@ -14,6 +14,14 @@
  * @property {string[]} fotos
  */
 
+/**
+ * @param {string} horario
+ * @returns {string}
+ */
+export function formatarHorario(horario) {
+  return new Date(horario).toLocaleString('pt-BR')
+}
+
 export const PEDIDO_STATUS = {
   pendente: { label: 'Pendente', color: 'warning' },
   em_andamento: { label: 'Em andamento', color: 'info' },

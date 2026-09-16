@@ -11,7 +11,7 @@ import InputLabel from '@mui/material/InputLabel'
 import Select from '@mui/material/Select'
 import MenuItem from '@mui/material/MenuItem'
 import { FEATURE_FLAGS } from '../../../config/featureFlags.js'
-import { PEDIDO_STATUS } from '../service/pedidos.model.js'
+import { PEDIDO_STATUS, formatarHorario } from '../service/pedidos.model.js'
 
 function PedidoDetalhe({ pedido, open, onClose, onStatusChange }) {
   const [salvando, setSalvando] = useState(false)
@@ -35,7 +35,7 @@ function PedidoDetalhe({ pedido, open, onClose, onStatusChange }) {
         <Stack spacing={2} sx={{ mt: 1 }}>
           <Typography variant="body1">Serviço: {pedido.servico}</Typography>
           <Typography variant="body2" color="text.secondary">
-            Horário: {new Date(pedido.horario).toLocaleString('pt-BR')}
+            Horário: {formatarHorario(pedido.horario)}
           </Typography>
 
           <FormControl fullWidth disabled={salvando}>
