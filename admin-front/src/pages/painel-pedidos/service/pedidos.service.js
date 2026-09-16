@@ -1,7 +1,8 @@
 import { PEDIDOS_ROUTES } from './pedidos.routes.js'
 import { normalizePedido } from './pedidos.model.js'
+import { DEV_API_BASE_URL } from '../../../config/api.js'
 
-const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:3001'
+const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? DEV_API_BASE_URL
 
 /**
  * @param {string} path
