@@ -16,8 +16,6 @@ import { PEDIDO_STATUS, formatarHorario } from '../service/pedidos.model.js'
 function PedidoDetalhe({ pedido, open, onClose, onStatusChange }) {
   const [salvando, setSalvando] = useState(false)
 
-  if (!pedido) return null
-
   async function handleStatusChange(event) {
     const novoStatus = event.target.value
     setSalvando(true)
@@ -30,52 +28,56 @@ function PedidoDetalhe({ pedido, open, onClose, onStatusChange }) {
 
   return (
     <Dialog open={open} onClose={onClose} fullWidth maxWidth="sm">
-      <DialogTitle>{pedido.veiculo.modelo} — {pedido.veiculo.placa}</DialogTitle>
-      <DialogContent>
-        <Stack spacing={2} sx={{ mt: 1 }}>
-          <Typography variant="body1">Serviço: {pedido.servico}</Typography>
-          <Typography variant="body2" color="text.secondary">
-            Horário: {formatarHorario(pedido.horario)}
-          </Typography>
+      {pedido && (
+        <>
+          <DialogTitle>{pedido.veiculo.modelo} — {pedido.veiculo.placa}</DialogTitle>
+          <DialogContent>
+            <Stack spacing={2} sx={{ mt: 1 }}>
+              <Typography variant="body1">Serviço: {pedido.servico}</Typography>
+              <Typography variant="body2" color="text.secondary">
+                Horário: {formatarHorario(pedido.horario)}
+              </Typography>
 
-          <FormControl fullWidth disabled={salvando}>
-            <InputLabel id="pedido-status-label">Status</InputLabel>
-            <Select
-              labelId="pedido-status-label"
-              label="Status"
-              value={pedido.status}
-              onChange={handleStatusChange}
-            >
-              {Object.entries(PEDIDO_STATUS).map(([value, { label }]) => (
-                <MenuItem key={value} value={value}>
-                  {label}
-                </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
+              <FormControl fullWidth disabled={salvando}>
+                <InputLabel id="pedido-status-label">Status</InputLabel>
+                <Select
+                  labelId="pedido-status-label"
+                  label="Status"
+                  value={pedido.status}
+                  onChange={handleStatusChange}
+                >
+                  {Object.entries(PEDIDO_STATUS).map(([value, { label }]) => (
+                    <MenuItem key={value} value={value}>
+                      {label}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
 
-          {FEATURE_FLAGS.fotosPedido && (
-            <Stack spacing={1}>
-              <Typography variant="subtitle2">Fotos do veículo</Typography>
-              <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap' }}>
-                {pedido.fotos.map((foto) => (
-                  <img
-                    key={foto}
-                    src={foto}
-                    alt={`Foto do veículo ${pedido.veiculo.placa}`}
-                    width={120}
-                    height={90}
-                    style={{ objectFit: 'cover', borderRadius: 4 }}
-                  />
-                ))}
-              </Stack>
+              {FEATURE_FLAGS.fotosPedido && (
+                <Stack spacing={1}>
+                  <Typography variant="subtitle2">Fotos do veículo</Typography>
+                  <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap' }}>
+                    {pedido.fotos.map((foto) => (
+                      <img
+                        key={foto}
+                        src={foto}
+                        alt={`Foto do veículo ${pedido.veiculo.placa}`}
+                        width={120}
+                        height={90}
+                        style={{ objectFit: 'cover', borderRadius: 4 }}
+                      />
+                    ))}
+                  </Stack>
+                </Stack>
+              )}
             </Stack>
-          )}
-        </Stack>
-      </DialogContent>
-      <DialogActions>
-        <Button onClick={onClose}>Fechar</Button>
-      </DialogActions>
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={onClose}>Fechar</Button>
+          </DialogActions>
+        </>
+      )}
     </Dialog>
   )
 }
