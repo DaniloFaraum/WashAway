@@ -14,6 +14,12 @@
  * @property {string[]} fotos
  */
 
+export const PEDIDO_STATUS = {
+  pendente: { label: 'Pendente', color: 'warning' },
+  em_andamento: { label: 'Em andamento', color: 'info' },
+  concluido: { label: 'Concluído', color: 'success' },
+}
+
 /**
  * @param {any} raw
  * @returns {Pedido}

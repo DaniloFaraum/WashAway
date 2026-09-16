@@ -9,14 +9,9 @@ import Alert from '@mui/material/Alert'
 import Snackbar from '@mui/material/Snackbar'
 import CircularProgress from '@mui/material/CircularProgress'
 import { getPedidos, updatePedidoStatus } from './service/pedidos.service.js'
+import { PEDIDO_STATUS } from './service/pedidos.model.js'
 import PedidoDetalhe from './components/PedidoDetalhe.jsx'
 import PageHeader from '../../components/layout/PageHeader.jsx'
-
-const STATUS_CHIP = {
-  pendente: { label: 'Pendente', color: 'warning' },
-  em_andamento: { label: 'Em andamento', color: 'info' },
-  concluido: { label: 'Concluído', color: 'success' },
-}
 
 function PainelPedidos() {
   const [pedidos, setPedidos] = useState([])
@@ -76,8 +71,8 @@ function PainelPedidos() {
                     {new Date(pedido.horario).toLocaleString('pt-BR')}
                   </Typography>
                   <Chip
-                    label={STATUS_CHIP[pedido.status]?.label ?? pedido.status}
-                    color={STATUS_CHIP[pedido.status]?.color ?? 'default'}
+                    label={PEDIDO_STATUS[pedido.status]?.label ?? pedido.status}
+                    color={PEDIDO_STATUS[pedido.status]?.color ?? 'default'}
                     size="small"
                     sx={{ alignSelf: 'flex-start' }}
                   />

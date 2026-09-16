@@ -11,12 +11,7 @@ import InputLabel from '@mui/material/InputLabel'
 import Select from '@mui/material/Select'
 import MenuItem from '@mui/material/MenuItem'
 import { FEATURE_FLAGS } from '../../../config/featureFlags.js'
-
-const STATUS_LABELS = {
-  pendente: 'Pendente',
-  em_andamento: 'Em andamento',
-  concluido: 'Concluído',
-}
+import { PEDIDO_STATUS } from '../service/pedidos.model.js'
 
 function PedidoDetalhe({ pedido, open, onClose, onStatusChange }) {
   const [salvando, setSalvando] = useState(false)
@@ -51,7 +46,7 @@ function PedidoDetalhe({ pedido, open, onClose, onStatusChange }) {
               value={pedido.status}
               onChange={handleStatusChange}
             >
-              {Object.entries(STATUS_LABELS).map(([value, label]) => (
+              {Object.entries(PEDIDO_STATUS).map(([value, { label }]) => (
                 <MenuItem key={value} value={value}>
                   {label}
                 </MenuItem>
