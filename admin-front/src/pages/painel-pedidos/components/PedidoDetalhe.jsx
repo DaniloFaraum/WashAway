@@ -62,7 +62,7 @@ function PedidoDetalhe({ pedido, open, onClose, onStatusChange }) {
           {FEATURE_FLAGS.fotosPedido && (
             <Stack spacing={1}>
               <Typography variant="subtitle2">Fotos do veículo</Typography>
-              <Stack direction="row" spacing={1} flexWrap="wrap">
+              <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap' }}>
                 {pedido.fotos.map((foto) => (
                   <img
                     key={foto}

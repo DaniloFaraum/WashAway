@@ -53,7 +53,11 @@ O admin-front é organizado **por página**, não por camada técnica global. Es
 src/
 ├── config/
 │   └── featureFlags.js          # feature flags do projeto inteiro (ver seção 7)
-├── components/                  # SÓ componentes reaproveitados por 2+ páginas (hoje vazio/inexistente)
+├── components/                  # SÓ componentes reaproveitados por 2+ páginas
+│   └── layout/                  # shell da aplicação — ver seção 4.1
+│       ├── AppShell.jsx
+│       ├── Sidebar.jsx
+│       └── PageHeader.jsx
 ├── pages/
 │   └── <nome-da-pagina>/
 │       ├── <NomeDaPagina>.jsx   # componente de página, é o que a rota renderiza
@@ -66,16 +70,25 @@ src/
 │   ├── setup/                   # globalSetup do Vitest (sobe/derruba json-server de teste)
 │   ├── fixtures/                # db.json isolados para teste (nunca reaproveitar o de dev)
 │   └── <dominio>.service.test.js
-├── App.jsx                      # layout raiz (AppBar) + <Routes>
+├── App.jsx                      # <AppShell><Routes>...</Routes></AppShell>
 └── main.jsx                     # bootstrap: ThemeProvider + CssBaseline + BrowserRouter
 ```
 
 Regras derivadas dessa organização (aplicar em qualquer página nova):
 1. **Uma página, uma pasta.** Tudo que só aquela página usa (componente principal, subcomponentes, service) mora dentro de `src/pages/<pagina>/`.
-2. **`src/components/` é exceção, não regra.** Só criar/mover algo para lá quando um componente for genuinamente reaproveitado por 2 ou mais páginas. Não criar essa pasta "para o futuro" antecipadamente (YAGNI) — ela nasce quando o segundo uso aparece.
+2. **`src/components/` é exceção, não regra.** Só criar/mover algo para lá quando um componente for genuinamente reaproveitado por 2 ou mais páginas. Não criar essa pasta "para o futuro" antecipadamente (YAGNI) — ela nasce quando o segundo uso aparece. `components/layout/` (seção 4.1) foi o primeiro caso real: o shell é usado por toda página, não por uma só.
 3. **`service/` sempre com 3 arquivos separados** (`*.routes.js`, `*.model.js`, `*.service.js`), nunca um único arquivo monolítico. Motivo: quando o back-end real existir, a migração fica isolada em `*.routes.js` (e possivelmente `*.model.js`), sem tocar em quem consome o service.
 4. **`*.service.js` nunca hardcoda paths** — todo path vem de `*.routes.js`. Nunca hardcoda a forma do dado retornado sem passar por `*.model.js` (normalização).
 5. **Nenhum mock estático solto** (ex.: um array em `src/mocks/`). Dado de exemplo vive no `db.json` do `json-server` (dev) ou nas fixtures de teste — a página sempre busca dado através do `service`, nunca de um array hardcoded no componente.
+
+### 4.1 Shell da aplicação (`AppShell`, `Sidebar`, `PageHeader`)
+
+Toda página é renderizada dentro do shell definido em `src/App.jsx` (`<AppShell><Routes>...</Routes></AppShell>`) — nenhuma página deve montar seu próprio header ou navegação.
+
+- **`AppShell.jsx`**: layout raiz — `Drawer` permanente (sidebar) à esquerda + área de conteúdo à direita. Fixo/desktop-first por decisão explícita (sem colapsar, sem adaptação mobile) — revisar esta seção se isso mudar.
+- **`Sidebar.jsx`**: navegação lateral. Cada item é `{ label, path, icon }`; itens sem `path` (páginas ainda não implementadas) renderizam desabilitados com tooltip "Em breve", em vez de somem da lista — dá visibilidade do que vem a seguir. O item ativo é destacado via `NavLink`/`useLocation` do `react-router-dom`. Agrupamento hoje: um único grupo "Operação" (sem correspondência direta com nenhuma referência externa — ajustar se o domínio pedir seções específicas no futuro).
+- **`PageHeader.jsx`**: cabeçalho padrão de página — `breadcrumbs` (array de strings) + `title` + slot opcional `action` (ex.: um botão no canto direito). Toda página nova deve abrir seu conteúdo com `<PageHeader title="..." breadcrumbs={[...]} />` em vez de um `Typography` solto.
+- **Fidelidade visual**: o shell segue só a *estrutura* de uma referência externa (sidebar + breadcrumb + header, inspirado no painel do lojista do iFood) — cores, ícones e estilo continuam o tema padrão do MUI (ver seção 3), sem tentar copiar a identidade visual de outro produto.
 
 ## 5. Back-end: hoje simulado com `json-server`
 
@@ -154,10 +167,12 @@ Decisões arquiteturais tomadas ao longo das tasks, na ordem em que foram confir
 6. **Feature flag como constante no código, padrão desligado, sem env var** (`docs/plan/painel-de-pedidos`, confirmado com o usuário) — simplicidade sobre flexibilidade, enquanto só há uma flag e um ambiente relevante (dev).
 7. **Ações de mudança de estado permitidas na UI de leitura** (`docs/plan/painel-de-pedidos`, confirmado com o usuário) — o painel de pedidos não é só leitura: o dono do lava-rápido pode alterar o status do pedido por ali.
 8. **Contrato de API provisório = rotas padrão do `json-server`** (`docs/plan/painel-de-pedidos`, confirmado com o usuário) — não vale a pena modelar um contrato específico do back-end real antes dele existir.
+9. **Shell com sidebar fixa + `PageHeader`, só na estrutura** (`docs/plan/shell-sidebar-navegacao`, confirmado com o usuário) — inspirado numa referência externa (painel do lojista do iFood), mas copiando só o padrão estrutural (navegação lateral + breadcrumb/título), não cores/estilo. Mantém o tema MUI padrão; sem colapso/responsividade da sidebar por ora. Primeiro uso real de `src/components/` global.
 
 ## 12. Riscos/decisões ainda em aberto
 
-Ver a seção "Riscos / decisões que ainda precisam de confirmação" do plano ativo mais recente (`docs/plan/painel-de-pedidos/painel-de-pedidos-v2.md`) para o que ainda não foi fechado — por exemplo, script único para subir `mock-server` + dev server juntos, porta fixa do `json-server`, e se os dois `db.json` (dev/teste) deveriam ser um só.
+- `docs/plan/painel-de-pedidos/painel-de-pedidos-v2.md` — script único para subir `mock-server` + dev server juntos, porta fixa do `json-server`, se os dois `db.json` (dev/teste) deveriam ser um só, fonte específica das fotos placeholder.
+- `docs/plan/shell-sidebar-navegacao/shell-sidebar-navegacao.md` — nomes/agrupamento dos itens de menu da sidebar (hoje assumido um único grupo "Operação", sem indicação do usuário).
 
 ## Referências
 - `CLAUDE.md` (raiz do repo) — status geral do projeto, atualizado a cada task.
