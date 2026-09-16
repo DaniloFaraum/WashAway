@@ -2,12 +2,13 @@ import { spawn } from 'node:child_process'
 import { copyFile, rm } from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { TEST_SERVER_PORT } from './testServerConfig.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const FIXTURE_SRC = path.resolve(__dirname, '../fixtures/pedidos.db.json')
 const FIXTURE_TMP = path.resolve(__dirname, '../fixtures/.tmp-pedidos.db.json')
 const JSON_SERVER_BIN = path.resolve(__dirname, '../../../node_modules/.bin/json-server')
-const PORT = 3002
+const PORT = TEST_SERVER_PORT
 
 async function waitForServer(url, timeoutMs = 10000) {
   const start = Date.now()

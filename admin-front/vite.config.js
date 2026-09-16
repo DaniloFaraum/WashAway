@@ -1,5 +1,6 @@
 import react from '@vitejs/plugin-react'
 import { defineConfig } from 'vite'
+import { TEST_SERVER_URL } from './src/test/setup/testServerConfig.js'
 
 // https://vite.dev/config/
 export default defineConfig({
@@ -7,7 +8,7 @@ export default defineConfig({
   test: {
     globalSetup: ['./src/test/setup/globalSetup.js'],
     env: {
-      VITE_API_BASE_URL: 'http://localhost:3002',
+      VITE_API_BASE_URL: TEST_SERVER_URL,
     },
   },
 })
