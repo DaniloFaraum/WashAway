@@ -1,0 +1,20 @@
+{
+  "pedidos": [
+    {
+      "id": "1",
+      "veiculo": { "modelo": "Fiat Argo", "placa": "ABC1D23" },
+      "servico": "Lavagem completa",
+      "horario": "2026-09-16T09:00:00.000Z",
+      "status": "pendente",
+      "fotos": ["https://placehold.co/400x300?text=Antes+1"]
+    },
+    {
+      "id": "2",
+      "veiculo": { "modelo": "VW Gol", "placa": "XYZ9E88" },
+      "servico": "Lavagem simples",
+      "horario": "2026-09-16T10:30:00.000Z",
+      "status": "em_andamento",
+      "fotos": []
+    }
+  ]
+}
