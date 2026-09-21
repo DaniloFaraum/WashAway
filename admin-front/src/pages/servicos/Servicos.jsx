@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import Card from '@mui/material/Card'
 import CardContent from '@mui/material/CardContent'
 import Typography from '@mui/material/Typography'
@@ -15,8 +16,10 @@ import { useToast } from '../../hooks/useToast.js'
 function Servicos() {
   const { data: servicos, setData: setServicos, loading, error } = useFetch(getServicos)
   const { toast, showToast, closeToast } = useToast()
+  const [salvandoIds, setSalvandoIds] = useState(() => new Set())
 
   async function handleToggleAtivo(id, ativo) {
+    setSalvandoIds((atuais) => new Set(atuais).add(id))
     try {
       const servicoAtualizado = await updateServicoAtivo(id, ativo)
       setServicos((atuais) =>
@@ -24,6 +27,12 @@ function Servicos() {
       )
     } catch (err) {
       showToast(`Erro ao atualizar serviço: ${err.message}`, 'error')
+    } finally {
+      setSalvandoIds((atuais) => {
+        const proximo = new Set(atuais)
+        proximo.delete(id)
+        return proximo
+      })
     }
   }
 
@@ -55,6 +64,7 @@ function Servicos() {
                   control={
                     <Switch
                       checked={servico.ativo}
+                      disabled={salvandoIds.has(servico.id)}
                       onChange={(event) => handleToggleAtivo(servico.id, event.target.checked)}
                     />
                   }
