@@ -51,6 +51,9 @@ export default function RootLayout() {
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="servicos" />
         <Stack.Screen name="detail" />
+        <Stack.Screen name="lavagem-completa" />
+        <Stack.Screen name="higienizacao-interna" />
+        <Stack.Screen name="lavagem-externa" />
       </Stack>
     </ThemeProvider>
   );

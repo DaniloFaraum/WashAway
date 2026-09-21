@@ -1,14 +1,15 @@
 import React, { useState } from 'react';
 import {
   View, Text, StyleSheet, TextInput, ScrollView,
-  TouchableOpacity, Image, Modal, Switch
+  TouchableOpacity, Image, Modal
 } from 'react-native';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import Slider from '@react-native-community/slider';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 
 // Ícones do Lucide
 import { 
-  Search, SlidersHorizontal, Clock, Check, Star, X,
+  Search, SlidersHorizontal, Clock, Check, X,
   Car, Sparkles, Droplet, Eye, ShieldCheck, Palette, Umbrella, CloudRain, Shield 
 } from 'lucide-react-native';
 
@@ -16,6 +17,8 @@ import {
 import { colors } from '@/constants/colors';
 
 // Tipagem dos serviços e categorias
+type ServiceType = 'Lavagem Básica' | 'Lavagem Completa' | 'Estética (Polimento)';
+
 interface ServiceItem {
   id: string;
   title: string;
@@ -23,23 +26,27 @@ interface ServiceItem {
   price: number;
   time: number;
   image: string;
+  routeName: '/lavagem-completa' | '/higienizacao-interna' | '/lavagem-externa';
+  serviceType: ServiceType;
   selected: boolean;
 }
 
 export default function ServicosScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   
   // Recebe o ID e Nome do lava-rápido passados na navegação do seu colega
   const { id, nome } = useLocalSearchParams<{ id?: string; nome?: string }>();
 
   const [showAllCategories, setShowAllCategories] = useState(false);
   const [filterVisible, setFilterVisible] = useState(false);
-  const [proximityEnabled, setProximityEnabled] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
 
   // Estados dos Filtros
-  const [minPrice, setMinPrice] = useState(50);
+  const [minPrice, setMinPrice] = useState(20);
   const [maxPrice, setMaxPrice] = useState(300);
-  const [distance, setDistance] = useState(10);
+  const [maxTime, setMaxTime] = useState(120);
+  const [selectedServiceTypes, setSelectedServiceTypes] = useState<ServiceType[]>([]);
 
   // Lista de Serviços
   const initialServices: ServiceItem[] = [
@@ -50,6 +57,8 @@ export default function ServicosScreen() {
       price: 100.00,
       time: 40,
       image: 'https://images.unsplash.com/photo-1520340356584-f9917d1eea6f?w=500',
+      routeName: '/lavagem-completa',
+      serviceType: 'Lavagem Completa',
       selected: true,
     },
     {
@@ -59,6 +68,19 @@ export default function ServicosScreen() {
       price: 80.00,
       time: 30,
       image: 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQx6RA5P0_G-6ZvW_sywJOQgG0sTZzEjPNkMyWjAgMib8TKu1_xRXRJWyuT&s=10',
+      routeName: '/higienizacao-interna',
+      serviceType: 'Estética (Polimento)',
+      selected: true,
+    },
+    {
+      id: '3',
+      title: 'Lavagem Externa',
+      desc: 'Lavagem detalhada da lataria com aplicação de cera protetora...',
+      price: 60.00,
+      time: 25,
+      image: 'https://images.unsplash.com/photo-1507136566006-cfc505b114fc?w=500',
+      routeName: '/lavagem-externa',
+      serviceType: 'Lavagem Básica',
       selected: true,
     }
   ];
@@ -78,6 +100,39 @@ export default function ServicosScreen() {
   const totalPrice = selectedServices.reduce((sum, item) => sum + item.price, 0);
   const totalTime = selectedServices.reduce((sum, item) => sum + item.time, 0);
 
+  const serviceTypeOptions: ServiceType[] = [
+    'Lavagem Básica',
+    'Lavagem Completa',
+    'Estética (Polimento)',
+  ];
+
+  const toggleServiceType = (serviceType: ServiceType) => {
+    setSelectedServiceTypes(current =>
+      current.includes(serviceType)
+        ? current.filter(item => item !== serviceType)
+        : [...current, serviceType]
+    );
+  };
+
+  const normalizeText = (value: string) =>
+    value
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLocaleLowerCase('pt-BR');
+
+  const normalizedSearch = normalizeText(searchQuery.trim());
+  const filteredServices = services.filter(service => {
+    const matchesSearch =
+      !normalizedSearch ||
+      normalizeText(`${service.title} ${service.desc}`).includes(normalizedSearch);
+    const matchesPrice = service.price >= minPrice && service.price <= maxPrice;
+    const matchesTime = service.time <= maxTime;
+    const matchesType =
+      selectedServiceTypes.length === 0 || selectedServiceTypes.includes(service.serviceType);
+
+    return matchesSearch && matchesPrice && matchesTime && matchesType;
+  });
+
   const categories = [
     { id: '1', title: 'Lavagem\nExterna', icon: Car },
     { id: '2', title: 'Lavagem\nInterna', icon: Sparkles },
@@ -93,7 +148,7 @@ export default function ServicosScreen() {
   const visibleCategories = showAllCategories ? categories : categories.slice(0, 4);
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container}>
       <ScrollView style={styles.scrollContent} showsVerticalScrollIndicator={false}>
         
         {/* Cabeçalho dinâmico informando o Lava-rápido vindo da tela do seu amigo */}
@@ -110,6 +165,9 @@ export default function ServicosScreen() {
               placeholder="Encontre seu serviço..."
               placeholderTextColor={colors.neutralGray || '#6B7280'}
               style={styles.searchInput}
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+              returnKeyType="search"
             />
           </View>
           <TouchableOpacity style={styles.filterButton} onPress={() => setFilterVisible(true)}>
@@ -124,11 +182,11 @@ export default function ServicosScreen() {
         </View>
 
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.cardsScroll}>
-          {services.map((item) => (
+          {filteredServices.map((item) => (
             <View key={item.id} style={styles.card}>
               <TouchableOpacity 
                 activeOpacity={0.8}
-                onPress={() => router.push('/detail')}
+                onPress={() => router.push(item.routeName)}
               >
                 <View style={styles.imageWrapper}>
                   <Image source={{ uri: item.image }} style={styles.cardImage} />
@@ -156,6 +214,11 @@ export default function ServicosScreen() {
               </TouchableOpacity>
             </View>
           ))}
+          {filteredServices.length === 0 && (
+            <Text style={styles.emptyResultsText}>
+              Nenhum serviço encontrado com os filtros selecionados.
+            </Text>
+          )}
         </ScrollView>
 
         {/* Categorias */}
@@ -195,37 +258,32 @@ export default function ServicosScreen() {
       {/* Modal de Filtros */}
       <Modal visible={filterVisible} animationType="slide" transparent>
         <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
+          <View
+            style={[
+              styles.modalContent,
+              {
+                paddingTop: insets.top + 10,
+                paddingBottom: insets.bottom + 20,
+              },
+            ]}
+          >
             
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Menu</Text>
-              <TouchableOpacity onPress={() => setFilterVisible(false)}>
+              <Text style={styles.modalTitle}>Filtrar Serviços</Text>
+              <TouchableOpacity
+                style={styles.closeButton}
+                onPress={() => setFilterVisible(false)}
+                accessibilityLabel="Fechar filtros"
+              >
                 <X color={colors.black || '#000'} size={24} />
               </TouchableOpacity>
             </View>
 
-            <ScrollView showsVerticalScrollIndicator={false}>
-              <View style={styles.filterSection}>
-                <Text style={styles.filterLabel}>Proximidade</Text>
-                <Switch
-                  value={proximityEnabled}
-                  onValueChange={setProximityEnabled}
-                  trackColor={{ false: '#D1D5DB', true: colors.primary }}
-                />
-              </View>
-
-              <View style={styles.filterSectionCol}>
-                <Text style={styles.filterLabel}>Avaliações</Text>
-                <View style={styles.starsRow}>
-                  {[1, 2, 3, 4].map((s) => (
-                    <Star key={s} color="#FBBF24" fill="#FBBF24" size={22} />
-                  ))}
-                  <Star color="#FBBF24" size={22} />
-                </View>
-                <Text style={styles.subText}>Mostrando 4+ estrelas</Text>
-              </View>
-
-              <View style={styles.filterSectionCol}>
+            <ScrollView
+              showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+            >
+              <View style={styles.filterGroup}>
                 <Text style={styles.filterLabel}>Faixa de preço</Text>
                 <View style={styles.priceLabels}>
                   <Text style={styles.subText}>Mín: R$ {minPrice.toFixed(0)}</Text>
@@ -234,10 +292,11 @@ export default function ServicosScreen() {
                 
                 <Slider
                   style={styles.sliderStyle}
-                  minimumValue={10}
-                  maximumValue={150}
+                  minimumValue={20}
+                  maximumValue={300}
+                  step={10}
                   value={minPrice}
-                  onValueChange={setMinPrice}
+                  onValueChange={value => setMinPrice(Math.min(value, maxPrice))}
                   minimumTrackTintColor={colors.primary}
                   maximumTrackTintColor="#D1D5DB"
                   thumbTintColor={colors.primary}
@@ -245,31 +304,56 @@ export default function ServicosScreen() {
 
                 <Slider
                   style={styles.sliderStyle}
-                  minimumValue={150}
-                  maximumValue={500}
+                  minimumValue={20}
+                  maximumValue={300}
+                  step={10}
                   value={maxPrice}
-                  onValueChange={setMaxPrice}
+                  onValueChange={value => setMaxPrice(Math.max(value, minPrice))}
                   minimumTrackTintColor={colors.primary}
                   maximumTrackTintColor="#D1D5DB"
                   thumbTintColor={colors.primary}
                 />
               </View>
 
-              <View style={styles.filterSectionCol}>
+              <View style={styles.filterGroup}>
                 <View style={styles.priceLabels}>
-                  <Text style={styles.filterLabel}>Distância máxima</Text>
-                  <Text style={styles.subText}>{distance.toFixed(0)} km</Text>
+                  <Text style={styles.filterLabel}>Tempo estimado máximo</Text>
+                  <Text style={styles.subText}>{maxTime.toFixed(0)} min</Text>
                 </View>
                 <Slider
                   style={styles.sliderStyle}
-                  minimumValue={1}
-                  maximumValue={50}
-                  value={distance}
-                  onValueChange={setDistance}
+                  minimumValue={15}
+                  maximumValue={120}
+                  step={5}
+                  value={maxTime}
+                  onValueChange={setMaxTime}
                   minimumTrackTintColor={colors.primary}
                   maximumTrackTintColor="#D1D5DB"
                   thumbTintColor={colors.primary}
                 />
+              </View>
+
+              <View style={styles.filterGroup}>
+                <Text style={styles.filterLabel}>Tipos de serviço</Text>
+                <View style={styles.chipsContainer}>
+                  {serviceTypeOptions.map(serviceType => {
+                    const isSelected = selectedServiceTypes.includes(serviceType);
+
+                    return (
+                      <TouchableOpacity
+                        key={serviceType}
+                        style={[styles.chip, isSelected && styles.chipSelected]}
+                        onPress={() => toggleServiceType(serviceType)}
+                        accessibilityRole="button"
+                        accessibilityState={{ selected: isSelected }}
+                      >
+                        <Text style={[styles.chipText, isSelected && styles.chipTextSelected]}>
+                          {serviceType}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
               </View>
             </ScrollView>
 
@@ -277,12 +361,12 @@ export default function ServicosScreen() {
               style={styles.applyFilterButton} 
               onPress={() => setFilterVisible(false)}
             >
-              <Text style={styles.applyFilterText}>Selecionar Lava-rápido</Text>
+              <Text style={styles.applyFilterText}>Aplicar Filtros</Text>
             </TouchableOpacity>
           </View>
         </View>
       </Modal>
-    </View>
+    </SafeAreaView>
   );
 }
 
@@ -355,6 +439,13 @@ const styles = StyleSheet.create({
   timeBadge: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   timeText: { fontSize: 11, color: colors.neutralGray || '#6B7280' },
   priceText: { fontSize: 14, fontWeight: '700', color: colors.black || '#000' },
+  emptyResultsText: {
+    width: 280,
+    color: colors.neutralGray || '#6B7280',
+    fontSize: 14,
+    lineHeight: 20,
+    paddingVertical: 24,
+  },
   categoriesGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 20 },
   categoryCard: {
     width: '23%',
@@ -398,15 +489,49 @@ const styles = StyleSheet.create({
     padding: 20, 
     justifyContent: 'space-between' 
   },
-  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
   modalTitle: { fontSize: 20, fontWeight: '700', color: colors.black || '#000' },
-  filterSection: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginVertical: 10 },
-  filterSectionCol: { marginVertical: 10 },
+  closeButton: {
+    width: 40,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  filterGroup: { marginBottom: 24 },
   filterLabel: { fontSize: 14, fontWeight: '700', color: colors.black || '#000' },
-  starsRow: { flexDirection: 'row', gap: 4, marginVertical: 4 },
   subText: { fontSize: 12, color: colors.neutralGray || '#6B7280' },
-  priceLabels: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 2 },
-  sliderStyle: { width: '100%', height: 30 },
+  priceLabels: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 },
+  sliderStyle: { width: '100%', height: 36 },
+  chipsContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: 12,
+  },
+  chip: {
+    borderWidth: 1,
+    borderColor: colors.primary,
+    borderRadius: 999,
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+    backgroundColor: colors.white,
+  },
+  chipSelected: {
+    backgroundColor: colors.primary,
+  },
+  chipText: {
+    color: colors.primary,
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  chipTextSelected: {
+    color: colors.white,
+  },
   applyFilterButton: {
     backgroundColor: colors.primary,
     borderRadius: 12,
