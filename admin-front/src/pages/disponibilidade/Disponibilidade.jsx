@@ -20,6 +20,7 @@ import CircularProgress from '@mui/material/CircularProgress'
 import { getIntercorrencias, createIntercorrencia } from './service/disponibilidade.service.js'
 import PageHeader from '../../components/layout/PageHeader.jsx'
 import { useFetch } from '../../hooks/useFetch.js'
+import { useToast } from '../../hooks/useToast.js'
 
 function DiaComIntercorrencia(props) {
   const { diasComIntercorrencia, day, outsideCurrentMonth, ...other } = props
@@ -33,7 +34,7 @@ function DiaComIntercorrencia(props) {
 
 function Disponibilidade() {
   const { data: intercorrencias, setData: setIntercorrencias, loading, error } = useFetch(getIntercorrencias)
-  const [toast, setToast] = useState({ open: false, message: '', severity: 'success' })
+  const { toast, showToast, closeToast } = useToast()
   const [diaSelecionado, setDiaSelecionado] = useState(null)
   const [motivo, setMotivo] = useState('')
   const [diaInteiro, setDiaInteiro] = useState(true)
@@ -70,16 +71,12 @@ function Disponibilidade() {
       })
       setIntercorrencias((atuais) => [...atuais, nova])
       setDiaSelecionado(null)
-      setToast({ open: true, message: 'Intercorrência salva.', severity: 'success' })
+      showToast('Intercorrência salva.')
     } catch (err) {
-      setToast({ open: true, message: `Erro ao salvar intercorrência: ${err.message}`, severity: 'error' })
+      showToast(`Erro ao salvar intercorrência: ${err.message}`, 'error')
     } finally {
       setSalvando(false)
     }
-  }
-
-  function handleCloseToast() {
-    setToast((atual) => ({ ...atual, open: false }))
   }
 
   if (loading) {
@@ -158,8 +155,8 @@ function Disponibilidade() {
         </DialogActions>
       </Dialog>
 
-      <Snackbar open={toast.open} autoHideDuration={4000} onClose={handleCloseToast}>
-        <Alert onClose={handleCloseToast} severity={toast.severity} sx={{ width: '100%' }}>
+      <Snackbar open={toast.open} autoHideDuration={4000} onClose={closeToast}>
+        <Alert onClose={closeToast} severity={toast.severity} sx={{ width: '100%' }}>
           {toast.message}
         </Alert>
       </Snackbar>

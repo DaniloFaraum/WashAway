@@ -1,4 +1,3 @@
-import { useState } from 'react'
 import Card from '@mui/material/Card'
 import CardContent from '@mui/material/CardContent'
 import Typography from '@mui/material/Typography'
@@ -11,10 +10,11 @@ import CircularProgress from '@mui/material/CircularProgress'
 import { getServicos, updateServicoAtivo } from './service/servicos.service.js'
 import PageHeader from '../../components/layout/PageHeader.jsx'
 import { useFetch } from '../../hooks/useFetch.js'
+import { useToast } from '../../hooks/useToast.js'
 
 function Servicos() {
   const { data: servicos, setData: setServicos, loading, error } = useFetch(getServicos)
-  const [toast, setToast] = useState({ open: false, message: '', severity: 'success' })
+  const { toast, showToast, closeToast } = useToast()
 
   async function handleToggleAtivo(id, ativo) {
     try {
@@ -23,12 +23,8 @@ function Servicos() {
         atuais.map((servico) => (servico.id === id ? servicoAtualizado : servico)),
       )
     } catch (err) {
-      setToast({ open: true, message: `Erro ao atualizar serviço: ${err.message}`, severity: 'error' })
+      showToast(`Erro ao atualizar serviço: ${err.message}`, 'error')
     }
-  }
-
-  function handleCloseToast() {
-    setToast((atual) => ({ ...atual, open: false }))
   }
 
   if (loading) {
@@ -69,8 +65,8 @@ function Servicos() {
         ))}
       </Stack>
 
-      <Snackbar open={toast.open} autoHideDuration={4000} onClose={handleCloseToast}>
-        <Alert onClose={handleCloseToast} severity={toast.severity} sx={{ width: '100%' }}>
+      <Snackbar open={toast.open} autoHideDuration={4000} onClose={closeToast}>
+        <Alert onClose={closeToast} severity={toast.severity} sx={{ width: '100%' }}>
           {toast.message}
         </Alert>
       </Snackbar>
