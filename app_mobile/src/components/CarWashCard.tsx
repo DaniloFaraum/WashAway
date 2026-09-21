@@ -7,7 +7,6 @@ import {
   Text,
   TouchableOpacity,
   View,
-  type ImageSourcePropType,
 } from 'react-native';
 
 import { colors } from '@/constants/colors';
@@ -21,7 +20,7 @@ export type CarWashCardProps = {
   time: string;
   price: number;
   isOpen: boolean;
-  image: ImageSourcePropType;
+  image: string;
   rank: number;
 };
 
@@ -50,7 +49,7 @@ export function CarWashCard({
       asChild>
       <TouchableOpacity style={styles.card} activeOpacity={0.7}>
         <View style={styles.photoWrap}>
-          <Image source={image} style={styles.photo} resizeMode="cover" />
+          <Image source={{ uri: image }} style={styles.photo} resizeMode="cover" />
           <View style={styles.rankBadge}>
             <Text style={styles.rankText}>{rank}</Text>
           </View>

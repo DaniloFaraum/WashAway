@@ -1,0 +1,69 @@
+{
+  "lavaRapidos": [
+    {
+      "id": "1",
+      "name": "Aqua Shine Lava-Rápido",
+      "rating": 4.8,
+      "reviewsCount": 124,
+      "distance": "1.2 km",
+      "time": "5 min",
+      "price": 45,
+      "isOpen": true,
+      "image": "https://placehold.co/300x300?text=Aqua+Shine",
+      "latitude": -23.5505,
+      "longitude": -46.6333
+    },
+    {
+      "id": "2",
+      "name": "Lava Rápido Centro",
+      "rating": 4.5,
+      "reviewsCount": 89,
+      "distance": "2.4 km",
+      "time": "8 min",
+      "price": 39,
+      "isOpen": true,
+      "image": "https://placehold.co/300x300?text=Centro",
+      "latitude": -23.5506,
+      "longitude": -46.6341
+    },
+    {
+      "id": "3",
+      "name": "Super Wash Express",
+      "rating": 4.2,
+      "reviewsCount": 56,
+      "distance": "3.1 km",
+      "time": "12 min",
+      "price": 55,
+      "isOpen": false,
+      "image": "https://placehold.co/300x300?text=Super+Wash",
+      "latitude": -23.5498,
+      "longitude": -46.6324
+    },
+    {
+      "id": "4",
+      "name": "Brilho Total Premium",
+      "rating": 5.0,
+      "reviewsCount": 208,
+      "distance": "0.7 km",
+      "time": "3 min",
+      "price": 69,
+      "isOpen": true,
+      "image": "https://placehold.co/300x300?text=Brilho+Total",
+      "latitude": -23.5513,
+      "longitude": -46.6329
+    },
+    {
+      "id": "5",
+      "name": "Crystal Jet Wash",
+      "rating": 4.6,
+      "reviewsCount": 141,
+      "distance": "4.8 km",
+      "time": "16 min",
+      "price": 42,
+      "isOpen": false,
+      "image": "https://placehold.co/300x300?text=Crystal+Jet",
+      "latitude": -23.5492,
+      "longitude": -46.6348
+    }
+  ]
+}

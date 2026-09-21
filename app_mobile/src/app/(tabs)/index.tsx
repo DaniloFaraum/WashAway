@@ -3,6 +3,7 @@ import { useRouter } from 'expo-router';
 import * as Location from 'expo-location';
 import { useEffect, useState } from 'react';
 import {
+  ActivityIndicator,
   FlatList,
   Keyboard,
   KeyboardAvoidingView,
@@ -20,6 +21,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { CarWashCard } from '@/components/CarWashCard';
 import { colors } from '@/constants/colors';
+import { getLavaRapidos } from '@/features/lava-rapidos/service/lavaRapidos.service';
+import type { LavaRapido } from '@/features/lava-rapidos/service/lavaRapidos.model';
 
 let MapView: any = null;
 let Marker: any = null;
@@ -36,76 +39,11 @@ function parseDistance(distance: string) {
   return parseFloat(distance.replace(/[^\d.,]/g, '').replace(',', '.')) || 0;
 }
 
-const mockData = [
-  {
-    id: '1',
-    name: 'Aqua Shine Lava-Rápido',
-    rating: 4.8,
-    reviewsCount: 124,
-    distance: '1.2 km',
-    time: '5 min',
-    price: 45,
-    isOpen: true,
-    image: require('../../../assets/images/lava1.jpg'),
-    latitude: -23.5505,
-    longitude: -46.6333,
-  },
-  {
-    id: '2',
-    name: 'Lava Rápido Centro',
-    rating: 4.5,
-    reviewsCount: 89,
-    distance: '2.4 km',
-    time: '8 min',
-    price: 39,
-    isOpen: true,
-    image: require('../../../assets/images/lava2.jpg'),
-    latitude: -23.5506,
-    longitude: -46.6341,
-  },
-  {
-    id: '3',
-    name: 'Super Wash Express',
-    rating: 4.2,
-    reviewsCount: 56,
-    distance: '3.1 km',
-    time: '12 min',
-    price: 55,
-    isOpen: false,
-    image: require('../../../assets/images/lava3.jpg'),
-    latitude: -23.5498,
-    longitude: -46.6324,
-  },
-  {
-    id: '4',
-    name: 'Brilho Total Premium',
-    rating: 5.0,
-    reviewsCount: 208,
-    distance: '0.7 km',
-    time: '3 min',
-    price: 69,
-    isOpen: true,
-    image: require('../../../assets/images/lava1.jpg'),
-    latitude: -23.5513,
-    longitude: -46.6329,
-  },
-  {
-    id: '5',
-    name: 'Crystal Jet Wash',
-    rating: 4.6,
-    reviewsCount: 141,
-    distance: '4.8 km',
-    time: '16 min',
-    price: 42,
-    isOpen: false,
-    image: require('../../../assets/images/lava2.jpg'),
-    latitude: -23.5492,
-    longitude: -46.6348,
-  },
-];
-
 export default function HomeScreen() {
   const router = useRouter();
+  const [lavaRapidos, setLavaRapidos] = useState<LavaRapido[]>([]);
+  const [loadingLavaRapidos, setLoadingLavaRapidos] = useState(true);
+  const [lavaRapidosError, setLavaRapidosError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<ActiveTab>('lista');
   const [searchQuery, setSearchQuery] = useState('');
   const [currentAddress, setCurrentAddress] = useState('Buscando localização...');
@@ -161,6 +99,13 @@ export default function HomeScreen() {
     }
 
     loadCurrentAddress();
+  }, []);
+
+  useEffect(() => {
+    getLavaRapidos()
+      .then(setLavaRapidos)
+      .catch((err) => setLavaRapidosError(err.message))
+      .finally(() => setLoadingLavaRapidos(false));
   }, []);
 
   async function handleManualAddressChange() {
@@ -246,7 +191,25 @@ export default function HomeScreen() {
     </View>
   );
 
-  let result = mockData.filter((item) =>
+  if (loadingLavaRapidos) {
+    return (
+      <SafeAreaView style={[styles.container, styles.centeredContainer]}>
+        <ActivityIndicator color={colors.primary} size="large" />
+      </SafeAreaView>
+    );
+  }
+
+  if (lavaRapidosError) {
+    return (
+      <SafeAreaView style={[styles.container, styles.centeredContainer]}>
+        <Text style={styles.mapUnavailableText}>
+          Não foi possível carregar os lava-rápidos: {lavaRapidosError}
+        </Text>
+      </SafeAreaView>
+    );
+  }
+
+  let result = lavaRapidos.filter((item) =>
     item.name.toLowerCase().includes(searchQuery.toLowerCase()),
   );
 
@@ -446,6 +409,10 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background,
+  },
+  centeredContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   header: {
     paddingHorizontal: 20,

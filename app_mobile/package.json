@@ -37,7 +37,9 @@
   },
   "devDependencies": {
     "@types/react": "~19.2.2",
-    "typescript": "~6.0.3"
+    "json-server": "^1.0.0-beta.15",
+    "typescript": "~6.0.3",
+    "vitest": "^5.0.1"
   },
   "scripts": {
     "start": "expo start",
@@ -45,7 +47,10 @@
     "android": "expo start --android",
     "ios": "expo start --ios",
     "web": "expo start --web",
-    "lint": "expo lint"
+    "lint": "expo lint",
+    "mock-server": "json-server --port 3003 mock-server/db.json",
+    "test": "vitest run --passWithNoTests",
+    "build": "expo export -p web"
   },
   "private": true
 }

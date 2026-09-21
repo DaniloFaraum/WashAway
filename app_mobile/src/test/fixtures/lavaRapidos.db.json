@@ -1,0 +1,30 @@
+{
+  "lavaRapidos": [
+    {
+      "id": "1",
+      "name": "Aqua Shine Lava-Rápido",
+      "rating": 4.8,
+      "reviewsCount": 124,
+      "distance": "1.2 km",
+      "time": "5 min",
+      "price": 45,
+      "isOpen": true,
+      "image": "https://placehold.co/300x300?text=Aqua+Shine",
+      "latitude": -23.5505,
+      "longitude": -46.6333
+    },
+    {
+      "id": "2",
+      "name": "Lava Rápido Centro",
+      "rating": 4.5,
+      "reviewsCount": 89,
+      "distance": "2.4 km",
+      "time": "8 min",
+      "price": 39,
+      "isOpen": true,
+      "image": "https://placehold.co/300x300?text=Centro",
+      "latitude": -23.5506,
+      "longitude": -46.6341
+    }
+  ]
+}
