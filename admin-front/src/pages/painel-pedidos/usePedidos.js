@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { getPedidos, updatePedidoStatus } from './service/pedidos.service.js'
+import { useFetch } from '../../hooks/useFetch.js'
 
 /**
  * Encapsula a busca de pedidos, a atualização de status e o controle do
@@ -15,17 +16,8 @@ import { getPedidos, updatePedidoStatus } from './service/pedidos.service.js'
  * }}
  */
 export function usePedidos() {
-  const [pedidos, setPedidos] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState(null)
+  const { data: pedidos, setData: setPedidos, loading, error } = useFetch(getPedidos)
   const [toast, setToast] = useState({ open: false, message: '', severity: 'success' })
-
-  useEffect(() => {
-    getPedidos()
-      .then(setPedidos)
-      .catch((err) => setError(err.message))
-      .finally(() => setLoading(false))
-  }, [])
 
   async function handleStatusChange(id, status) {
     try {
@@ -43,5 +35,5 @@ export function usePedidos() {
     setToast((atual) => ({ ...atual, open: false }))
   }
 
-  return { pedidos, loading, error, toast, handleStatusChange, handleCloseToast }
+  return { pedidos: pedidos ?? [], loading, error, toast, handleStatusChange, handleCloseToast }
 }
