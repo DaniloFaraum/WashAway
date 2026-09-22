@@ -1,5 +1,5 @@
 import type { Request, Response } from 'express'
-import { isPedidoNotFoundError, isValidStatus, listPedidos, updatePedidoStatus } from './pedidos.service.js'
+import { getPedidoById, isValidStatus, listPedidos, updatePedidoStatus } from './pedidos.service.js'
 
 export async function index(_req: Request, res: Response) {
   const pedidos = await listPedidos()
@@ -14,14 +14,12 @@ export async function updateStatus(req: Request, res: Response) {
     return
   }
 
-  try {
-    const pedido = await updatePedidoStatus(req.params.id, status)
-    res.json(pedido)
-  } catch (error) {
-    if (isPedidoNotFoundError(error)) {
-      res.status(404).json({ error: 'Pedido não encontrado' })
-      return
-    }
-    throw error
+  const pedidoExistente = await getPedidoById(req.params.id)
+  if (!pedidoExistente) {
+    res.status(404).json({ error: 'Pedido não encontrado' })
+    return
   }
+
+  const pedido = await updatePedidoStatus(req.params.id, status)
+  res.json(pedido)
 }
