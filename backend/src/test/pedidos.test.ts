@@ -1,7 +1,8 @@
-import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import supertest from 'supertest'
 import { createApp } from '../app.js'
 import { prisma } from '../config/prisma.js'
+import * as pedidosService from '../modules/pedidos/pedidos.service.js'
 
 const app = createApp()
 
@@ -76,5 +77,20 @@ describe('/pedidos', () => {
       .send({ status: 'concluido' })
 
     expect(response.status).toBe(404)
+  })
+
+  describe('erro inesperado', () => {
+    afterEach(() => {
+      vi.restoreAllMocks()
+    })
+
+    it('GET /pedidos retorna 500 em vez de derrubar o processo quando o acesso a dados falha', async () => {
+      vi.spyOn(pedidosService, 'listPedidos').mockRejectedValueOnce(new Error('falha inesperada no banco'))
+
+      const response = await supertest(app).get('/pedidos')
+
+      expect(response.status).toBe(500)
+      expect(response.body).toEqual({ error: 'Erro interno' })
+    })
   })
 })
