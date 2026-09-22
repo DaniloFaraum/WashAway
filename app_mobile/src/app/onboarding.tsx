@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useRouter } from 'expo-router';
 import {
   ActivityIndicator,
@@ -10,21 +11,27 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { colors } from '@/constants/colors';
+import { centeredStyle } from '@/constants/commonStyles';
 import { useLavaRapidos } from '@/features/lava-rapidos/useLavaRapidos';
 import { setEmpresaSelecionada } from '@/features/lava-rapidos/onboarding/empresaSelecionada.storage';
 
 export default function OnboardingScreen() {
   const router = useRouter();
   const { lavaRapidos, loading, error } = useLavaRapidos();
+  const [erroEscolha, setErroEscolha] = useState<string | null>(null);
 
   async function handleEscolher(id: string) {
-    await setEmpresaSelecionada(id);
-    router.replace('/(tabs)');
+    try {
+      await setEmpresaSelecionada(id);
+      router.replace('/(tabs)');
+    } catch (err) {
+      setErroEscolha(err instanceof Error ? err.message : 'Erro desconhecido');
+    }
   }
 
   if (loading) {
     return (
-      <SafeAreaView style={[styles.container, styles.centered]}>
+      <SafeAreaView style={[styles.container, centeredStyle]}>
         <ActivityIndicator color={colors.primary} size="large" />
       </SafeAreaView>
     );
@@ -32,7 +39,7 @@ export default function OnboardingScreen() {
 
   if (error) {
     return (
-      <SafeAreaView style={[styles.container, styles.centered]}>
+      <SafeAreaView style={[styles.container, centeredStyle]}>
         <Text style={styles.errorText}>Não foi possível carregar os lava-rápidos: {error}</Text>
       </SafeAreaView>
     );
@@ -42,6 +49,7 @@ export default function OnboardingScreen() {
     <SafeAreaView style={styles.container}>
       <Text style={styles.title}>Escolha seu lava-rápido</Text>
       <Text style={styles.subtitle}>Você poderá ver e agendar serviços dele.</Text>
+      {erroEscolha && <Text style={styles.errorText}>Não foi possível salvar: {erroEscolha}</Text>}
       <FlatList
         data={lavaRapidos}
         keyExtractor={(item) => item.id}
@@ -69,10 +77,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background,
-  },
-  centered: {
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   errorText: {
     color: colors.neutralGray,

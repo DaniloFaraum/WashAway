@@ -21,6 +21,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { CarWashCard } from '@/components/CarWashCard';
 import { colors } from '@/constants/colors';
+import { centeredStyle } from '@/constants/commonStyles';
 import { useLavaRapidos } from '@/features/lava-rapidos/useLavaRapidos';
 
 let MapView: any = null;
@@ -183,7 +184,7 @@ export default function HomeScreen() {
 
   if (loadingLavaRapidos) {
     return (
-      <SafeAreaView style={[styles.container, styles.centeredContainer]}>
+      <SafeAreaView style={[styles.container, centeredStyle]}>
         <ActivityIndicator color={colors.primary} size="large" />
       </SafeAreaView>
     );
@@ -191,7 +192,7 @@ export default function HomeScreen() {
 
   if (lavaRapidosError) {
     return (
-      <SafeAreaView style={[styles.container, styles.centeredContainer]}>
+      <SafeAreaView style={[styles.container, centeredStyle]}>
         <Text style={styles.mapUnavailableText}>
           Não foi possível carregar os lava-rápidos: {lavaRapidosError}
         </Text>
@@ -399,10 +400,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background,
-  },
-  centeredContainer: {
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   header: {
     paddingHorizontal: 20,
