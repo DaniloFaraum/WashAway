@@ -1,5 +1,6 @@
 import type { Request, Response } from 'express'
-import { getPedidoById, isValidStatus, listPedidos, updatePedidoStatus } from './pedidos.service.js'
+import { getPedidoById, listPedidos, updatePedidoStatus } from './pedidos.service.js'
+import { isValidStatus } from './pedidos.validation.js'
 
 export async function index(_req: Request, res: Response) {
   const pedidos = await listPedidos()

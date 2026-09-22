@@ -12,7 +12,3 @@ export function getPedidoById(id: string) {
 export function updatePedidoStatus(id: string, status: PedidoStatus) {
   return prisma.pedido.update({ where: { id }, data: { status } })
 }
-
-export function isValidStatus(status: unknown): status is PedidoStatus {
-  return typeof status === 'string' && (Object.values(PedidoStatus) as string[]).includes(status)
-}
