@@ -1,8 +1,8 @@
 import { LAVA_RAPIDOS_ROUTES } from './lavaRapidos.routes'
 import { normalizeLavaRapido, type LavaRapido } from './lavaRapidos.model'
-import { DEV_API_BASE_URL } from '@/config/api'
+import { BACKEND_API_BASE_URL } from '@/config/api'
 
-const BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL ?? DEV_API_BASE_URL
+const BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL ?? BACKEND_API_BASE_URL
 
 async function request(path: string, options?: RequestInit): Promise<any> {
   const response = await fetch(`${BASE_URL}${path}`, options)

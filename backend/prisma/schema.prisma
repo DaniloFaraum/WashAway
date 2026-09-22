@@ -1,0 +1,40 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model LavaRapido {
+  id           String   @id @default(cuid())
+  name         String
+  rating       Float    @default(0)
+  reviewsCount Int      @default(0)
+  distance     String
+  time         String
+  price        Float
+  isOpen       Boolean  @default(true)
+  image        String
+  latitude     Float
+  longitude    Float
+  pedidos      Pedido[]
+}
+
+enum PedidoStatus {
+  pendente
+  em_andamento
+  concluido
+}
+
+model Pedido {
+  id           String       @id @default(cuid())
+  lavaRapidoId String
+  lavaRapido   LavaRapido   @relation(fields: [lavaRapidoId], references: [id])
+  veiculo      Json
+  servico      String
+  horario      DateTime
+  status       PedidoStatus @default(pendente)
+  fotos        String[]     @default([])
+}
