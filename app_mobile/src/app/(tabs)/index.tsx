@@ -21,8 +21,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { CarWashCard } from '@/components/CarWashCard';
 import { colors } from '@/constants/colors';
-import { getLavaRapidos } from '@/features/lava-rapidos/service/lavaRapidos.service';
-import type { LavaRapido } from '@/features/lava-rapidos/service/lavaRapidos.model';
+import { useLavaRapidos } from '@/features/lava-rapidos/useLavaRapidos';
 
 let MapView: any = null;
 let Marker: any = null;
@@ -41,9 +40,7 @@ function parseDistance(distance: string) {
 
 export default function HomeScreen() {
   const router = useRouter();
-  const [lavaRapidos, setLavaRapidos] = useState<LavaRapido[]>([]);
-  const [loadingLavaRapidos, setLoadingLavaRapidos] = useState(true);
-  const [lavaRapidosError, setLavaRapidosError] = useState<string | null>(null);
+  const { lavaRapidos, loading: loadingLavaRapidos, error: lavaRapidosError } = useLavaRapidos();
   const [activeTab, setActiveTab] = useState<ActiveTab>('lista');
   const [searchQuery, setSearchQuery] = useState('');
   const [currentAddress, setCurrentAddress] = useState('Buscando localização...');
@@ -99,13 +96,6 @@ export default function HomeScreen() {
     }
 
     loadCurrentAddress();
-  }, []);
-
-  useEffect(() => {
-    getLavaRapidos()
-      .then(setLavaRapidos)
-      .catch((err) => setLavaRapidosError(err.message))
-      .finally(() => setLoadingLavaRapidos(false));
   }, []);
 
   async function handleManualAddressChange() {
