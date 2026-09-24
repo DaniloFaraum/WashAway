@@ -8,7 +8,7 @@ import {
   Image,
   SafeAreaView,
 } from 'react-native';
-import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useRouter } from 'expo-router';
 
 // Ícones
 import { ArrowLeft, Clock, Star, Check, ShieldCheck, Heart } from 'lucide-react-native';
@@ -20,9 +20,51 @@ import VehicleBar from '@/components/VehicleBar';
 // Estilos e Cores centralizados
 import { colors } from '@/constants/colors';
 
-export default function ServiceDetailScreen() {
+export interface ServiceDetail {
+  title: string;
+  price: string;
+  premiumPrice: string;
+  time: string;
+  image: string;
+  description: string;
+  includedItems: string[];
+  standardTitle: string;
+  standardSubtitle: string;
+  premiumTitle: string;
+  premiumSubtitle: string;
+  premiumSurcharge: string;
+}
+
+export const lavagemCompletaService: ServiceDetail = {
+  title: 'Lavagem Completa Premium',
+  price: '100,00',
+  premiumPrice: '140,00',
+  time: '40 min',
+  image: 'https://images.unsplash.com/photo-1520340356584-f9917d1eea6f?w=800',
+  description:
+    'Limpeza detalhada interna e externa do seu veículo. Utiliza produtos de alta performance com PH neutro, lavagem das caixas de roda, pretinho nos pneus e aspiração completa do interior.',
+  includedItems: [
+    'Lavagem externa com shampoo neutro',
+    'Limpeza e hidratação das caixas de roda',
+    'Aspiração do assoalho e porta-malas',
+    'Higienização do painel e vidros',
+    'Aplicação de cera líquida protetora',
+  ],
+  standardTitle: 'Pacote Padrão',
+  standardSubtitle: 'Cera líquida protetora',
+  premiumTitle: 'Adicionar Cristalização',
+  premiumSubtitle: 'Proteção da pintura por até 3 meses',
+  premiumSurcharge: '40,00',
+};
+
+interface ServiceDetailScreenProps {
+  service?: ServiceDetail;
+}
+
+export function ServiceDetailScreen({
+  service = lavagemCompletaService,
+}: ServiceDetailScreenProps) {
   const router = useRouter();
-  const params = useLocalSearchParams();
 
   // Estados locais da tela
   const [isFavorite, setIsFavorite] = useState(false);
@@ -38,7 +80,7 @@ export default function ServiceDetailScreen() {
         <View style={styles.imageContainer}>
           <Image
             source={{
-              uri: 'https://images.unsplash.com/photo-1520340356584-f9917d1eea6f?w=800',
+              uri: service.image,
             }}
             style={styles.bannerImage}
           />
@@ -67,14 +109,14 @@ export default function ServiceDetailScreen() {
         {/* Informações Principais do Serviço */}
         <View style={styles.contentContainer}>
           <View style={styles.titleRow}>
-            <Text style={styles.serviceTitle}>Lavagem Completa Premium</Text>
-            <Text style={styles.servicePrice}>R$ 100,00</Text>
+            <Text style={styles.serviceTitle}>{service.title}</Text>
+            <Text style={styles.servicePrice}>R$ {service.price}</Text>
           </View>
 
           <View style={styles.metaRow}>
             <View style={styles.badge}>
               <Clock color={colors.neutralGray || '#6B7280'} size={14} />
-              <Text style={styles.badgeText}>40 min</Text>
+              <Text style={styles.badgeText}>{service.time}</Text>
             </View>
 
             <View style={styles.badge}>
@@ -84,21 +126,12 @@ export default function ServiceDetailScreen() {
           </View>
 
           <Text style={styles.descriptionTitle}>Descrição do Serviço</Text>
-          <Text style={styles.descriptionText}>
-            Limpeza detalhada interna e externa do seu veículo. Utiliza produtos de alta performance
-            com PH neutro, lavagem das caixas de roda, pretinho nos pneus e aspiração completa do interior.
-          </Text>
+          <Text style={styles.descriptionText}>{service.description}</Text>
 
           {/* O que está incluso */}
           <Text style={styles.sectionTitle}>O que está incluso</Text>
           <View style={styles.includedList}>
-            {[
-              'Lavagem externa com shampoo neutro',
-              'Limpeza e hidratação das caixas de roda',
-              'Aspiração do assoalho e porta-malas',
-              'Higienização do painel e vidros',
-              'Aplicação de cera líquida protetora',
-            ].map((item, index) => (
+            {service.includedItems.map((item, index) => (
               <View key={index} style={styles.includedItem}>
                 <View style={styles.checkIcon}>
                   <Check color={colors.white} size={12} />
@@ -119,8 +152,8 @@ export default function ServiceDetailScreen() {
             onPress={() => setSelectedOption('padrao')}
           >
             <View style={styles.optionInfo}>
-              <Text style={styles.optionTitle}>Pacote Padrão</Text>
-              <Text style={styles.optionSub}>Cera líquida protetora</Text>
+              <Text style={styles.optionTitle}>{service.standardTitle}</Text>
+              <Text style={styles.optionSub}>{service.standardSubtitle}</Text>
             </View>
             <Text style={styles.optionPrice}>Incluso</Text>
           </TouchableOpacity>
@@ -133,10 +166,10 @@ export default function ServiceDetailScreen() {
             onPress={() => setSelectedOption('premium')}
           >
             <View style={styles.optionInfo}>
-              <Text style={styles.optionTitle}>Adicionar Cristalização</Text>
-              <Text style={styles.optionSub}>Proteção da pintura por até 3 meses</Text>
+              <Text style={styles.optionTitle}>{service.premiumTitle}</Text>
+              <Text style={styles.optionSub}>{service.premiumSubtitle}</Text>
             </View>
-            <Text style={styles.optionPrice}>+ R$ 40,00</Text>
+            <Text style={styles.optionPrice}>+ R$ {service.premiumSurcharge}</Text>
           </TouchableOpacity>
         </View>
       </ScrollView>
@@ -146,7 +179,7 @@ export default function ServiceDetailScreen() {
         <View>
           <Text style={styles.footerLabel}>Valor Total</Text>
           <Text style={styles.footerPrice}>
-            R$ {selectedOption === 'premium' ? '140,00' : '100,00'}
+            R$ {selectedOption === 'premium' ? service.premiumPrice : service.price}
           </Text>
         </View>
 
@@ -160,6 +193,8 @@ export default function ServiceDetailScreen() {
     </SafeAreaView>
   );
 }
+
+export default ServiceDetailScreen;
 
 const styles = StyleSheet.create({
   safeArea: {
