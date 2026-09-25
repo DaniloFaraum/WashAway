@@ -1,3 +1,5 @@
+import { useFonts, Viga_400Regular } from '@expo-google-fonts/viga';
+import * as SplashScreen from 'expo-splash-screen';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useRouter } from 'expo-router';
 import * as Location from 'expo-location';
@@ -106,6 +108,11 @@ const mockData = [
 
 export default function HomeScreen() {
   const router = useRouter();
+
+  const [fontsLoaded] = useFonts({
+    Viga_400Regular,
+  });
+
   const [activeTab, setActiveTab] = useState<ActiveTab>('lista');
   const [searchQuery, setSearchQuery] = useState('');
   const [currentAddress, setCurrentAddress] = useState('Buscando localização...');
@@ -162,6 +169,10 @@ export default function HomeScreen() {
 
     loadCurrentAddress();
   }, []);
+
+  if (!fontsLoaded) {
+    return null; // ou um indicador de carregamento
+  }
 
   async function handleManualAddressChange() {
     const query = typedAddress.trim();
@@ -459,9 +470,11 @@ const styles = StyleSheet.create({
     letterSpacing: 2.4,
     textAlign: 'center',
     color: colors.black,
+    fontFamily: 'Viga_400Regular',  
   },
   titleAccent: {
     color: colors.primary,
+    fontFamily: 'Viga_400Regular',
   },
   locationButton: {
     alignSelf: 'center',
