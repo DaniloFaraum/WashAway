@@ -10,16 +10,48 @@ import Typography from '@mui/material/Typography'
 import Stack from '@mui/material/Stack'
 import Snackbar from '@mui/material/Snackbar'
 import Alert from '@mui/material/Alert'
+import CircularProgress from '@mui/material/CircularProgress'
+import InputAdornment from '@mui/material/InputAdornment'
 import { useToast } from '../hooks/useToast.js'
+import { buscarCep } from './service/cep.service.js'
+
+function montarAddress({ logradouro, numero, bairro, cidade, estado, cep }) {
+  return `${logradouro}, ${numero} - ${bairro}, ${cidade} - ${estado}, CEP ${cep}`
+}
 
 function Login({ onEntrar, onCadastrar }) {
   const [modo, setModo] = useState('entrar')
   const [name, setName] = useState('')
-  const [address, setAddress] = useState('')
+  const [cep, setCep] = useState('')
+  const [numero, setNumero] = useState('')
+  const [logradouro, setLogradouro] = useState('')
+  const [bairro, setBairro] = useState('')
+  const [cidade, setCidade] = useState('')
+  const [estado, setEstado] = useState('')
+  const [buscandoCep, setBuscandoCep] = useState(false)
   const [cnpj, setCnpj] = useState('')
   const [senha, setSenha] = useState('')
   const [enviando, setEnviando] = useState(false)
   const { toast, showToast, closeToast } = useToast()
+
+  async function handleCepBlur() {
+    if (cep.length !== 8) return
+
+    setBuscandoCep(true)
+    try {
+      const endereco = await buscarCep(cep)
+      if (!endereco) {
+        showToast('CEP não encontrado — preencha o endereço manualmente.', 'error')
+        return
+      }
+      setLogradouro(endereco.logradouro)
+      setBairro(endereco.bairro)
+      setCidade(endereco.cidade)
+      setEstado(endereco.estado)
+    } finally {
+      setBuscandoCep(false)
+    }
+  }
 
   async function handleSubmit(event) {
     event.preventDefault()
@@ -28,6 +60,7 @@ function Login({ onEntrar, onCadastrar }) {
       if (modo === 'entrar') {
         await onEntrar({ cnpj, senha })
       } else {
+        const address = montarAddress({ logradouro, numero, bairro, cidade, estado, cep })
         await onCadastrar({ name, address, cnpj })
       }
     } catch (err) {
@@ -70,11 +103,58 @@ function Login({ onEntrar, onCadastrar }) {
                     fullWidth
                   />
                   <TextField
-                    label="Endereço"
-                    value={address}
-                    onChange={(event) => setAddress(event.target.value)}
+                    label="CEP"
+                    value={cep}
+                    onChange={(event) => setCep(event.target.value.replace(/\D/g, ''))}
+                    onBlur={handleCepBlur}
+                    fullWidth
+                    inputProps={{ maxLength: 8, inputMode: 'numeric' }}
+                    helperText="Só números, 8 dígitos"
+                    slotProps={{
+                      input: {
+                        endAdornment: buscandoCep && (
+                          <InputAdornment position="end">
+                            <CircularProgress size={18} />
+                          </InputAdornment>
+                        ),
+                      },
+                    }}
+                  />
+                  <Stack direction="row" spacing={2}>
+                    <TextField
+                      label="Logradouro"
+                      value={logradouro}
+                      onChange={(event) => setLogradouro(event.target.value)}
+                      fullWidth
+                    />
+                    <TextField
+                      label="Número"
+                      value={numero}
+                      onChange={(event) => setNumero(event.target.value)}
+                      required
+                      sx={{ width: '40%' }}
+                    />
+                  </Stack>
+                  <TextField
+                    label="Bairro"
+                    value={bairro}
+                    onChange={(event) => setBairro(event.target.value)}
                     fullWidth
                   />
+                  <Stack direction="row" spacing={2}>
+                    <TextField
+                      label="Cidade"
+                      value={cidade}
+                      onChange={(event) => setCidade(event.target.value)}
+                      fullWidth
+                    />
+                    <TextField
+                      label="Estado"
+                      value={estado}
+                      onChange={(event) => setEstado(event.target.value)}
+                      sx={{ width: '30%' }}
+                    />
+                  </Stack>
                 </>
               )}
 
