@@ -186,6 +186,15 @@ export const openApiDocument = {
           404: { description: 'Não encontrado.', content: { 'application/json': { schema: { $ref: '#/components/schemas/Erro' } } } },
         },
       },
+      delete: {
+        tags: ['lavaRapidos'],
+        summary: 'Exclui um lava-rápido (em cascata: apaga junto seus pedidos, serviços e intercorrências)',
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+        responses: {
+          204: { description: 'Excluído.' },
+          404: { description: 'Não encontrado.', content: { 'application/json': { schema: { $ref: '#/components/schemas/Erro' } } } },
+        },
+      },
     },
     '/pedidos': {
       get: {

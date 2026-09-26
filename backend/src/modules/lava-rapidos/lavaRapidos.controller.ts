@@ -3,6 +3,7 @@ import { Prisma } from '@prisma/client'
 import {
   autenticarLavaRapido,
   criarLavaRapido,
+  deleteLavaRapido,
   getLavaRapidoById,
   listLavaRapidos,
   omitSenha,
@@ -42,6 +43,19 @@ export async function create(req: Request, res: Response) {
   } catch (error) {
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
       res.status(409).json({ error: 'Já existe uma empresa cadastrada com esse cnpj' })
+      return
+    }
+    throw error
+  }
+}
+
+export async function destroy(req: Request, res: Response) {
+  try {
+    await deleteLavaRapido(req.params.id)
+    res.status(204).end()
+  } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') {
+      res.status(404).json({ error: 'Lava-rápido não encontrado' })
       return
     }
     throw error

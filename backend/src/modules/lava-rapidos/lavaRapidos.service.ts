@@ -21,6 +21,10 @@ export async function listLavaRapidos() {
   }))
 }
 
+export function deleteLavaRapido(id: string) {
+  return prisma.lavaRapido.delete({ where: { id } })
+}
+
 export async function getLavaRapidoById(id: string) {
   const lavaRapido = await prisma.lavaRapido.findUnique({ where: { id } })
   if (!lavaRapido) return null

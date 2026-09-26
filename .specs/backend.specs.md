@@ -109,6 +109,7 @@ model Intercorrencia {
 | `/lava-rapidos/:id` | `GET` | Um lava-rápido; `404` se não existir. `isOpen` é calculado (ver nota acima); inclui `intercorrenciaAtiva` (`{...} \| null`). |
 | `/lava-rapidos` | `POST` | Cadastro: body `{ name, address?, cnpj }`; `400` se `cnpj` não tiver 14 dígitos numéricos ou `name` faltar; `409` se `cnpj` já existir; senha fixada como hash de `"admin"` (bcryptjs), demais campos com defaults (`rating`/`reviewsCount`/`price`/`latitude`/`longitude`: `0`, `distance`/`time`: `''`, `isOpen`: `true`, `image`: placeholder). Resposta `201` sem o campo `senha`. |
 | `/lava-rapidos/login` | `POST` | Login: body `{ cnpj, senha }`; `401` se `cnpj` não existir ou `senha` não bater (bcrypt compare); `200` com o `LavaRapido` (sem `senha`) se validar. |
+| `/lava-rapidos/:id` | `DELETE` | Exclui o lava-rápido **em cascata** (`onDelete: Cascade` em `Pedido`/`Servico`/`Intercorrencia`, migration `20260926040000_lavarapido_delete_cascade`) — apaga junto seus pedidos, serviços e intercorrências. `204` se excluído, `404` se não existir. |
 | `/pedidos` | `GET` | Lista todos, mais recentes primeiro, com `lavaRapidoId`. Aceita `?lavaRapidoId=` opcional pra filtrar por empresa (usado pelo admin-front após o login). |
 | `/pedidos/:id` | `PATCH` | Atualiza **só** o `status` (body `{ status }`); `400` se o status não for um dos 3 válidos, `404` se o pedido não existir. |
 | `/servicos` | `GET` | Lista serviços. Aceita `?lavaRapidoId=` opcional. |

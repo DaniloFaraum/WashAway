@@ -36,7 +36,7 @@ enum PedidoStatus {
 model Pedido {
   id           String       @id @default(cuid())
   lavaRapidoId String
-  lavaRapido   LavaRapido   @relation(fields: [lavaRapidoId], references: [id])
+  lavaRapido   LavaRapido   @relation(fields: [lavaRapidoId], references: [id], onDelete: Cascade)
   veiculo      Json
   servico      String
   horario      DateTime
@@ -47,7 +47,7 @@ model Pedido {
 model Servico {
   id           String     @id @default(cuid())
   lavaRapidoId String
-  lavaRapido   LavaRapido @relation(fields: [lavaRapidoId], references: [id])
+  lavaRapido   LavaRapido @relation(fields: [lavaRapidoId], references: [id], onDelete: Cascade)
   nome         String
   categoria    String
   preco        Float
@@ -60,7 +60,7 @@ model Servico {
 model Intercorrencia {
   id           String     @id @default(cuid())
   lavaRapidoId String
-  lavaRapido   LavaRapido @relation(fields: [lavaRapidoId], references: [id])
+  lavaRapido   LavaRapido @relation(fields: [lavaRapidoId], references: [id], onDelete: Cascade)
   data         String
   motivo       String
   diaInteiro   Boolean    @default(true)

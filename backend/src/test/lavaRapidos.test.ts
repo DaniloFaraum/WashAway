@@ -104,6 +104,79 @@ describe('POST /lavaRapidos (cadastro)', () => {
   })
 })
 
+describe('DELETE /lavaRapidos/:id', () => {
+  it('exclui um lava-rápido sem dependentes e some da listagem', async () => {
+    const lavaRapido = await prisma.lavaRapido.create({
+      data: {
+        name: 'Lava-rápido a excluir',
+        cnpj: '77777777000177',
+        senha: 'hash-fake-nao-usado-nestes-testes',
+        rating: 0,
+        reviewsCount: 0,
+        distance: '',
+        time: '',
+        price: 0,
+        isOpen: true,
+        image: 'https://placehold.co/300x300?text=Excluir',
+        latitude: 0,
+        longitude: 0,
+      },
+    })
+
+    const response = await supertest(app).delete(`/lavaRapidos/${lavaRapido.id}`)
+    expect(response.status).toBe(204)
+
+    const show = await supertest(app).get(`/lavaRapidos/${lavaRapido.id}`)
+    expect(show.status).toBe(404)
+  })
+
+  it('exclui em cascata: apaga pedidos, serviços e intercorrências junto', async () => {
+    const lavaRapido = await prisma.lavaRapido.create({
+      data: {
+        name: 'Lava-rápido com dependentes',
+        cnpj: '88888888000188',
+        senha: 'hash-fake-nao-usado-nestes-testes',
+        rating: 0,
+        reviewsCount: 0,
+        distance: '',
+        time: '',
+        price: 0,
+        isOpen: true,
+        image: 'https://placehold.co/300x300?text=Dependentes',
+        latitude: 0,
+        longitude: 0,
+      },
+    })
+
+    const pedido = await prisma.pedido.create({
+      data: {
+        lavaRapidoId: lavaRapido.id,
+        veiculo: { modelo: 'Onix', placa: 'ABC1234' },
+        servico: 'Lavagem simples',
+        horario: new Date(),
+      },
+    })
+    const servico = await prisma.servico.create({
+      data: { lavaRapidoId: lavaRapido.id, nome: 'Lavagem', categoria: 'Lavagem', preco: 40 },
+    })
+    const intercorrencia = await prisma.intercorrencia.create({
+      data: { lavaRapidoId: lavaRapido.id, data: '2026-12-01', motivo: 'Teste', diaInteiro: true },
+    })
+
+    const response = await supertest(app).delete(`/lavaRapidos/${lavaRapido.id}`)
+    expect(response.status).toBe(204)
+
+    expect(await prisma.pedido.findUnique({ where: { id: pedido.id } })).toBeNull()
+    expect(await prisma.servico.findUnique({ where: { id: servico.id } })).toBeNull()
+    expect(await prisma.intercorrencia.findUnique({ where: { id: intercorrencia.id } })).toBeNull()
+  })
+
+  it('retorna 404 pra id inexistente', async () => {
+    const response = await supertest(app).delete('/lavaRapidos/id-que-nao-existe')
+    expect(response.status).toBe(404)
+  })
+})
+
 describe('isOpen calculado a partir de intercorrências', () => {
   let lavaRapidoId: string
 
