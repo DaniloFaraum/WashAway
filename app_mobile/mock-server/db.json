@@ -65,5 +65,15 @@
       "latitude": -23.5492,
       "longitude": -46.6348
     }
+  ],
+  "servicos": [
+    { "id": "s1", "lavaRapidoId": "1", "nome": "Lavagem simples", "categoria": "Lavagem", "preco": 40, "ativo": true },
+    { "id": "s2", "lavaRapidoId": "1", "nome": "Lavagem completa", "categoria": "Lavagem", "preco": 70, "ativo": true },
+    { "id": "s3", "lavaRapidoId": "1", "nome": "Polimento", "categoria": "Estética", "preco": 120, "ativo": false },
+    { "id": "s4", "lavaRapidoId": "2", "nome": "Lavagem simples", "categoria": "Lavagem", "preco": 35, "ativo": true }
+  ],
+  "intercorrencias": [
+    { "id": "i1", "lavaRapidoId": "1", "data": "2026-10-12", "motivo": "Feriado", "diaInteiro": true, "horaInicio": null, "horaFim": null },
+    { "id": "i2", "lavaRapidoId": "1", "data": "2026-09-25", "motivo": "Falta de energia", "diaInteiro": false, "horaInicio": "14:00", "horaFim": "16:00" }
   ]
 }
