@@ -1,8 +1,11 @@
 import { PedidoStatus } from '@prisma/client'
 import { prisma } from '../../config/prisma.js'
 
-export function listPedidos() {
-  return prisma.pedido.findMany({ orderBy: { horario: 'desc' } })
+export function listPedidos(lavaRapidoId?: string) {
+  return prisma.pedido.findMany({
+    where: lavaRapidoId ? { lavaRapidoId } : undefined,
+    orderBy: { horario: 'desc' },
+  })
 }
 
 export function getPedidoById(id: string) {

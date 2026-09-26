@@ -2,8 +2,15 @@ import type { Request, Response } from 'express'
 import { getPedidoById, listPedidos, updatePedidoStatus } from './pedidos.service.js'
 import { isValidStatus } from './pedidos.validation.js'
 
-export async function index(_req: Request, res: Response) {
-  const pedidos = await listPedidos()
+export async function index(req: Request, res: Response) {
+  const { lavaRapidoId } = req.query
+  const pedidos = await listPedidos(
+    typeof lavaRapidoId === 'string'
+      ? lavaRapidoId
+      : Array.isArray(lavaRapidoId) && typeof lavaRapidoId[0] === 'string'
+        ? lavaRapidoId[0]
+        : undefined,
+  )
   res.json(pedidos)
 }
 

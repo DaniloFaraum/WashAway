@@ -10,6 +10,9 @@ datasource db {
 model LavaRapido {
   id           String   @id @default(cuid())
   name         String
+  address      String?
+  cnpj         String   @unique
+  senha        String
   rating       Float    @default(0)
   reviewsCount Int      @default(0)
   distance     String

@@ -14,6 +14,8 @@ describe('/pedidos', () => {
     const lavaRapido = await prisma.lavaRapido.create({
       data: {
         name: 'Lava-rápido do pedido de teste',
+        cnpj: '22222222000122',
+        senha: 'hash-fake-nao-usado-nestes-testes',
         rating: 4.5,
         reviewsCount: 10,
         distance: '1 km',
@@ -52,6 +54,30 @@ describe('/pedidos', () => {
     expect(response.status).toBe(200)
     const pedido = response.body.find((item: { id: string }) => item.id === pedidoId)
     expect(pedido).toMatchObject({ lavaRapidoId, status: 'pendente' })
+  })
+
+  it('GET /pedidos?lavaRapidoId= filtra só os pedidos daquele lava-rápido', async () => {
+    const response = await supertest(app).get('/pedidos').query({ lavaRapidoId })
+
+    expect(response.status).toBe(200)
+    expect(response.body.every((item: { lavaRapidoId: string }) => item.lavaRapidoId === lavaRapidoId)).toBe(true)
+    expect(response.body.some((item: { id: string }) => item.id === pedidoId)).toBe(true)
+  })
+
+  it('GET /pedidos?lavaRapidoId= com id que não tem pedido retorna lista vazia', async () => {
+    const response = await supertest(app).get('/pedidos').query({ lavaRapidoId: 'id-sem-pedidos' })
+
+    expect(response.status).toBe(200)
+    expect(response.body).toEqual([])
+  })
+
+  it('GET /pedidos?lavaRapidoId= repetido usa o primeiro valor em vez de ignorar o filtro', async () => {
+    const response = await supertest(app)
+      .get('/pedidos')
+      .query({ lavaRapidoId: [lavaRapidoId, 'id-sem-pedidos'] })
+
+    expect(response.status).toBe(200)
+    expect(response.body.every((item: { lavaRapidoId: string }) => item.lavaRapidoId === lavaRapidoId)).toBe(true)
   })
 
   it('PATCH /pedidos/:id atualiza o status', async () => {

@@ -1,11 +1,18 @@
 import 'dotenv/config'
 import { PrismaClient } from '@prisma/client'
+import bcrypt from 'bcryptjs'
+import { SENHA_PADRAO } from '../src/modules/lava-rapidos/lavaRapidos.service.js'
 
 const prisma = new PrismaClient()
+
+// Hasheada aqui do mesmo jeito que o cadastro real (POST /lava-rapidos) faz.
+const SENHA_PADRAO_HASH = bcrypt.hashSync(SENHA_PADRAO, 10)
 
 const lavaRapidosData = [
   {
     name: 'Aqua Shine Lava-Rápido',
+    cnpj: '00000000000101',
+    senha: SENHA_PADRAO_HASH,
     rating: 4.8,
     reviewsCount: 124,
     distance: '1.2 km',
@@ -18,6 +25,8 @@ const lavaRapidosData = [
   },
   {
     name: 'Lava Rápido Centro',
+    cnpj: '00000000000102',
+    senha: SENHA_PADRAO_HASH,
     rating: 4.5,
     reviewsCount: 89,
     distance: '2.4 km',
@@ -30,6 +39,8 @@ const lavaRapidosData = [
   },
   {
     name: 'Super Wash Express',
+    cnpj: '00000000000103',
+    senha: SENHA_PADRAO_HASH,
     rating: 4.2,
     reviewsCount: 56,
     distance: '3.1 km',
@@ -42,6 +53,8 @@ const lavaRapidosData = [
   },
   {
     name: 'Brilho Total Premium',
+    cnpj: '00000000000104',
+    senha: SENHA_PADRAO_HASH,
     rating: 5.0,
     reviewsCount: 208,
     distance: '0.7 km',
@@ -54,6 +67,8 @@ const lavaRapidosData = [
   },
   {
     name: 'Crystal Jet Wash',
+    cnpj: '00000000000105',
+    senha: SENHA_PADRAO_HASH,
     rating: 4.6,
     reviewsCount: 141,
     distance: '4.8 km',
