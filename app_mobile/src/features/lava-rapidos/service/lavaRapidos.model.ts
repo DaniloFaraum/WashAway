@@ -1,6 +1,7 @@
 export interface LavaRapido {
   id: string
   name: string
+  address: string | null
   rating: number
   reviewsCount: number
   distance: string
@@ -16,6 +17,7 @@ export function normalizeLavaRapido(raw: any): LavaRapido {
   return {
     id: String(raw.id),
     name: raw.name ?? '',
+    address: raw.address ?? null,
     rating: Number(raw.rating) || 0,
     reviewsCount: Number(raw.reviewsCount) || 0,
     distance: raw.distance ?? '',

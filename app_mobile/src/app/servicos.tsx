@@ -8,10 +8,11 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 
 // Ícones do Lucide
 import {
-  Search, SlidersHorizontal, Check, Star, X, AlertTriangle
+  Search, SlidersHorizontal, Check, Star, X, AlertTriangle, MapPin
 } from 'lucide-react-native';
 
 import { colors } from '@/constants/colors';
+import { useLavaRapido } from '@/features/lava-rapidos/useLavaRapido';
 import { useServicos } from '@/features/servicos/useServicos';
 import type { Servico } from '@/features/servicos/service/servicos.model';
 import { useIntercorrencias, getIntercorrenciaRelevante, diasAte } from '@/features/intercorrencias/useIntercorrencias';
@@ -25,6 +26,7 @@ export default function ServicosScreen() {
   // Recebe o ID e Nome do lava-rápido passados na navegação
   const { id, nome } = useLocalSearchParams<{ id?: string; nome?: string }>();
 
+  const { lavaRapido } = useLavaRapido(id);
   const { servicos, loading, error } = useServicos(id);
   const { intercorrencias } = useIntercorrencias(id);
   const intercorrenciaRelevante = getIntercorrenciaRelevante(intercorrencias);
@@ -82,6 +84,12 @@ export default function ServicosScreen() {
         <View style={styles.lavaRapidoHeader}>
           <Text style={styles.lavaRapidoLabel}>Lava-rápido selecionado:</Text>
           <Text style={styles.lavaRapidoName}>{nome || 'Lava-rápido Padrão'}</Text>
+          {lavaRapido?.address && (
+            <View style={styles.enderecoRow}>
+              <MapPin color={colors.neutralGray || '#6B7280'} size={14} />
+              <Text style={styles.enderecoText}>{lavaRapido.address}</Text>
+            </View>
+          )}
         </View>
 
         {/* Aviso de disponibilidade (intercorrência de hoje ou próxima) */}
@@ -294,6 +302,8 @@ const styles = StyleSheet.create({
   lavaRapidoHeader: { marginBottom: 12, paddingBottom: 8, borderBottomWidth: 1, borderBottomColor: '#E5E7EB' },
   lavaRapidoLabel: { fontSize: 12, color: colors.neutralGray || '#6B7280' },
   lavaRapidoName: { fontSize: 18, fontWeight: '700', color: colors.primary },
+  enderecoRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4 },
+  enderecoText: { fontSize: 12, color: colors.neutralGray || '#6B7280', flexShrink: 1 },
   avisoBanner: {
     flexDirection: 'row',
     alignItems: 'center',

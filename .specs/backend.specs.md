@@ -23,7 +23,7 @@
 1. `cd backend && npm install`.
 2. `npm run docker:up` — sobe o Postgres (`docker compose up -d --wait`).
 3. `npx prisma migrate dev` (só a primeira vez, ou quando o schema mudar) — aplica as migrations em `prisma/migrations/` no banco de dev.
-4. `npm run prisma:seed` — popula `washaway` com 5 lava-rápidos, 3 pedidos, e 3 serviços + 2 intercorrências por lava-rápido (mesmos dados que já estavam nos `db.json` dos front-ends, agora ligados via `lavaRapidoId`).
+4. `npm run prisma:seed` — popula `washaway` com 5 lava-rápidos (cada um com `address` preenchido — mesma rua/bairro/cidade/CEP, número diferente por lava-rápido — pra o consumidor sempre ter um endereço pra ver no app_mobile), 3 pedidos, e 3 serviços + 2 intercorrências por lava-rápido (mesmos dados que já estavam nos `db.json` dos front-ends, agora ligados via `lavaRapidoId`).
 5. `npm run dev` — sobe o Express em `http://localhost:4000` (`tsx watch src/server.ts`).
 
 ## 4. Domínio implementado

@@ -16,3 +16,8 @@ export async function getLavaRapidos(): Promise<LavaRapido[]> {
   const data = await request(LAVA_RAPIDOS_ROUTES.list)
   return data.map(normalizeLavaRapido)
 }
+
+export async function getLavaRapido(id: string): Promise<LavaRapido> {
+  const data = await request(LAVA_RAPIDOS_ROUTES.detail(id))
+  return normalizeLavaRapido(data)
+}
