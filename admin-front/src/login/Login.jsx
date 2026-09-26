@@ -34,12 +34,10 @@ function Login({ onEntrar, onCadastrar }) {
   const [enviando, setEnviando] = useState(false)
   const { toast, showToast, closeToast } = useToast()
 
-  async function handleCepBlur() {
-    if (cep.length !== 8) return
-
+  async function buscarEnderecoPeloCep(cepDigitado) {
     setBuscandoCep(true)
     try {
-      const endereco = await buscarCep(cep)
+      const endereco = await buscarCep(cepDigitado)
       if (!endereco) {
         showToast('CEP não encontrado — preencha o endereço manualmente.', 'error')
         return
@@ -50,6 +48,14 @@ function Login({ onEntrar, onCadastrar }) {
       setEstado(endereco.estado)
     } finally {
       setBuscandoCep(false)
+    }
+  }
+
+  function handleCepChange(event) {
+    const novoCep = event.target.value.replace(/\D/g, '')
+    setCep(novoCep)
+    if (novoCep.length === 8) {
+      buscarEnderecoPeloCep(novoCep)
     }
   }
 
@@ -105,8 +111,7 @@ function Login({ onEntrar, onCadastrar }) {
                   <TextField
                     label="CEP"
                     value={cep}
-                    onChange={(event) => setCep(event.target.value.replace(/\D/g, ''))}
-                    onBlur={handleCepBlur}
+                    onChange={handleCepChange}
                     fullWidth
                     inputProps={{ maxLength: 8, inputMode: 'numeric' }}
                     helperText="Só números, 8 dígitos"
