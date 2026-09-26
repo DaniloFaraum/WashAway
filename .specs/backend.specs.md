@@ -101,6 +101,8 @@ model Intercorrencia {
 
 ## 5. Contrato de API implementado
 
+**Documentação interativa** (`docs/plan/swagger-backend/`): `GET /api-docs` serve a UI do Swagger (`swagger-ui-express`) com todas as rotas abaixo; `GET /api-docs.json` devolve o documento OpenAPI 3.0 cru (útil pra importar em Postman/Insomnia). Documento escrito à mão em `backend/src/docs/openapi.ts` (objeto TS, não gerado via `swagger-jsdoc`/comentários) — precisa ser atualizado manualmente quando uma rota muda; não há teste que garanta que o spec bate com o comportamento real além do smoke test de que os endpoints respondem.
+
 | Rota | Método | Descrição |
 |---|---|---|
 | `/lava-rapidos` | `GET` | Lista todos. `isOpen` é calculado (ver nota acima); não inclui `intercorrenciaAtiva` (só o detalhe). |
@@ -135,6 +137,8 @@ backend/
 │   ├── server.ts                    # importa createApp() e sobe na porta 4000
 │   ├── config/
 │   │   └── prisma.ts                # PrismaClient singleton
+│   ├── docs/
+│   │   └── openapi.ts                # documento OpenAPI 3.0 (objeto TS, escrito à mão) servido em /api-docs
 │   ├── modules/
 │   │   ├── lava-rapidos/{lavaRapidos.routes,controller,service}.ts
 │   │   ├── pedidos/{pedidos.routes,controller,service}.ts
@@ -149,7 +153,8 @@ backend/
 │       ├── pedidos.test.ts
 │       ├── servicos.test.ts
 │       ├── intercorrencias.test.ts
-│       └── veiculos.test.ts
+│       ├── veiculos.test.ts
+│       └── openApiDocs.test.ts      # smoke test: /api-docs (HTML) e /api-docs.json (OpenAPI cru) respondem
 └── vitest.config.ts                 # aponta DATABASE_URL pro banco de teste; exclui dist/ (ver nota)
 ```
 

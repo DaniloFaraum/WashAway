@@ -1,6 +1,8 @@
 import cors from 'cors'
 import type { NextFunction, Request, Response } from 'express'
 import express from 'express'
+import swaggerUi from 'swagger-ui-express'
+import { openApiDocument } from './docs/openapi.js'
 import { intercorrenciasRouter } from './modules/intercorrencias/intercorrencias.routes.js'
 import { lavaRapidosRouter } from './modules/lava-rapidos/lavaRapidos.routes.js'
 import { pedidosRouter } from './modules/pedidos/pedidos.routes.js'
@@ -12,6 +14,9 @@ export function createApp() {
 
   app.use(cors())
   app.use(express.json())
+
+  app.get('/api-docs.json', (_req, res) => res.json(openApiDocument))
+  app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(openApiDocument))
 
   // Path camelCase (não kebab-case) pra bater com `LAVA_RAPIDOS_ROUTES.list` já
   // existente em app_mobile/src/features/lava-rapidos/service/lavaRapidos.routes.ts
