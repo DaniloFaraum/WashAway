@@ -11,7 +11,6 @@ import Stack from '@mui/material/Stack'
 import Snackbar from '@mui/material/Snackbar'
 import Alert from '@mui/material/Alert'
 import CircularProgress from '@mui/material/CircularProgress'
-import InputAdornment from '@mui/material/InputAdornment'
 import { useToast } from '../hooks/useToast.js'
 import { buscarCep } from './service/cep.service.js'
 
@@ -34,10 +33,15 @@ function Login({ onEntrar, onCadastrar }) {
   const [enviando, setEnviando] = useState(false)
   const { toast, showToast, closeToast } = useToast()
 
-  async function buscarEnderecoPeloCep(cepDigitado) {
+  async function handleBuscarCep() {
+    if (cep.length !== 8) {
+      showToast('Digite os 8 dígitos do CEP antes de buscar.', 'error')
+      return
+    }
+
     setBuscandoCep(true)
     try {
-      const endereco = await buscarCep(cepDigitado)
+      const endereco = await buscarCep(cep)
       if (!endereco) {
         showToast('CEP não encontrado — preencha o endereço manualmente.', 'error')
         return
@@ -46,16 +50,10 @@ function Login({ onEntrar, onCadastrar }) {
       setBairro(endereco.bairro)
       setCidade(endereco.cidade)
       setEstado(endereco.estado)
+    } catch {
+      showToast('Não foi possível buscar o CEP agora — preencha o endereço manualmente.', 'error')
     } finally {
       setBuscandoCep(false)
-    }
-  }
-
-  function handleCepChange(event) {
-    const novoCep = event.target.value.replace(/\D/g, '')
-    setCep(novoCep)
-    if (novoCep.length === 8) {
-      buscarEnderecoPeloCep(novoCep)
     }
   }
 
@@ -108,28 +106,32 @@ function Login({ onEntrar, onCadastrar }) {
                     required
                     fullWidth
                   />
-                  <TextField
-                    label="CEP"
-                    value={cep}
-                    onChange={handleCepChange}
-                    fullWidth
-                    inputProps={{ maxLength: 8, inputMode: 'numeric' }}
-                    helperText="Só números, 8 dígitos"
-                    slotProps={{
-                      input: {
-                        endAdornment: buscandoCep && (
-                          <InputAdornment position="end">
-                            <CircularProgress size={18} />
-                          </InputAdornment>
-                        ),
-                      },
-                    }}
-                  />
+                  <Stack direction="row" spacing={1}>
+                    <TextField
+                      label="CEP"
+                      value={cep}
+                      onChange={(event) => setCep(event.target.value.replace(/\D/g, ''))}
+                      required
+                      fullWidth
+                      inputProps={{ maxLength: 8, inputMode: 'numeric' }}
+                      helperText="Só números, 8 dígitos"
+                    />
+                    <Button
+                      onClick={handleBuscarCep}
+                      disabled={buscandoCep || cep.length !== 8}
+                      variant="outlined"
+                      sx={{ height: 56, whiteSpace: 'nowrap' }}
+                      startIcon={buscandoCep ? <CircularProgress size={16} /> : null}
+                    >
+                      Buscar
+                    </Button>
+                  </Stack>
                   <Stack direction="row" spacing={2}>
                     <TextField
                       label="Logradouro"
                       value={logradouro}
                       onChange={(event) => setLogradouro(event.target.value)}
+                      required
                       fullWidth
                     />
                     <TextField
@@ -144,6 +146,7 @@ function Login({ onEntrar, onCadastrar }) {
                     label="Bairro"
                     value={bairro}
                     onChange={(event) => setBairro(event.target.value)}
+                    required
                     fullWidth
                   />
                   <Stack direction="row" spacing={2}>
@@ -151,12 +154,14 @@ function Login({ onEntrar, onCadastrar }) {
                       label="Cidade"
                       value={cidade}
                       onChange={(event) => setCidade(event.target.value)}
+                      required
                       fullWidth
                     />
                     <TextField
                       label="Estado"
                       value={estado}
                       onChange={(event) => setEstado(event.target.value)}
+                      required
                       sx={{ width: '30%' }}
                     />
                   </Stack>
