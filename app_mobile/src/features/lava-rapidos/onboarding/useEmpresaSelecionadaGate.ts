@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react'
-import { getEmpresaSelecionada } from './empresaSelecionada.storage'
+import { useCallback, useEffect, useState } from 'react'
+import { clearEmpresaSelecionada, getEmpresaSelecionada } from './empresaSelecionada.storage'
 
 /**
  * Checa se o consumidor já escolheu uma empresa (lava-rápido) no onboarding.
@@ -15,5 +15,10 @@ export function useEmpresaSelecionadaGate() {
     })
   }, [])
 
-  return { pronto, temEmpresaSelecionada }
+  const trocarEmpresa = useCallback(async () => {
+    await clearEmpresaSelecionada()
+    setTemEmpresaSelecionada(false)
+  }, [])
+
+  return { pronto, temEmpresaSelecionada, trocarEmpresa }
 }

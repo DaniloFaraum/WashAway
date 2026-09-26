@@ -9,3 +9,7 @@ export async function getEmpresaSelecionada(): Promise<string | null> {
 export async function setEmpresaSelecionada(id: string): Promise<void> {
   await AsyncStorage.setItem(EMPRESA_SELECIONADA_KEY, id)
 }
+
+export async function clearEmpresaSelecionada(): Promise<void> {
+  await AsyncStorage.removeItem(EMPRESA_SELECIONADA_KEY)
+}

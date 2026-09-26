@@ -4,6 +4,7 @@ import * as Location from 'expo-location';
 import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   FlatList,
   Keyboard,
   KeyboardAvoidingView,
@@ -23,6 +24,7 @@ import { CarWashCard } from '@/components/CarWashCard';
 import { colors } from '@/constants/colors';
 import { centeredStyle } from '@/constants/commonStyles';
 import { useLavaRapidos } from '@/features/lava-rapidos/useLavaRapidos';
+import { useEmpresaSelecionadaGate } from '@/features/lava-rapidos/onboarding/useEmpresaSelecionadaGate';
 
 let MapView: any = null;
 let Marker: any = null;
@@ -42,6 +44,7 @@ function parseDistance(distance: string) {
 export default function HomeScreen() {
   const router = useRouter();
   const { lavaRapidos, loading: loadingLavaRapidos, error: lavaRapidosError } = useLavaRapidos();
+  const { trocarEmpresa } = useEmpresaSelecionadaGate();
   const [activeTab, setActiveTab] = useState<ActiveTab>('lista');
   const [searchQuery, setSearchQuery] = useState('');
   const [currentAddress, setCurrentAddress] = useState('Buscando localização...');
@@ -121,24 +124,52 @@ export default function HomeScreen() {
     setTypedAddress('');
   }
 
+  function handleTrocarEmpresa() {
+    Alert.alert(
+      'Trocar lava-rápido?',
+      'Você vai escolher outro lava-rápido.',
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Trocar',
+          style: 'destructive',
+          onPress: async () => {
+            await trocarEmpresa();
+            router.replace('/onboarding');
+          },
+        },
+      ],
+    );
+  }
+
   const header = (
     <View style={styles.header}>
       <Text style={styles.title}>
         WASH <Text style={styles.titleAccent}>YOUR</Text> WAY
       </Text>
 
-      <Pressable
-        style={styles.locationButton}
-        accessibilityRole="button"
-        accessibilityLabel="Alterar localização"
-        onPress={() => {
-          setTypedAddress('');
-          setIsAddressModalVisible(true);
-        }}>
-        <Text style={styles.locationText} numberOfLines={1}>
-          📍 {currentAddress} ▾
-        </Text>
-      </Pressable>
+      <View style={styles.locationRow}>
+        <Pressable
+          style={styles.locationButton}
+          accessibilityRole="button"
+          accessibilityLabel="Alterar localização"
+          onPress={() => {
+            setTypedAddress('');
+            setIsAddressModalVisible(true);
+          }}>
+          <Text style={styles.locationText} numberOfLines={1}>
+            📍 {currentAddress} ▾
+          </Text>
+        </Pressable>
+
+        <Pressable
+          style={styles.trocarEmpresaButton}
+          accessibilityRole="button"
+          accessibilityLabel="Trocar lava-rápido"
+          onPress={handleTrocarEmpresa}>
+          <Ionicons name="swap-horizontal-outline" size={18} color={colors.primary} />
+        </Pressable>
+      </View>
 
       <View style={styles.searchBar}>
         <Ionicons name="search-outline" size={20} color={colors.neutralGray} />
@@ -417,9 +448,15 @@ const styles = StyleSheet.create({
   titleAccent: {
     color: colors.primary,
   },
-  locationButton: {
+  locationRow: {
+    flexDirection: 'row',
     alignSelf: 'center',
+    alignItems: 'center',
     maxWidth: '90%',
+    gap: 8,
+  },
+  locationButton: {
+    flexShrink: 1,
     backgroundColor: colors.primary,
     borderRadius: 22,
     paddingHorizontal: 18,
@@ -429,6 +466,16 @@ const styles = StyleSheet.create({
     color: colors.white,
     fontSize: 14,
     fontWeight: '600',
+  },
+  trocarEmpresaButton: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.white,
+    borderWidth: 1.5,
+    borderColor: colors.primary,
   },
   searchBar: {
     flexDirection: 'row',

@@ -27,16 +27,16 @@
 - **Fontes**: `@expo-google-fonts/poppins` e `@expo-google-fonts/albert-sans`, carregadas via `useFonts` em `src/app/_layout.tsx`.
 - **Ícones**: `lucide-react-native` (telas do produto) e `@expo/vector-icons` (Ionicons, usado em `index.tsx` e no template starter).
 - Scripts: `npm start` (`expo start`), `npm run android`/`ios`/`web`, `npm run lint` (`expo lint`), `npm run reset-project` (script padrão do template Expo, não usado no fluxo normal).
-- **json-server** como back-end simulado da feature-piloto `lava-rapidos` (dev e testes) — ver seção 4.1. As demais telas (`servicos`, `detail`) ainda não migraram e continuam com mock local (achado #10 na seção 6, agora só parcial).
+- **Back-end real** (`WashAway/backend/`, ver `backend.specs.md`) como padrão da feature `lava-rapidos` (`BACKEND_API_BASE_URL`, porta 4000); `json-server` continua disponível como fallback manual e é quem roda nos testes (`globalSetup`). As demais telas (`servicos`, `detail`) ainda não migraram e continuam com mock local (achado #10 na seção 6, agora só parcial).
 - **Vitest** como test runner — só para a camada `service/model` (JS/TS puro, sem `react-native`), não para componentes/telas. Ver seção 4.1 e 3.2.
 
 ### 3.1 Como rodar
 
 1. `cd app_mobile && npm install` (só na primeira vez, ou quando `package.json` mudar).
-2. Em um terminal: `npm run mock-server` — sobe o back-end simulado da feature `lava-rapidos` em `http://localhost:3003` (só essa feature consome API real por enquanto; `servicos`/`detail` continuam com mock local).
+2. Suba o back-end de verdade (`WashAway/backend/`, ver `backend.specs.md`) em `http://localhost:4000` — é o padrão agora pra feature `lava-rapidos` (Home + onboarding). Pra usar o `json-server` como fallback manual: `npm run mock-server` (porta 3003) + `EXPO_PUBLIC_API_BASE_URL=http://localhost:3003`.
 3. Em outro terminal (a partir da raiz do repo `washaway/WashAway/`): `python3 scripts/run.py --project app_mobile` (ou `cd app_mobile && npm start`) — abre o Metro Bundler.
 4. No terminal do Metro, escolher a plataforma: `w` para abrir no navegador (web, `http://localhost:8081` por padrão), `a`/`i` para emulador Android/iOS, ou escanear o QR code com o app **Expo Go**. Também dá pra pedir direto: `python3 scripts/run.py --project app_mobile --web` (ou `npm run web`), `npm run android`, `npm run ios`.
-5. Sem o passo 2, a Home fica em loading indefinido / mostra erro de rede (ela busca os lava-rápidos via `fetch`, não tem mais fallback pra dado fixo).
+5. Sem o passo 2 (algum back-end no ar em `BASE_URL`), a Home/onboarding ficam em loading indefinido / mostram erro de rede (buscam os lava-rápidos via `fetch`, sem fallback pra dado fixo).
 6. No web, a aba "Mapa" da Home mostra uma mensagem de indisponibilidade em vez do mapa (ver seção 6, item 13) — pra ver o mapa de verdade é preciso rodar em Android/iOS (emulador ou Expo Go).
 
 ### 3.2 Como testar
@@ -68,7 +68,7 @@ app_mobile/
 │   │           ├── lavaRapidos.model.ts     # forma dos dados + normalização
 │   │           └── lavaRapidos.service.ts   # getLavaRapidos(), usa routes + model
 │   ├── config/
-│   │   └── api.ts                # DEV_API_PORT/DEV_API_BASE_URL (porta 3003)
+│   │   └── api.ts                # DEV_API_BASE_URL (json-server, 3003) + BACKEND_API_BASE_URL (backend real, 4000, padrão)
 │   ├── test/
 │   │   ├── setup/                # globalSetup do Vitest (sobe/derruba json-server de teste, porta 3004)
 │   │   ├── fixtures/              # db.json isolado para teste
@@ -103,15 +103,16 @@ app_mobile/
 
 - Os arquivos em `src/app/*.tsx` continuam existindo e são a rota de verdade (exigência do expo-router) — mas viram consumidores finos de uma `feature` em `src/features/<nome>/`, que é quem tem o `service/` (mesmo padrão do admin-front: `routes.ts`+`model.ts`+`service.ts`).
 - **Piloto implementado**: `src/features/lava-rapidos/`, consumido só por `(tabs)/index.tsx` (Home). `servicos.tsx` e `detail.tsx` **ainda não migraram** — continuam com mock local (achado #10 da seção 6 segue valendo pra elas).
-- Back-end simulado com `json-server`, igual ao admin-front: `npm run mock-server` (porta 3003, dev manual) e `globalSetup` do Vitest (porta 3004, automático nos testes).
-- Variável de ambiente do service: `process.env.EXPO_PUBLIC_API_BASE_URL` (convenção do Expo/Metro para inlinar env vars no bundle — **não** `import.meta.env`, que é específico do Vite/admin-front), com fallback pra `DEV_API_BASE_URL` (`src/config/api.ts`).
+- **Back-end real por padrão** (`WashAway/backend/`, ver `backend.specs.md`): `lavaRapidos.service.ts` usa `BACKEND_API_BASE_URL` (`http://localhost:4000`) como fallback quando `EXPO_PUBLIC_API_BASE_URL` não está definida. `json-server` (`npm run mock-server`, porta 3003) continua disponível como fallback manual (defina a env var pra usá-lo) e é quem roda automaticamente nos testes (`globalSetup`, porta 3004) — os testes não são afetados pela troca de padrão.
+- Variável de ambiente do service: `process.env.EXPO_PUBLIC_API_BASE_URL` (convenção do Expo/Metro para inlinar env vars no bundle — **não** `import.meta.env`, que é específico do Vite/admin-front).
 - Test runner: **Vitest** (não Jest/`jest-expo`) — só é possível porque `service.ts`/`model.ts`/`routes.ts` são TS puro, sem import de `react-native`/`expo-router`. Testar componentes/telas exigiria Jest + `jest-expo`, decisão maior, fora do escopo desse piloto.
 - **Mudança de contrato do `image`**: a Home mockava `image` como `require('.../lava1.jpg')` (asset local, um número de módulo RN). Isso não é serializável em JSON/API — o `db.json`/fixture usam URLs (`https://placehold.co/...`) e `CarWashCard` passou a esperar `image: string` (`<Image source={{ uri: image }} />`) em vez de `ImageSourcePropType`. As imagens locais (`assets/images/lava*.jpg`) pararam de ser referenciadas pela Home.
-- **Onboarding (escolha da empresa)**: `docs/plan/onboarding-lava-rapido/` implementou um fluxo restrito à escolha do lava-rápido (não confundir com um onboarding de conta/cadastro). `src/features/lava-rapidos/onboarding/empresaSelecionada.storage.ts` lê/grava o id escolhido via `@react-native-async-storage/async-storage` (chave `@washaway/empresaSelecionadaId`). `src/app/_layout.tsx` checa esse valor antes de renderizar o `Stack` e usa `<Redirect href="/onboarding" />` quando nada foi escolhido ainda — a escolha é local ao aparelho, sem sincronização com backend (não existe um ainda).
+- **Onboarding (escolha da empresa)**: `docs/plan/onboarding-lava-rapido/` implementou um fluxo restrito à escolha do lava-rápido (não confundir com um onboarding de conta/cadastro). `src/features/lava-rapidos/onboarding/empresaSelecionada.storage.ts` lê/grava o id escolhido via `@react-native-async-storage/async-storage` (chave `@washaway/empresaSelecionadaId`), e agora também expõe `clearEmpresaSelecionada()`. `src/app/_layout.tsx` usa o hook `useEmpresaSelecionadaGate` e navegação **imperativa** (`router.replace('/onboarding')` num `useEffect`) pra mandar pro onboarding quando nada foi escolhido ainda — **não** `<Redirect>` (ver achado de review: `<Redirect>` depende de `useFocusEffect`/`useNavigation`, cujo comportamento no layout raiz, fora de qualquer `Stack.Screen`, não é confiável). A escolha é local ao aparelho; a partir do `backend-mvp` (`WashAway/.specs/backend.specs.md`) os `id`s de lava-rápido escolhidos já vêm do mesmo Postgres que o `painel-pedidos` do admin-front usa — a escolha em si continua sem sincronizar com o backend (não existe conceito de conta/usuário ainda).
+- **Trocar de lava-rápido** (`docs/plan/trocar-lava-rapido-app-mobile/`): a Home (`(tabs)/index.tsx`) tem um botão "Trocar lava-rápido" ao lado do botão de localização; toca → `Alert.alert` de confirmação → confirmando, `useEmpresaSelecionadaGate().trocarEmpresa()` limpa a escolha (`clearEmpresaSelecionada`) e `router.replace('/onboarding')` volta pro onboarding. Resolve a limitação que existia antes (só dava pra escolher uma vez, sem jeito de voltar).
 
 ## 5. Rotas e navegação
 
-- `/onboarding` — primeira tela quando não há empresa (lava-rápido) escolhida ainda no aparelho (ver seção 4.1); lista simplificada (nome + distância) vinda de `getLavaRapidos()`, sem mapa/filtros/busca. Escolher navega para `/(tabs)` e não aparece mais nas próximas aberturas.
+- `/onboarding` — primeira tela quando não há empresa (lava-rápido) escolhida ainda no aparelho (ver seção 4.1); lista simplificada (nome + distância) vinda de `getLavaRapidos()`, sem mapa/filtros/busca. Escolher navega para `/(tabs)` e não aparece mais nas próximas aberturas — a menos que o consumidor toque em "Trocar lava-rápido" na Home, que volta pra cá.
 - `/(tabs)` → `AppTabs` (NativeTabs) com 2 abas: **Home** (`index.tsx`) e **Explore** (`explore.tsx`, boilerplate — seção 6).
 - `/servicos` — recebe `id`/`nome` via `useLocalSearchParams` (passados pelo `CarWashCard` da Home ou pelo `Marker` do mapa). Mostra serviços mockados (dados fixos, ignora o `id` recebido — sempre os mesmos 2 serviços).
 - `/detail` — **não recebe nenhum parâmetro de navegação** apesar de `servicos.tsx` navegar com `router.push('/detail')`; mostra sempre o mesmo serviço hardcoded ("Lavagem Completa Premium"), independente do que foi selecionado em `servicos.tsx`. Ou seja, a navegação Home → Serviços → Detalhe existe visualmente, mas **os dados não fluem entre as três telas** — cada uma tem seu próprio mock isolado.
