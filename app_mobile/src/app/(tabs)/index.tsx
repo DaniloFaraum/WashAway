@@ -134,8 +134,12 @@ export default function HomeScreen() {
           text: 'Trocar',
           style: 'destructive',
           onPress: async () => {
-            await trocarEmpresa();
-            router.replace('/onboarding');
+            try {
+              await trocarEmpresa();
+              router.replace('/onboarding');
+            } catch {
+              Alert.alert('Não foi possível trocar de lava-rápido. Tente de novo.');
+            }
           },
         },
       ],
