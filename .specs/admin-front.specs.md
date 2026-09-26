@@ -124,11 +124,10 @@ Desde a task `selecao-empresa-admin-front` (`docs/plan/selecao-empresa-admin-fro
 
 ## 5. Back-end
 
-O back-end real (`WashAway/backend/`, Express + Prisma + PostgreSQL — ver `WashAway/.specs/backend.specs.md`) existe, mas só cobre `pedidos`/`lava-rapidos` (escopo do `backend-mvp`). As páginas `Serviços`/`Disponibilidade`/`Veículos` ainda usam só o `json-server` local — não têm equivalente no backend real ainda.
+O back-end real (`WashAway/backend/`, Express + Prisma + PostgreSQL — ver `WashAway/.specs/backend.specs.md`) cobre agora as 4 páginas: `pedidos`/`lava-rapidos` (escopo do `backend-mvp`) e, desde `migrar-servicos-disponibilidade-veiculos-backend`, também `servicos`/`disponibilidade`/`veiculos`.
 
-- **`painel-pedidos` (real por padrão)**: `pedidos.service.js` aponta pra `BACKEND_API_BASE_URL` (`http://localhost:4000`, `src/config/api.js`) por padrão. Pra usar o `json-server` como fallback manual: `npm run mock-server` (porta 3001) + `VITE_API_BASE_URL=http://localhost:3001`.
-- **`servicos`/`disponibilidade`/`veiculos` (só mock)**: continuam 100% no `json-server` (`npm run mock-server`, mesmo `db.json` compartilhado) — não têm `BACKEND_API_BASE_URL` nem equivalente no backend real.
-- **Em teste**: cada suíte de `service` (das 4 páginas) sobe seu próprio `json-server` de teste via `globalSetup` do Vitest, isolado do backend real — não afetado pela troca de padrão do `painel-pedidos`.
+- **Todas as 4 páginas apontam pro backend real por padrão**: cada `*.service.js` usa `BACKEND_API_BASE_URL` (`http://localhost:4000`, `src/config/api.js`) e manda `?lavaRapidoId=` (via `getEmpresaLogadaId()`, `src/login/sessao.storage.js`) nas chamadas de `GET`; `disponibilidade.service.js` injeta `lavaRapidoId` no body do `POST /intercorrencias` também via `getEmpresaLogadaId()` — nenhuma página (`.jsx`) passa isso explicitamente, o `service` busca sozinho na sessão (mesmo padrão de `pedidos.service.js`). Pra usar o `json-server` como fallback manual: `npm run mock-server` (porta 3001) + `VITE_API_BASE_URL=http://localhost:3001` — o `mock-server`/`db.json` continuam existindo, não foram removidos.
+- **Em teste**: cada suíte de `service` (das 4 páginas) sobe seu próprio `json-server` de teste via `globalSetup` do Vitest — funciona como dublê do backend real (mesmas rotas/filtro por `lavaRapidoId`, já que `json-server` filtra por igualdade de campo nativamente), não bate no Postgres.
 - **Nota sobre a versão do `json-server`**: a versão instalada (`^1.0.0-beta.15`) é a reescrita v1, com CLI diferente da v0 clássica — não tem flag `--watch` (recarrega sozinho) e normaliza `id` para string, além de injetar um campo `$schema` no `db.json` ao rodar. Isso é esperado, não é bug.
 
 ## 6. Domínio conhecido até aqui
@@ -206,10 +205,10 @@ Regra para novas flags: mesma convenção (chave em `FEATURE_FLAGS`, consumida v
 
 | Página | Rota | Pasta | Status |
 |---|---|---|---|
-| Painel de pedidos | `/` | `src/pages/painel-pedidos/` | Implementada (task `painel-de-pedidos`, plano em `docs/plan/painel-de-pedidos/painel-de-pedidos-v2.md`) |
-| Serviços | `/servicos` | `src/pages/servicos/` | Implementada (task `telas-servicos-disponibilidade-veiculos`) — só listar + ativar/desativar, sem criar/editar/excluir (ver seção 6) |
-| Disponibilidade | `/disponibilidade` | `src/pages/disponibilidade/` | Implementada (task `telas-servicos-disponibilidade-veiculos`) — calendário de intercorrências pontuais, não a agenda regular |
-| Veículos | `/veiculos` | `src/pages/veiculos/` | Implementada (task `telas-servicos-disponibilidade-veiculos`) — listagem read-only |
+| Painel de pedidos | `/` | `src/pages/painel-pedidos/` | Implementada (task `painel-de-pedidos`, plano em `docs/plan/painel-de-pedidos/painel-de-pedidos-v2.md`); backend real desde `backend-mvp` |
+| Serviços | `/servicos` | `src/pages/servicos/` | Implementada (task `telas-servicos-disponibilidade-veiculos`) — só listar + ativar/desativar, sem criar/editar/excluir (ver seção 6); backend real desde `migrar-servicos-disponibilidade-veiculos-backend` |
+| Disponibilidade | `/disponibilidade` | `src/pages/disponibilidade/` | Implementada (task `telas-servicos-disponibilidade-veiculos`) — calendário de intercorrências pontuais, não a agenda regular; backend real desde `migrar-servicos-disponibilidade-veiculos-backend` |
+| Veículos | `/veiculos` | `src/pages/veiculos/` | Implementada (task `telas-servicos-disponibilidade-veiculos`) — listagem read-only; backend real (derivado de `Pedido`, sem tabela própria) desde `migrar-servicos-disponibilidade-veiculos-backend` |
 
 ## 9. Testes
 
@@ -243,12 +242,14 @@ Decisões arquiteturais tomadas ao longo das tasks, na ordem em que foram confir
 9. **Shell com sidebar fixa + `PageHeader`, só na estrutura** (`docs/plan/shell-sidebar-navegacao`, confirmado com o usuário) — inspirado numa referência externa (painel do lojista do iFood), mas copiando só o padrão estrutural (navegação lateral + breadcrumb/título), não cores/estilo. Mantém o tema MUI padrão; sem colapso/responsividade da sidebar por ora. Primeiro uso real de `src/components/` global.
 10. **admin-front é "PDV", não "ERP"** (`docs/plan/telas-servicos-disponibilidade-veiculos`, confirmado com o usuário) — cadastro/configuração do negócio (catálogo de serviços, agenda regular, tipos de veículo) fica pra um onboarding do dono que ainda não existe; o admin-front só opera o dia a dia em cima disso (ativar/desativar serviço, registrar intercorrência pontual, ver veículos). Essa distinção guia o recorte de qualquer página nova que pareça "cadastro".
 11. **Login real por CNPJ + senha fixa, não "lembrar localmente"** (`docs/plan/selecao-empresa-admin-front`, confirmado com o usuário após 3 rodadas de correção) — a primeira ideia (dispositivo "lembra" qual empresa foi cadastrada nele, sem senha) foi descartada porque não permite login de outro aparelho; a segunda ideia (selecionar entre todas as empresas cadastradas, sem cadastro próprio) também foi descartada por confundir "selecionar empresa existente" com "onboarding/cadastro da própria empresa" (analogia usada: iFood dono da loja vs. iFood consumidor). Decisão final: cadastro (nome + endereço + CNPJ, sem pedir senha) com senha sempre fixada como `"admin"` no backend, e login de verdade (CNPJ + senha) contra o backend — funciona de qualquer aparelho, sem exigir um modelo de auth completo (JWT etc., fora de escopo).
+12. **`Veiculo` sem tabela própria no backend** (`docs/plan/migrar-servicos-disponibilidade-veiculos-backend`) — um veículo já existe embutido em `Pedido.veiculo`; a página `veiculos` só precisa listar, então `GET /veiculos` deriva a lista (dedup por `placa`) em vez de normalizar uma entidade nova sem caso de uso que dependa disso (YAGNI).
+13. **Services continuam buscando `lavaRapidoId` sozinhos, nunca recebendo por prop** (`docs/plan/migrar-servicos-disponibilidade-veiculos-backend`) — mesmo padrão que `pedidos.service.js` já usava (`getEmpresaLogadaId()` importado direto no `service.js`); nenhuma das páginas (`Servicos.jsx`/`Disponibilidade.jsx`/`Veiculos.jsx`) precisou mudar.
 
 ## 12. Riscos/decisões ainda em aberto
 
 - `docs/plan/painel-de-pedidos/painel-de-pedidos-v2.md` — script único para subir `mock-server` + dev server juntos, porta fixa do `json-server`, se os dois `db.json` (dev/teste) deveriam ser um só, fonte específica das fotos placeholder.
 - `docs/plan/shell-sidebar-navegacao/shell-sidebar-navegacao.md` — nomes/agrupamento dos itens de menu da sidebar (hoje assumido um único grupo "Operação", sem indicação do usuário).
-- `docs/plan/telas-servicos-disponibilidade-veiculos/telas-servicos-disponibilidade-veiculos.md` — depende de um "onboarding do dono do lava-rápido" (cadastro do catálogo de serviços, tipos de veículo, agenda regular) que ainda não existe em nenhum front; as 3 páginas novas (`servicos`/`disponibilidade`/`veiculos`) operam sobre dados mockados que simulam esse onboarding já ter acontecido.
+- `docs/plan/telas-servicos-disponibilidade-veiculos/telas-servicos-disponibilidade-veiculos.md` — depende de um "onboarding do dono do lava-rápido" (cadastro do catálogo de serviços, tipos de veículo, agenda regular) que ainda não existe em nenhum front; as 3 páginas novas (`servicos`/`disponibilidade`/`veiculos`) já usam o backend real (seed com dados por lava-rápido, ver `backend.specs.md` seção 3), mas continuam sem UI de cadastro/edição do catálogo em si — isso simula o onboarding já ter acontecido.
 
 ## Referências
 - `CLAUDE.md` (raiz do repo) — status geral do projeto, atualizado a cada task.

@@ -23,7 +23,7 @@
 1. `cd backend && npm install`.
 2. `npm run docker:up` — sobe o Postgres (`docker compose up -d --wait`).
 3. `npx prisma migrate dev` (só a primeira vez, ou quando o schema mudar) — aplica as migrations em `prisma/migrations/` no banco de dev.
-4. `npm run prisma:seed` — popula `washaway` com 5 lava-rápidos e 3 pedidos (mesmos dados que já estavam nos dois `db.json` dos front-ends, agora ligados via `lavaRapidoId`).
+4. `npm run prisma:seed` — popula `washaway` com 5 lava-rápidos, 3 pedidos, e 3 serviços + 2 intercorrências por lava-rápido (mesmos dados que já estavam nos `db.json` dos front-ends, agora ligados via `lavaRapidoId`).
 5. `npm run dev` — sobe o Express em `http://localhost:4000` (`tsx watch src/server.ts`).
 
 ## 4. Domínio implementado
@@ -63,7 +63,32 @@ model Pedido {
   status       PedidoStatus @default(pendente)
   fotos        String[]     # URLs estáticas (mock) — upload real não existe (seção 7)
 }
+
+model Servico {
+  id           String     @id @default(cuid())
+  lavaRapidoId String
+  lavaRapido   LavaRapido @relation(fields: [lavaRapidoId], references: [id])
+  nome         String
+  categoria    String
+  preco        Float
+  ativo        Boolean    @default(true)
+}
+
+model Intercorrencia {
+  id           String     @id @default(cuid())
+  lavaRapidoId String
+  lavaRapido   LavaRapido @relation(fields: [lavaRapidoId], references: [id])
+  data         String     # "YYYY-MM-DD" — ver nota abaixo, não é DateTime de propósito
+  motivo       String
+  diaInteiro   Boolean    @default(true)
+  horaInicio   String?
+  horaFim      String?
+}
 ```
+
+`Servico` e `Intercorrencia` foram adicionados na task `migrar-servicos-disponibilidade-veiculos-backend` (`docs/plan/migrar-servicos-disponibilidade-veiculos-backend/`) pra tirar essas 3 telas do `json-server` isolado do admin-front. `Veiculo` **não ganhou tabela própria** — `GET /veiculos` deriva a lista a partir de `Pedido.veiculo` (ver seção 5).
+
+**Desvio do plano — `Intercorrencia.data` é `String`, não `DateTime`**: o plano original especificava `DateTime`, mas `admin-front/src/pages/disponibilidade/Disponibilidade.jsx` casa esse campo por igualdade exata de string no formato `"YYYY-MM-DD"` (marcação de dias no calendário via `dayjs().format('YYYY-MM-DD')`). Um `DateTime` serializaria como ISO completo (`"2026-10-12T00:00:00.000Z"`) e quebraria silenciosamente esse match — nenhum dia apareceria marcado no calendário. `String` guarda exatamente o formato que o front já espera, sem semântica de data no servidor (não há nenhuma ordenação/cálculo por data feito no backend que justificasse `DateTime`).
 
 `LavaRapido` usa o formato de campos do **app_mobile** (`name`, `rating`, `reviewsCount`, `distance`, `time`, `price`, `image`), não o esboço inicial deste spec (`nome`/`endereco`) — decisão tomada na implementação pra bater exatamente com `lavaRapidos.model.ts` sem exigir nenhuma mudança de `model` no front. `distance`/`time` continuam sendo campos estáticos persistidos (copiando o mock), não calculados a partir da localização real do consumidor — mesma limitação que já existia, não resolvida aqui.
 
@@ -81,10 +106,15 @@ model Pedido {
 | `/lava-rapidos/login` | `POST` | Login: body `{ cnpj, senha }`; `401` se `cnpj` não existir ou `senha` não bater (bcrypt compare); `200` com o `LavaRapido` (sem `senha`) se validar. |
 | `/pedidos` | `GET` | Lista todos, mais recentes primeiro, com `lavaRapidoId`. Aceita `?lavaRapidoId=` opcional pra filtrar por empresa (usado pelo admin-front após o login). |
 | `/pedidos/:id` | `PATCH` | Atualiza **só** o `status` (body `{ status }`); `400` se o status não for um dos 3 válidos, `404` se o pedido não existir. |
+| `/servicos` | `GET` | Lista serviços. Aceita `?lavaRapidoId=` opcional. |
+| `/servicos/:id` | `PATCH` | Atualiza **só** o `ativo` (body `{ ativo: boolean }`, nenhum outro campo); `400` se o body tiver outra coisa, `404` se o serviço não existir. |
+| `/intercorrencias` | `GET` | Lista intercorrências. Aceita `?lavaRapidoId=` opcional. |
+| `/intercorrencias` | `POST` | Cria uma intercorrência: body `{ lavaRapidoId, data, motivo, diaInteiro, horaInicio?, horaFim? }`; `400` se `horaInicio`/`horaFim` vierem com `diaInteiro: true`, ou faltarem com `diaInteiro: false`. |
+| `/veiculos` | `GET` | Lista veículos **derivados** dos `Pedido`s (não é uma tabela própria — ver seção 4): extrai `veiculo` (JSON) de cada pedido filtrado por `?lavaRapidoId=` (opcional) e deduplica por `placa` (usada como `id` na resposta). |
 
 **Desvio da decisão original do plano**: o plano previa uma rota específica `PATCH /pedidos/:id/status`. Na implementação, isso quebraria com o `pedidos.routes.js` do admin-front (que já usa `PATCH /pedidos/:id` genérico) e com o `json-server` de fallback (que não suporta sub-rotas customizadas — não tem `--routes`/rewrite nessa versão). Mantida `PATCH /pedidos/:id`, com a mesma segurança pretendida (só `status` é aceito, qualquer outro campo no body é ignorado) garantida na validação do controller, não na URL. Isso preserva o critério "zero mudança de código além da `BASE_URL`" nos dois front-ends.
 
-Nenhuma outra rota do domínio completo (seção 7) foi implementada nesta task — `/servicos`, `/veiculos`, `/auth`, `POST /pedidos` continuam não existindo aqui (as telas `Serviços`/`Disponibilidade`/`Veículos` do admin-front usam seu próprio `json-server`, não este backend — ver `admin-front.specs.md` seção 8).
+As 3 telas `Serviços`/`Disponibilidade`/`Veículos` do admin-front usam este backend real desde `migrar-servicos-disponibilidade-veiculos-backend` (ver `admin-front.specs.md` seção 8) — o `json-server` próprio delas continua existindo só como fallback manual, mesmo padrão já adotado pra `/pedidos`. `/auth` e `POST /pedidos` continuam não implementados.
 
 ## 6. Organização de pastas
 
@@ -103,11 +133,19 @@ backend/
 │   │   └── prisma.ts                # PrismaClient singleton
 │   ├── modules/
 │   │   ├── lava-rapidos/{lavaRapidos.routes,controller,service}.ts
-│   │   └── pedidos/{pedidos.routes,controller,service}.ts
+│   │   ├── pedidos/{pedidos.routes,controller,service}.ts
+│   │   ├── servicos/{servicos.routes,controller,service}.ts
+│   │   ├── intercorrencias/{intercorrencias.routes,controller,service,validation}.ts
+│   │   └── veiculos/{veiculos.routes,controller,service}.ts   # sem model Prisma próprio — deriva de Pedido
+│   ├── utils/
+│   │   └── queryParam.ts            # getStringQueryParam — normaliza ?lavaRapidoId= (string ou array), usado por todos os módulos acima
 │   └── test/
 │       ├── globalSetup.ts           # docker compose up + prisma migrate deploy no banco de teste
 │       ├── lavaRapidos.test.ts
-│       └── pedidos.test.ts
+│       ├── pedidos.test.ts
+│       ├── servicos.test.ts
+│       ├── intercorrencias.test.ts
+│       └── veiculos.test.ts
 └── vitest.config.ts                 # aponta DATABASE_URL pro banco de teste; exclui dist/ (ver nota)
 ```
 
@@ -120,24 +158,21 @@ O domínio completo imaginado originalmente continua válido como direção — 
 ```
 Usuario
   id, nome, email, papel: 'consumidor' | 'dono_lava_rapido'
-
-Servico                        # hoje só mockado em app_mobile/servicos.tsx e no json-server do admin-front (telas Serviços/Disponibilidade/Veículos)
-  id, lavaRapidoId, titulo, descricao, preco, duracaoMinutos, imagem
-
-Veiculo                        # hoje só {modelo, placa} embutido em Pedido.veiculo (Json)
-  id, consumidorId, modelo, placa
 ```
+
+`Servico` e `Veiculo` (que apareciam aqui antes) já existem — `Servico` como model Prisma real, `Veiculo` derivado de `Pedido.veiculo` (ver seção 4/5).
 
 - **Autenticação**: `admin-front` agora tem login real por `LavaRapido` (CNPJ + senha fixa "admin", ver seção 4/5) — mas é proposital e simples: sem JWT, sem expiração de sessão, sem troca/recuperação de senha, sem validação de dígito verificador do CNPJ. Os endpoints continuam sem middleware de auth (qualquer request pode chamar `GET /pedidos`, `GET /lava-rapidos`, etc. — só o `login`/`cadastro` em si têm alguma validação). `app_mobile` continua sem login nenhum.
 - **Upload de fotos do veículo**: `Pedido.fotos` continua array de URLs estáticas — sem endpoint de upload nem storage.
 - **Divergência `Pedido.servico` (string) vs. seleção múltipla** (`app_mobile/servicos.tsx` deixa marcar vários serviços): não resolvida — `Pedido.servico` no banco continua um `String` só, copiando o que `admin-front/pedidos.model.js` já fazia.
 - **`POST /pedidos`**: nenhum front cria pedido pela UI ainda; não implementado.
-- **`Servico`/`Veiculo` como entidades do backend**: as telas `Serviços`/`Disponibilidade`/`Veículos` do admin-front (ver `admin-front.specs.md` seção 8) usam o `json-server` do admin-front, não este backend — migrar isso é trabalho futuro.
+- **Editar/excluir `Servico`/`Intercorrencia`**: fora de escopo (mesmo escopo "PDV" de `telas-servicos-disponibilidade-veiculos`) — só listar + ativar/desativar serviço, só criar intercorrência.
 - **Deploy/hosting em produção**: não definido; só ambiente local via Docker Compose.
 
 ## 8. Referências
 - `docs/plan/backend-mvp/backend-mvp.md` — plano e decisões desta implementação.
 - `docs/logs/backend-mvp.md` — o que foi de fato feito, desvios.
 - `docs/plan/selecao-empresa-admin-front/selecao-empresa-admin-front.md` — login real (CNPJ+senha), `cnpj`/`senha`/`address` em `LavaRapido`, filtro `?lavaRapidoId=` em `GET /pedidos`.
+- `docs/plan/migrar-servicos-disponibilidade-veiculos-backend/migrar-servicos-disponibilidade-veiculos-backend.md` — `Servico`/`Intercorrencia`, `/veiculos` derivado, migração das 3 telas do admin-front.
 - `WashAway/.specs/admin-front.specs.md` — seção 3.1/5, `BACKEND_API_BASE_URL` como padrão agora.
 - `WashAway/.specs/app_mobile.specs.md` — seção 4.1, `BACKEND_API_BASE_URL` como padrão agora.
