@@ -32,5 +32,19 @@
         "https://placehold.co/400x300?text=Depois+1"
       ]
     }
+  ],
+  "servicos": [
+    { "id": "1", "nome": "Lavagem simples", "categoria": "Lavagem", "preco": 40, "ativo": true },
+    { "id": "2", "nome": "Lavagem completa", "categoria": "Lavagem", "preco": 70, "ativo": true },
+    { "id": "3", "nome": "Polimento", "categoria": "Estética", "preco": 120, "ativo": false }
+  ],
+  "intercorrencias": [
+    { "id": "1", "data": "2026-10-12", "motivo": "Feriado", "diaInteiro": true },
+    { "id": "2", "data": "2026-09-25", "motivo": "Falta de energia", "diaInteiro": false, "horaInicio": "14:00", "horaFim": "16:00" }
+  ],
+  "veiculos": [
+    { "id": "1", "modelo": "Fiat Argo", "placa": "ABC1D23" },
+    { "id": "2", "modelo": "VW Gol", "placa": "XYZ9E88" },
+    { "id": "3", "modelo": "Chevrolet Onix", "placa": "JKL4F56" }
   ]
 }
