@@ -1,12 +1,32 @@
 import type { Request, Response } from 'express'
 import { Prisma } from '@prisma/client'
 import { getStringQueryParam } from '../../utils/queryParam.js'
-import { createIntercorrencia, listIntercorrencias } from './intercorrencias.service.js'
+import { createIntercorrencia, listIntercorrencias, reabrirIntercorrencia } from './intercorrencias.service.js'
 import { parseIntercorrenciaInput } from './intercorrencias.validation.js'
 
 export async function index(req: Request, res: Response) {
   const intercorrencias = await listIntercorrencias(getStringQueryParam(req.query.lavaRapidoId))
   res.json(intercorrencias)
+}
+
+export async function reabrir(req: Request, res: Response) {
+  const { reaberta } = req.body ?? {}
+
+  if (reaberta !== true) {
+    res.status(400).json({ error: 'body inválido — só aceita { reaberta: true }' })
+    return
+  }
+
+  try {
+    const intercorrencia = await reabrirIntercorrencia(req.params.id)
+    res.json(intercorrencia)
+  } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') {
+      res.status(404).json({ error: 'Intercorrência não encontrada' })
+      return
+    }
+    throw error
+  }
 }
 
 export async function create(req: Request, res: Response) {

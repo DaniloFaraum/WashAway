@@ -83,6 +83,7 @@ model Intercorrencia {
   diaInteiro   Boolean    @default(true)
   horaInicio   String?
   horaFim      String?
+  reaberta     Boolean    @default(false)  # ver nota sobre isOpen calculado, seção 5
 }
 ```
 
@@ -94,14 +95,16 @@ model Intercorrencia {
 
 `cnpj`/`senha` foram adicionados na task `selecao-empresa-admin-front` (`docs/plan/selecao-empresa-admin-front/`) pra dar ao admin-front um login real por empresa: `cnpj` é único (formato validado só como 14 dígitos numéricos, sem dígito verificador); `senha` é sempre o hash bcrypt de `"admin"` — fixa e proposital (fora de escopo: troca de senha, JWT, expiração de sessão). Nenhuma rota expõe `senha` em resposta (`create`/`login` removem o campo antes de responder).
 
+**`isOpen` é calculado, não é o valor cru da coluna** (task `isopen-intercorrencia-backend`, `docs/plan/isopen-intercorrencia-backend/`): a coluna `LavaRapido.isOpen` continua existindo (fixada `true` no cadastro/seed, nunca escrita depois), mas `GET /lava-rapidos` e `GET /lava-rapidos/:id` retornam `isOpen: false` sempre que houver uma `Intercorrencia` "ativa agora" pra aquele lava-rápido — de dia inteiro (`diaInteiro: true`) na data de hoje, ou parcial (`diaInteiro: false`) com o horário atual do servidor dentro de `horaInicio`–`horaFim`. Intercorrências marcadas `reaberta: true` não contam mais (ver `PATCH /intercorrencias/:id`, seção 5) — é como o dono reverte manualmente um fechamento automático (ex.: intercorrência cadastrada por engano, ou que terminou antes do previsto). `GET /lava-rapidos/:id` (mas não a listagem, pra não pesar) também retorna `intercorrenciaAtiva: {...} | null` com a intercorrência que está causando o fechamento agora, se houver. Cálculo feito na leitura (sem cron/job), sem tratamento de fuso horário (assume o fuso do servidor, mesma premissa já usada pras strings `data`/`horaInicio`/`horaFim`).
+
 **Nota sobre a migration `20260926011840_add_login_fields`**: `prisma migrate dev` é interativo (pede confirmação quando detecta perda de dado — os 5 `LavaRapido` seed não tinham `cnpj`/`senha`) e esse ambiente não suporta prompt interativo. A migration foi escrita à mão (`DELETE FROM "Pedido"; DELETE FROM "LavaRapido";` antes de adicionar as colunas `NOT NULL`, seguro pois é só dado de seed/dev) e aplicada com `npx prisma migrate deploy` (não interativo) + `npx prisma generate`, depois repopulada via `npm run prisma:seed`.
 
 ## 5. Contrato de API implementado
 
 | Rota | Método | Descrição |
 |---|---|---|
-| `/lava-rapidos` | `GET` | Lista todos. |
-| `/lava-rapidos/:id` | `GET` | Um lava-rápido; `404` se não existir. |
+| `/lava-rapidos` | `GET` | Lista todos. `isOpen` é calculado (ver nota acima); não inclui `intercorrenciaAtiva` (só o detalhe). |
+| `/lava-rapidos/:id` | `GET` | Um lava-rápido; `404` se não existir. `isOpen` é calculado (ver nota acima); inclui `intercorrenciaAtiva` (`{...} \| null`). |
 | `/lava-rapidos` | `POST` | Cadastro: body `{ name, address?, cnpj }`; `400` se `cnpj` não tiver 14 dígitos numéricos ou `name` faltar; `409` se `cnpj` já existir; senha fixada como hash de `"admin"` (bcryptjs), demais campos com defaults (`rating`/`reviewsCount`/`price`/`latitude`/`longitude`: `0`, `distance`/`time`: `''`, `isOpen`: `true`, `image`: placeholder). Resposta `201` sem o campo `senha`. |
 | `/lava-rapidos/login` | `POST` | Login: body `{ cnpj, senha }`; `401` se `cnpj` não existir ou `senha` não bater (bcrypt compare); `200` com o `LavaRapido` (sem `senha`) se validar. |
 | `/pedidos` | `GET` | Lista todos, mais recentes primeiro, com `lavaRapidoId`. Aceita `?lavaRapidoId=` opcional pra filtrar por empresa (usado pelo admin-front após o login). |
@@ -110,6 +113,7 @@ model Intercorrencia {
 | `/servicos/:id` | `PATCH` | Atualiza **só** o `ativo` (body `{ ativo: boolean }`, nenhum outro campo); `400` se o body tiver outra coisa, `404` se o serviço não existir. |
 | `/intercorrencias` | `GET` | Lista intercorrências. Aceita `?lavaRapidoId=` opcional. |
 | `/intercorrencias` | `POST` | Cria uma intercorrência: body `{ lavaRapidoId, data, motivo, diaInteiro, horaInicio?, horaFim? }`; `400` se `horaInicio`/`horaFim` vierem com `diaInteiro: true`, ou faltarem com `diaInteiro: false`. |
+| `/intercorrencias/:id` | `PATCH` | "Reabre" manualmente: body **só** `{ reaberta: true }` (`400` se vier outra coisa); a partir daí essa intercorrência para de contar no cálculo de `isOpen` (ver nota acima). `404` se o id não existir. |
 | `/veiculos` | `GET` | Lista veículos **derivados** dos `Pedido`s (não é uma tabela própria — ver seção 4): extrai `veiculo` (JSON) de cada pedido filtrado por `?lavaRapidoId=` (opcional) e deduplica por `placa` (usada como `id` na resposta). |
 
 **Desvio da decisão original do plano**: o plano previa uma rota específica `PATCH /pedidos/:id/status`. Na implementação, isso quebraria com o `pedidos.routes.js` do admin-front (que já usa `PATCH /pedidos/:id` genérico) e com o `json-server` de fallback (que não suporta sub-rotas customizadas — não tem `--routes`/rewrite nessa versão). Mantida `PATCH /pedidos/:id`, com a mesma segurança pretendida (só `status` é aceito, qualquer outro campo no body é ignorado) garantida na validação do controller, não na URL. Isso preserva o critério "zero mudança de código além da `BASE_URL`" nos dois front-ends.
@@ -166,7 +170,7 @@ Usuario
 - **Upload de fotos do veículo**: `Pedido.fotos` continua array de URLs estáticas — sem endpoint de upload nem storage.
 - **Divergência `Pedido.servico` (string) vs. seleção múltipla** (`app_mobile/servicos.tsx` deixa marcar vários serviços): não resolvida — `Pedido.servico` no banco continua um `String` só, copiando o que `admin-front/pedidos.model.js` já fazia.
 - **`POST /pedidos`**: nenhum front cria pedido pela UI ainda; não implementado.
-- **Editar/excluir `Servico`/`Intercorrencia`**: fora de escopo (mesmo escopo "PDV" de `telas-servicos-disponibilidade-veiculos`) — só listar + ativar/desativar serviço, só criar intercorrência.
+- **Editar/excluir `Servico`/`Intercorrencia`**: fora de escopo (mesmo escopo "PDV" de `telas-servicos-disponibilidade-veiculos`) — só listar + ativar/desativar serviço; intercorrência só cria e "reabre" (`PATCH .../reaberta`, task `isopen-intercorrencia-backend`), não edita/exclui de verdade.
 - **Deploy/hosting em produção**: não definido; só ambiente local via Docker Compose.
 
 ## 8. Referências
@@ -174,5 +178,6 @@ Usuario
 - `docs/logs/backend-mvp.md` — o que foi de fato feito, desvios.
 - `docs/plan/selecao-empresa-admin-front/selecao-empresa-admin-front.md` — login real (CNPJ+senha), `cnpj`/`senha`/`address` em `LavaRapido`, filtro `?lavaRapidoId=` em `GET /pedidos`.
 - `docs/plan/migrar-servicos-disponibilidade-veiculos-backend/migrar-servicos-disponibilidade-veiculos-backend.md` — `Servico`/`Intercorrencia`, `/veiculos` derivado, migração das 3 telas do admin-front.
+- `docs/plan/isopen-intercorrencia-backend/isopen-intercorrencia-backend.md` — `isOpen` calculado a partir de `Intercorrencia`, `intercorrenciaAtiva`, `PATCH /intercorrencias/:id` (reabrir).
 - `WashAway/.specs/admin-front.specs.md` — seção 3.1/5, `BACKEND_API_BASE_URL` como padrão agora.
 - `WashAway/.specs/app_mobile.specs.md` — seção 4.1, `BACKEND_API_BASE_URL` como padrão agora.

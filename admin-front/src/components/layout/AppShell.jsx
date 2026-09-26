@@ -3,11 +3,14 @@ import Drawer from '@mui/material/Drawer'
 import Toolbar from '@mui/material/Toolbar'
 import Typography from '@mui/material/Typography'
 import Divider from '@mui/material/Divider'
+import Chip from '@mui/material/Chip'
+import Button from '@mui/material/Button'
+import Stack from '@mui/material/Stack'
 import Sidebar from './Sidebar.jsx'
 
 const DRAWER_WIDTH = 240
 
-function AppShell({ children, empresaLogada, onSair }) {
+function AppShell({ children, empresaLogada, onSair, onReabrir }) {
   return (
     <Box sx={{ display: 'flex' }}>
       <Drawer
@@ -28,9 +31,28 @@ function AppShell({ children, empresaLogada, onSair }) {
             WashAway
           </Typography>
           {empresaLogada && (
-            <Typography variant="caption" color="text.secondary" noWrap>
-              {empresaLogada.name}
-            </Typography>
+            <>
+              <Typography variant="caption" color="text.secondary" noWrap>
+                {empresaLogada.name}
+              </Typography>
+              <Stack direction="row" spacing={1} alignItems="center" sx={{ mt: 0.5 }}>
+                <Chip
+                  size="small"
+                  label={empresaLogada.isOpen ? 'Aberto' : 'Fechado'}
+                  color={empresaLogada.isOpen ? 'success' : 'error'}
+                />
+                {!empresaLogada.isOpen && empresaLogada.intercorrenciaAtiva && (
+                  <Button size="small" onClick={onReabrir}>
+                    Reabrir
+                  </Button>
+                )}
+              </Stack>
+              {!empresaLogada.isOpen && empresaLogada.intercorrenciaAtiva && (
+                <Typography variant="caption" color="text.secondary" noWrap>
+                  Motivo: {empresaLogada.intercorrenciaAtiva.motivo}
+                </Typography>
+              )}
+            </>
           )}
         </Toolbar>
         <Divider />

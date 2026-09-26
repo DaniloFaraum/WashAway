@@ -104,6 +104,141 @@ describe('POST /lavaRapidos (cadastro)', () => {
   })
 })
 
+describe('isOpen calculado a partir de intercorrências', () => {
+  let lavaRapidoId: string
+
+  function horaFormatada(data: Date): string {
+    return data.toTimeString().slice(0, 5)
+  }
+
+  beforeAll(async () => {
+    const lavaRapido = await prisma.lavaRapido.create({
+      data: {
+        name: 'Lava-rápido do teste de isOpen',
+        cnpj: '55555555000155',
+        senha: 'hash-fake-nao-usado-nestes-testes',
+        rating: 4.5,
+        reviewsCount: 10,
+        distance: '1 km',
+        time: '5 min',
+        price: 50,
+        isOpen: true,
+        image: 'https://placehold.co/300x300?text=Teste',
+        latitude: 0,
+        longitude: 0,
+      },
+    })
+    lavaRapidoId = lavaRapido.id
+  })
+
+  afterAll(async () => {
+    await prisma.intercorrencia.deleteMany({ where: { lavaRapidoId } })
+    await prisma.lavaRapido.deleteMany({ where: { id: lavaRapidoId } })
+  })
+
+  it('fica isOpen: false com intercorrência de dia inteiro hoje', async () => {
+    const hoje = new Date().toISOString().slice(0, 10)
+    const intercorrencia = await prisma.intercorrencia.create({
+      data: { lavaRapidoId, data: hoje, motivo: 'Folga', diaInteiro: true },
+    })
+
+    const show = await supertest(app).get(`/lavaRapidos/${lavaRapidoId}`)
+    expect(show.body.isOpen).toBe(false)
+    expect(show.body.intercorrenciaAtiva).toMatchObject({ id: intercorrencia.id, motivo: 'Folga' })
+
+    const index = await supertest(app).get('/lavaRapidos')
+    const item = index.body.find((entry: { id: string }) => entry.id === lavaRapidoId)
+    expect(item.isOpen).toBe(false)
+
+    await prisma.intercorrencia.delete({ where: { id: intercorrencia.id } })
+  })
+
+  it('fica isOpen: false com intercorrência parcial cujo intervalo inclui o horário atual', async () => {
+    const agora = new Date()
+    const hoje = agora.toISOString().slice(0, 10)
+    const inicio = horaFormatada(new Date(agora.getTime() - 60_000))
+    const fim = horaFormatada(new Date(agora.getTime() + 60_000))
+
+    const intercorrencia = await prisma.intercorrencia.create({
+      data: { lavaRapidoId, data: hoje, motivo: 'Manutenção', diaInteiro: false, horaInicio: inicio, horaFim: fim },
+    })
+
+    const show = await supertest(app).get(`/lavaRapidos/${lavaRapidoId}`)
+    expect(show.body.isOpen).toBe(false)
+    expect(show.body.intercorrenciaAtiva?.id).toBe(intercorrencia.id)
+
+    await prisma.intercorrencia.delete({ where: { id: intercorrencia.id } })
+  })
+
+  it('não muda isOpen com intercorrência parcial fora do horário atual', async () => {
+    const agora = new Date()
+    const hoje = agora.toISOString().slice(0, 10)
+    const inicio = horaFormatada(new Date(agora.getTime() + 2 * 60 * 60_000))
+    const fim = horaFormatada(new Date(agora.getTime() + 3 * 60 * 60_000))
+
+    const intercorrencia = await prisma.intercorrencia.create({
+      data: { lavaRapidoId, data: hoje, motivo: 'Mais tarde', diaInteiro: false, horaInicio: inicio, horaFim: fim },
+    })
+
+    const show = await supertest(app).get(`/lavaRapidos/${lavaRapidoId}`)
+    expect(show.body.isOpen).toBe(true)
+    expect(show.body.intercorrenciaAtiva).toBeNull()
+
+    await prisma.intercorrencia.delete({ where: { id: intercorrencia.id } })
+  })
+
+  it('não muda isOpen com intercorrência de outro dia', async () => {
+    const intercorrencia = await prisma.intercorrencia.create({
+      data: { lavaRapidoId, data: '2099-01-01', motivo: 'Futuro distante', diaInteiro: true },
+    })
+
+    const show = await supertest(app).get(`/lavaRapidos/${lavaRapidoId}`)
+    expect(show.body.isOpen).toBe(true)
+
+    await prisma.intercorrencia.delete({ where: { id: intercorrencia.id } })
+  })
+
+  it('intercorrência marcada reaberta: true deixa de fechar o isOpen', async () => {
+    const hoje = new Date().toISOString().slice(0, 10)
+    const intercorrencia = await prisma.intercorrencia.create({
+      data: { lavaRapidoId, data: hoje, motivo: 'Folga cancelada', diaInteiro: true },
+    })
+
+    const reabrir = await supertest(app).patch(`/intercorrencias/${intercorrencia.id}`).send({ reaberta: true })
+    expect(reabrir.status).toBe(200)
+
+    const show = await supertest(app).get(`/lavaRapidos/${lavaRapidoId}`)
+    expect(show.body.isOpen).toBe(true)
+    expect(show.body.intercorrenciaAtiva).toBeNull()
+
+    await prisma.intercorrencia.delete({ where: { id: intercorrencia.id } })
+  })
+
+  it('lava-rápido com isOpen: false no banco continua false mesmo sem intercorrência', async () => {
+    const fechado = await prisma.lavaRapido.create({
+      data: {
+        name: 'Lava-rápido fechado no cadastro',
+        cnpj: '66666666000166',
+        senha: 'hash-fake-nao-usado-nestes-testes',
+        rating: 0,
+        reviewsCount: 0,
+        distance: '',
+        time: '',
+        price: 0,
+        isOpen: false,
+        image: 'https://placehold.co/300x300?text=Fechado',
+        latitude: 0,
+        longitude: 0,
+      },
+    })
+
+    const show = await supertest(app).get(`/lavaRapidos/${fechado.id}`)
+    expect(show.body.isOpen).toBe(false)
+
+    await prisma.lavaRapido.delete({ where: { id: fechado.id } })
+  })
+})
+
 describe('POST /lavaRapidos/login', () => {
   const cnpjLogin = '44444444000144'
 

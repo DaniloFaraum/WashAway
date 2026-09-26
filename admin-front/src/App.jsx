@@ -10,7 +10,7 @@ import Disponibilidade from './pages/disponibilidade/Disponibilidade.jsx'
 import Veiculos from './pages/veiculos/Veiculos.jsx'
 
 function App() {
-  const { empresaLogada, loading, entrar, cadastrar, sair } = useSessaoEmpresa()
+  const { empresaLogada, loading, entrar, cadastrar, sair, reabrir } = useSessaoEmpresa()
 
   if (loading) {
     return (
@@ -25,7 +25,7 @@ function App() {
   }
 
   return (
-    <AppShell empresaLogada={empresaLogada} onSair={sair}>
+    <AppShell empresaLogada={empresaLogada} onSair={sair} onReabrir={reabrir}>
       <Routes>
         <Route path="/" element={<PainelPedidos />} />
         <Route path="/servicos" element={<Servicos />} />

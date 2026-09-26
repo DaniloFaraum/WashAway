@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { getEmpresaLogadaId, limparSessao, setEmpresaLogadaId } from './sessao.storage.js'
 import { cadastrar, entrar, getLavaRapido } from './service/lavaRapidos.service.js'
+import { reabrirIntercorrencia } from './service/intercorrencias.service.js'
 
 /**
  * @returns {{
@@ -9,6 +10,7 @@ import { cadastrar, entrar, getLavaRapido } from './service/lavaRapidos.service.
  *   entrar: (credenciais: { cnpj: string, senha: string }) => Promise<void>,
  *   cadastrar: (dados: { name: string, address?: string, cnpj: string }) => Promise<void>,
  *   sair: () => void,
+ *   reabrir: () => Promise<void>,
  * }}
  */
 export function useSessaoEmpresa() {
@@ -45,5 +47,11 @@ export function useSessaoEmpresa() {
     setEmpresaLogada(null)
   }
 
-  return { empresaLogada, loading, entrar: handleEntrar, cadastrar: handleCadastrar, sair }
+  async function reabrir() {
+    if (!empresaLogada?.intercorrenciaAtiva) return
+    await reabrirIntercorrencia(empresaLogada.intercorrenciaAtiva.id)
+    setEmpresaLogada(await getLavaRapido(empresaLogada.id))
+  }
+
+  return { empresaLogada, loading, entrar: handleEntrar, cadastrar: handleCadastrar, sair, reabrir }
 }

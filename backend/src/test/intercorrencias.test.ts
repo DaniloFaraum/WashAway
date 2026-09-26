@@ -106,6 +106,33 @@ describe('/intercorrencias', () => {
     expect(response.status).toBe(400)
   })
 
+  describe('PATCH /intercorrencias/:id (reabrir)', () => {
+    it('marca reaberta: true', async () => {
+      const criada = await prisma.intercorrencia.create({
+        data: { lavaRapidoId, data: '2027-01-01', motivo: 'Pra reabrir', diaInteiro: true },
+      })
+
+      const response = await supertest(app).patch(`/intercorrencias/${criada.id}`).send({ reaberta: true })
+
+      expect(response.status).toBe(200)
+      expect(response.body).toMatchObject({ id: criada.id, reaberta: true })
+
+      await prisma.intercorrencia.delete({ where: { id: criada.id } })
+    })
+
+    it('rejeita body sem { reaberta: true }', async () => {
+      const response = await supertest(app).patch(`/intercorrencias/${intercorrenciaId}`).send({ reaberta: false })
+
+      expect(response.status).toBe(400)
+    })
+
+    it('retorna 404 pra id inexistente', async () => {
+      const response = await supertest(app).patch('/intercorrencias/id-que-nao-existe').send({ reaberta: true })
+
+      expect(response.status).toBe(404)
+    })
+  })
+
   describe('erro inesperado', () => {
     afterEach(() => {
       vi.restoreAllMocks()

@@ -66,4 +66,5 @@ model Intercorrencia {
   diaInteiro   Boolean    @default(true)
   horaInicio   String?
   horaFim      String?
+  reaberta     Boolean    @default(false)
 }

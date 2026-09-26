@@ -120,6 +120,7 @@ Desde a task `selecao-empresa-admin-front` (`docs/plan/selecao-empresa-admin-fro
 - **`useSessaoEmpresa.js`**: hook único que combina `sessao.storage.js` + `service/lavaRapidos.service.js` — expõe `{ empresaLogada, loading, entrar, cadastrar, sair }`. Ao montar, se já houver um `id` salvo, busca o `LavaRapido` no backend pra revalidar a sessão (limpa a sessão se o `GET` falhar, ex.: empresa apagada).
 - **`Login.jsx`**: formulário único com toggle "Entrar"/"Cadastrar" (não são duas rotas/páginas separadas). "Entrar" pede CNPJ + senha; "Cadastrar" pede nome + endereço + CNPJ — **sem** campo de senha (o backend fixa a senha como `"admin"`, ver `backend.specs.md` seção 4; a tela só avisa isso em texto). Erros de `entrar`/`cadastrar` (401/409/rede) aparecem via `Snackbar`/`Alert` (`useToast()`).
 - **Company logada / sair**: `AppShell.jsx` recebe `empresaLogada`/`onSair` de `App.jsx` e mostra o nome da empresa no topo do Drawer; `Sidebar.jsx` recebe `onSair` e renderiza um item "Sair" fixo no rodapé da navegação (chama `sair()`, que só limpa a sessão local — não é uma chamada de rede).
+- **Badge "Aberto"/"Fechado" + "Reabrir"** (`docs/plan/isopen-intercorrencia-backend/`): abaixo do nome da empresa no `AppShell.jsx`, um `Chip` mostra `empresaLogada.isOpen` (já vem calculado do backend, ver `backend.specs.md` seção 5 — considera intercorrência ativa agora, não só a coluna crua). Quando fechado por causa de uma intercorrência (`empresaLogada.intercorrenciaAtiva` presente), mostra o motivo e um botão "Reabrir" que chama `useSessaoEmpresa().reabrir()` — esse método manda `PATCH /intercorrencias/:id { reaberta: true }` (`src/login/service/intercorrencias.service.js`) e recarrega a empresa (`getLavaRapido`) pra refletir o novo estado. Não há "Reabrir" quando `isOpen: false` vem da própria coluna do banco (sem `intercorrenciaAtiva`) — isso não tem endpoint de toggle manual, fora de escopo.
 - **Pedidos filtrados por empresa**: `pedidos.service.js` (`painel-pedidos`) lê `getEmpresaLogadaId()` direto (não recebe como parâmetro do chamador) e manda `?lavaRapidoId=` em `GET /pedidos` — ver `backend.specs.md` seção 5.
 
 ## 5. Back-end
@@ -138,9 +139,11 @@ LavaRapido {
   id: string
   name: string
   address: string | null
+  isOpen: boolean
+  intercorrenciaAtiva: { id, motivo, diaInteiro, horaInicio, horaFim } | null
 }
 ```
-Forma normalizada pelo admin-front (`src/login/service/lavaRapidos.model.js`) — o backend guarda mais campos (`cnpj`, `senha` hasheada, `rating`, etc., ver `backend.specs.md` seção 4), mas o admin-front só precisa de `id`/`name`/`address` pra sessão e exibição; `normalizeLavaRapido` descarta o resto (inclusive `senha`, que a API já nem devolve).
+Forma normalizada pelo admin-front (`src/login/service/lavaRapidos.model.js`) — o backend guarda mais campos (`cnpj`, `senha` hasheada, `rating`, etc., ver `backend.specs.md` seção 4), mas o admin-front só precisa de `id`/`name`/`address`/`isOpen`/`intercorrenciaAtiva` pra sessão e exibição (badge "Aberto"/"Fechado", seção 4.2); `normalizeLavaRapido` descarta o resto (inclusive `senha`, que a API já nem devolve).
 
 ### Pedido (página `painel-pedidos`)
 ```
@@ -244,6 +247,7 @@ Decisões arquiteturais tomadas ao longo das tasks, na ordem em que foram confir
 11. **Login real por CNPJ + senha fixa, não "lembrar localmente"** (`docs/plan/selecao-empresa-admin-front`, confirmado com o usuário após 3 rodadas de correção) — a primeira ideia (dispositivo "lembra" qual empresa foi cadastrada nele, sem senha) foi descartada porque não permite login de outro aparelho; a segunda ideia (selecionar entre todas as empresas cadastradas, sem cadastro próprio) também foi descartada por confundir "selecionar empresa existente" com "onboarding/cadastro da própria empresa" (analogia usada: iFood dono da loja vs. iFood consumidor). Decisão final: cadastro (nome + endereço + CNPJ, sem pedir senha) com senha sempre fixada como `"admin"` no backend, e login de verdade (CNPJ + senha) contra o backend — funciona de qualquer aparelho, sem exigir um modelo de auth completo (JWT etc., fora de escopo).
 12. **`Veiculo` sem tabela própria no backend** (`docs/plan/migrar-servicos-disponibilidade-veiculos-backend`) — um veículo já existe embutido em `Pedido.veiculo`; a página `veiculos` só precisa listar, então `GET /veiculos` deriva a lista (dedup por `placa`) em vez de normalizar uma entidade nova sem caso de uso que dependa disso (YAGNI).
 13. **Services continuam buscando `lavaRapidoId` sozinhos, nunca recebendo por prop** (`docs/plan/migrar-servicos-disponibilidade-veiculos-backend`) — mesmo padrão que `pedidos.service.js` já usava (`getEmpresaLogadaId()` importado direto no `service.js`); nenhuma das páginas (`Servicos.jsx`/`Disponibilidade.jsx`/`Veiculos.jsx`) precisou mudar.
+14. **Badge "Aberto"/"Fechado" + "Reabrir" no `AppShell.jsx`** (`docs/plan/isopen-intercorrencia-backend/`) — achado ao validar a task `servicos-disponibilidade-app-mobile`: `LavaRapido.isOpen` nunca refletia intercorrências cadastradas. Resolvido calculando `isOpen` no backend (ver `backend.specs.md` seção 5); o admin-front só exibe o que já vem calculado e oferece "Reabrir" (`PATCH /intercorrencias/:id { reaberta: true }`) pra reverter um fechamento automático manualmente.
 
 ## 12. Riscos/decisões ainda em aberto
 

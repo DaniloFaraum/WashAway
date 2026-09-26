@@ -75,7 +75,13 @@ describe('lavaRapidos.service', () => {
   it('entrar retorna a empresa (sem senha) quando cnpj e senha são válidos', async () => {
     const empresa = await entrar({ cnpj: CNPJ_EXISTENTE, senha: SENHA_VALIDA }, baseUrl)
 
-    expect(empresa).toEqual({ id: 'lr-1', name: 'Lava Rápido Teste', address: 'Rua Teste, 123' })
+    expect(empresa).toEqual({
+      id: 'lr-1',
+      name: 'Lava Rápido Teste',
+      address: 'Rua Teste, 123',
+      isOpen: false,
+      intercorrenciaAtiva: null,
+    })
   })
 
   it('entrar lança erro amigável quando a senha está errada (401)', async () => {
@@ -93,7 +99,13 @@ describe('lavaRapidos.service', () => {
   it('cadastrar cria a empresa e nunca expõe a senha pro admin-front', async () => {
     const empresa = await cadastrar({ name: 'Nova Empresa', address: 'Rua X, 1', cnpj: '22222222000122' }, baseUrl)
 
-    expect(empresa).toEqual({ id: 'lr-nova', name: 'Nova Empresa', address: 'Rua X, 1' })
+    expect(empresa).toEqual({
+      id: 'lr-nova',
+      name: 'Nova Empresa',
+      address: 'Rua X, 1',
+      isOpen: false,
+      intercorrenciaAtiva: null,
+    })
     expect(empresa.senha).toBeUndefined()
   })
 
