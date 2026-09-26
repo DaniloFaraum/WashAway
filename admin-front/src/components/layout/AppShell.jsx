@@ -7,7 +7,7 @@ import Sidebar from './Sidebar.jsx'
 
 const DRAWER_WIDTH = 240
 
-function AppShell({ children }) {
+function AppShell({ children, empresaLogada, onSair }) {
   return (
     <Box sx={{ display: 'flex' }}>
       <Drawer
@@ -15,16 +15,28 @@ function AppShell({ children }) {
         sx={{
           width: DRAWER_WIDTH,
           flexShrink: 0,
-          '& .MuiDrawer-paper': { width: DRAWER_WIDTH, boxSizing: 'border-box' },
+          '& .MuiDrawer-paper': {
+            width: DRAWER_WIDTH,
+            boxSizing: 'border-box',
+            display: 'flex',
+            flexDirection: 'column',
+          },
         }}
       >
-        <Toolbar>
+        <Toolbar sx={{ flexDirection: 'column', alignItems: 'flex-start', justifyContent: 'center', py: 1 }}>
           <Typography variant="h6" noWrap>
             WashAway
           </Typography>
+          {empresaLogada && (
+            <Typography variant="caption" color="text.secondary" noWrap>
+              {empresaLogada.name}
+            </Typography>
+          )}
         </Toolbar>
         <Divider />
-        <Sidebar />
+        <Box sx={{ flexGrow: 1, minHeight: 0, display: 'flex' }}>
+          <Sidebar onSair={onSair} />
+        </Box>
       </Drawer>
       <Box component="main" sx={{ flexGrow: 1, p: 3 }}>
         {children}

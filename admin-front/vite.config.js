@@ -7,6 +7,7 @@ export default defineConfig({
   plugins: [react()],
   test: {
     globalSetup: ['./src/test/setup/globalSetup.js'],
+    setupFiles: ['./src/test/setup/localStorageShim.js'],
     env: {
       VITE_API_BASE_URL: TEST_SERVER_URL,
     },
