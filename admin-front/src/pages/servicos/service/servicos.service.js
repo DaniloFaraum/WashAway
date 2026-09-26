@@ -1,16 +1,17 @@
 import { SERVICOS_ROUTES } from './servicos.routes.js'
 import { normalizeServico } from './servicos.model.js'
-import { DEV_API_BASE_URL } from '../../../config/api.js'
+import { BACKEND_API_BASE_URL } from '../../../config/api.js'
 import { createHttpClient } from '../../../services/httpClient.js'
+import { getEmpresaLogadaId } from '../../../login/sessao.storage.js'
 
-const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? DEV_API_BASE_URL
+const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? BACKEND_API_BASE_URL
 const { request } = createHttpClient(BASE_URL)
 
 /**
  * @returns {Promise<import('./servicos.model.js').Servico[]>}
  */
 export async function getServicos() {
-  return (await request(SERVICOS_ROUTES.list)).map(normalizeServico)
+  return (await request(SERVICOS_ROUTES.list(getEmpresaLogadaId()))).map(normalizeServico)
 }
 
 /**

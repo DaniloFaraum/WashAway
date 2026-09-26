@@ -20,14 +20,14 @@
     }
   ],
   "servicos": [
-    { "id": "1", "nome": "Lavagem simples", "categoria": "Lavagem", "preco": 40, "ativo": true },
-    { "id": "2", "nome": "Polimento", "categoria": "Estética", "preco": 120, "ativo": false }
+    { "id": "1", "nome": "Lavagem simples", "categoria": "Lavagem", "preco": 40, "ativo": true, "lavaRapidoId": "lr-1" },
+    { "id": "2", "nome": "Polimento", "categoria": "Estética", "preco": 120, "ativo": false, "lavaRapidoId": "lr-2" }
   ],
   "intercorrencias": [
-    { "id": "1", "data": "2026-10-12", "motivo": "Feriado", "diaInteiro": true }
+    { "id": "1", "data": "2026-10-12", "motivo": "Feriado", "diaInteiro": true, "lavaRapidoId": "lr-1" }
   ],
   "veiculos": [
-    { "id": "1", "modelo": "Fiat Argo", "placa": "ABC1D23" },
-    { "id": "2", "modelo": "VW Gol", "placa": "XYZ9E88" }
+    { "id": "1", "modelo": "Fiat Argo", "placa": "ABC1D23", "lavaRapidoId": "lr-1" },
+    { "id": "2", "modelo": "VW Gol", "placa": "XYZ9E88", "lavaRapidoId": "lr-2" }
   ]
 }
