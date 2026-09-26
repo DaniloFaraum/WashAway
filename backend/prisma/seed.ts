@@ -82,6 +82,8 @@ const lavaRapidosData = [
 ]
 
 async function main() {
+  await prisma.intercorrencia.deleteMany()
+  await prisma.servico.deleteMany()
   await prisma.pedido.deleteMany()
   await prisma.lavaRapido.deleteMany()
 
@@ -127,7 +129,39 @@ async function main() {
     await prisma.pedido.create({ data })
   }
 
-  console.log(`Seed concluído: ${lavaRapidos.length} lava-rápidos, ${pedidosData.length} pedidos.`)
+  // Dados de servicos/intercorrencias hoje só em admin-front/mock-server/db.json,
+  // replicados aqui por lava-rápido pra sair do json-server isolado.
+  let servicosCount = 0
+  let intercorrenciasCount = 0
+  for (const lavaRapido of lavaRapidos) {
+    await prisma.servico.createMany({
+      data: [
+        { lavaRapidoId: lavaRapido.id, nome: 'Lavagem simples', categoria: 'Lavagem', preco: 40, ativo: true },
+        { lavaRapidoId: lavaRapido.id, nome: 'Lavagem completa', categoria: 'Lavagem', preco: 70, ativo: true },
+        { lavaRapidoId: lavaRapido.id, nome: 'Polimento', categoria: 'Estética', preco: 120, ativo: false },
+      ],
+    })
+    servicosCount += 3
+
+    await prisma.intercorrencia.createMany({
+      data: [
+        { lavaRapidoId: lavaRapido.id, data: '2026-10-12', motivo: 'Feriado', diaInteiro: true },
+        {
+          lavaRapidoId: lavaRapido.id,
+          data: '2026-09-25',
+          motivo: 'Falta de energia',
+          diaInteiro: false,
+          horaInicio: '14:00',
+          horaFim: '16:00',
+        },
+      ],
+    })
+    intercorrenciasCount += 2
+  }
+
+  console.log(
+    `Seed concluído: ${lavaRapidos.length} lava-rápidos, ${pedidosData.length} pedidos, ${servicosCount} serviços, ${intercorrenciasCount} intercorrências.`,
+  )
 }
 
 main()

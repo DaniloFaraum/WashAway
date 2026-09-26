@@ -23,6 +23,8 @@ model LavaRapido {
   latitude     Float
   longitude    Float
   pedidos      Pedido[]
+  servicos     Servico[]
+  intercorrencias Intercorrencia[]
 }
 
 enum PedidoStatus {
@@ -40,4 +42,28 @@ model Pedido {
   horario      DateTime
   status       PedidoStatus @default(pendente)
   fotos        String[]     @default([])
+}
+
+model Servico {
+  id           String     @id @default(cuid())
+  lavaRapidoId String
+  lavaRapido   LavaRapido @relation(fields: [lavaRapidoId], references: [id])
+  nome         String
+  categoria    String
+  preco        Float
+  ativo        Boolean    @default(true)
+}
+
+// `data` é String (não DateTime): o admin-front (Disponibilidade.jsx) casa esse
+// campo por igualdade exata no formato "YYYY-MM-DD" pra marcar dias no
+// calendário — um DateTime serializaria como ISO completo e quebraria esse match.
+model Intercorrencia {
+  id           String     @id @default(cuid())
+  lavaRapidoId String
+  lavaRapido   LavaRapido @relation(fields: [lavaRapidoId], references: [id])
+  data         String
+  motivo       String
+  diaInteiro   Boolean    @default(true)
+  horaInicio   String?
+  horaFim      String?
 }
