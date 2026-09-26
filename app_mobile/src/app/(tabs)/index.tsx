@@ -24,7 +24,7 @@ import { CarWashCard } from '@/components/CarWashCard';
 import { colors } from '@/constants/colors';
 import { centeredStyle } from '@/constants/commonStyles';
 import { useLavaRapidos } from '@/features/lava-rapidos/useLavaRapidos';
-import { useEmpresaSelecionadaGate } from '@/features/lava-rapidos/onboarding/useEmpresaSelecionadaGate';
+import { useTrocarEmpresa } from '@/features/lava-rapidos/onboarding/useTrocarEmpresa';
 
 let MapView: any = null;
 let Marker: any = null;
@@ -44,7 +44,7 @@ function parseDistance(distance: string) {
 export default function HomeScreen() {
   const router = useRouter();
   const { lavaRapidos, loading: loadingLavaRapidos, error: lavaRapidosError } = useLavaRapidos();
-  const { trocarEmpresa } = useEmpresaSelecionadaGate();
+  const { trocarEmpresa } = useTrocarEmpresa();
   const [activeTab, setActiveTab] = useState<ActiveTab>('lista');
   const [searchQuery, setSearchQuery] = useState('');
   const [currentAddress, setCurrentAddress] = useState('Buscando localização...');
