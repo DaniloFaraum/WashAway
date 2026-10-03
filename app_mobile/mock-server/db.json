@@ -1,0 +1,133 @@
+{
+  "lavaRapidos": [
+    {
+      "id": "1",
+      "name": "Aqua Shine Lava-Rápido",
+      "address": "Rua Canhemborá, 120 - Vila Gustavo, São Paulo - SP, CEP 02253010",
+      "rating": 4.8,
+      "reviewsCount": 124,
+      "distance": "1.2 km",
+      "time": "5 min",
+      "price": 45,
+      "isOpen": true,
+      "image": "https://placehold.co/300x300?text=Aqua+Shine",
+      "latitude": -23.5505,
+      "longitude": -46.6333
+    },
+    {
+      "id": "2",
+      "name": "Lava Rápido Centro",
+      "rating": 4.5,
+      "reviewsCount": 89,
+      "distance": "2.4 km",
+      "time": "8 min",
+      "price": 39,
+      "isOpen": true,
+      "image": "https://placehold.co/300x300?text=Centro",
+      "latitude": -23.5506,
+      "longitude": -46.6341
+    },
+    {
+      "id": "3",
+      "name": "Super Wash Express",
+      "rating": 4.2,
+      "reviewsCount": 56,
+      "distance": "3.1 km",
+      "time": "12 min",
+      "price": 55,
+      "isOpen": false,
+      "image": "https://placehold.co/300x300?text=Super+Wash",
+      "latitude": -23.5498,
+      "longitude": -46.6324
+    },
+    {
+      "id": "4",
+      "name": "Brilho Total Premium",
+      "rating": 5.0,
+      "reviewsCount": 208,
+      "distance": "0.7 km",
+      "time": "3 min",
+      "price": 69,
+      "isOpen": true,
+      "image": "https://placehold.co/300x300?text=Brilho+Total",
+      "latitude": -23.5513,
+      "longitude": -46.6329
+    },
+    {
+      "id": "5",
+      "name": "Crystal Jet Wash",
+      "rating": 4.6,
+      "reviewsCount": 141,
+      "distance": "4.8 km",
+      "time": "16 min",
+      "price": 42,
+      "isOpen": false,
+      "image": "https://placehold.co/300x300?text=Crystal+Jet",
+      "latitude": -23.5492,
+      "longitude": -46.6348
+    }
+  ],
+  "servicos": [
+    {
+      "id": "s1",
+      "lavaRapidoId": "1",
+      "nome": "Lavagem simples",
+      "preco": 40,
+      "ativo": true,
+      "itens": [
+        { "id": "it1", "nome": "Lavagem externa", "categoria": "Lavagem", "duracaoMinutos": 20 },
+        { "id": "it5", "nome": "Secagem", "categoria": "Secagem e acabamento", "duracaoMinutos": 10 }
+      ],
+      "categorias": ["Lavagem", "Secagem e acabamento"],
+      "duracaoMinutos": 30
+    },
+    {
+      "id": "s2",
+      "lavaRapidoId": "1",
+      "nome": "Lavagem completa",
+      "preco": 70,
+      "ativo": true,
+      "itens": [
+        { "id": "it1", "nome": "Lavagem externa", "categoria": "Lavagem", "duracaoMinutos": 20 },
+        { "id": "it2", "nome": "Lavagem de rodas", "categoria": "Lavagem", "duracaoMinutos": 15 },
+        { "id": "it3", "nome": "Aspiração", "categoria": "Limpeza interna", "duracaoMinutos": 15 },
+        { "id": "it4", "nome": "Limpeza de vidros", "categoria": "Limpeza interna", "duracaoMinutos": 10 },
+        { "id": "it5", "nome": "Secagem", "categoria": "Secagem e acabamento", "duracaoMinutos": 10 },
+        { "id": "it6", "nome": "Pretinho nos pneus", "categoria": "Secagem e acabamento", "duracaoMinutos": 5 }
+      ],
+      "categorias": ["Lavagem", "Limpeza interna", "Secagem e acabamento"],
+      "duracaoMinutos": 75
+    },
+    {
+      "id": "s3",
+      "lavaRapidoId": "1",
+      "nome": "Polimento",
+      "preco": 120,
+      "ativo": false,
+      "itens": [
+        { "id": "it1", "nome": "Lavagem externa", "categoria": "Lavagem", "duracaoMinutos": 20 },
+        { "id": "it5", "nome": "Secagem", "categoria": "Secagem e acabamento", "duracaoMinutos": 10 },
+        { "id": "it7", "nome": "Polimento", "categoria": "Estética e proteção", "duracaoMinutos": 120 }
+      ],
+      "categorias": ["Lavagem", "Secagem e acabamento", "Estética e proteção"],
+      "duracaoMinutos": 150
+    },
+    {
+      "id": "s4",
+      "lavaRapidoId": "2",
+      "nome": "Lavagem simples",
+      "preco": 35,
+      "ativo": true,
+      "itens": [
+        { "id": "it1", "nome": "Lavagem externa", "categoria": "Lavagem", "duracaoMinutos": 20 },
+        { "id": "it5", "nome": "Secagem", "categoria": "Secagem e acabamento", "duracaoMinutos": 10 }
+      ],
+      "categorias": ["Lavagem", "Secagem e acabamento"],
+      "duracaoMinutos": 30
+    }
+  ],
+  "intercorrencias": [
+    { "id": "i1", "lavaRapidoId": "1", "data": "2026-10-12", "motivo": "Feriado", "diaInteiro": true, "horaInicio": null, "horaFim": null },
+    { "id": "i2", "lavaRapidoId": "1", "data": "2026-09-25", "motivo": "Falta de energia", "diaInteiro": false, "horaInicio": "14:00", "horaFim": "16:00" }
+  ]
+}

@@ -1,161 +1,121 @@
 import React, { useState } from 'react';
 import {
   View, Text, StyleSheet, TextInput, ScrollView,
-  TouchableOpacity, Image, Modal
+  TouchableOpacity, Image, Modal, ActivityIndicator
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import Slider from '@react-native-community/slider';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 
 // Ícones do Lucide
-import { 
-  Search, SlidersHorizontal, Clock, Check, X,
-  Car, Sparkles, Droplet, Eye, ShieldCheck, Palette, Umbrella, CloudRain, Shield 
+import {
+  Search, SlidersHorizontal, Check, X, AlertTriangle, MapPin
 } from 'lucide-react-native';
 
-// Importações com o alias "@/constants/colors" padronizado pelo seu colega
 import { colors } from '@/constants/colors';
+import { useLavaRapido } from '@/features/lava-rapidos/useLavaRapido';
+import { useServicos } from '@/features/servicos/useServicos';
+import type { Servico } from '@/features/servicos/service/servicos.model';
+import { calcularCarrinho } from '@/features/servicos/calcularCarrinho';
+import { filtrarServicos, tetoDoFiltro } from '@/features/servicos/filtrarServicos';
+import { formatarDuracao } from '@/utils/formatarDuracao';
+import { useIntercorrencias, getIntercorrenciaRelevante, diasAte } from '@/features/intercorrencias/useIntercorrencias';
+import { formatarDataBR } from '@/features/intercorrencias/formatarData';
 
-// Tipagem dos serviços e categorias
-type ServiceType = 'Lavagem Básica' | 'Lavagem Completa' | 'Estética (Polimento)';
-
-interface ServiceItem {
-  id: string;
-  title: string;
-  desc: string;
-  price: number;
-  time: number;
-  image: string;
-  routeName: '/lavagem-completa' | '/higienizacao-interna' | '/lavagem-externa';
-  serviceType: ServiceType;
-  selected: boolean;
-}
+const SERVICO_IMAGEM_PLACEHOLDER = 'https://placehold.co/300x300?text=Servi%C3%A7o';
 
 export default function ServicosScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  
-  // Recebe o ID e Nome do lava-rápido passados na navegação do seu colega
+
+  // Recebe o ID e Nome do lava-rápido passados na navegação
   const { id, nome } = useLocalSearchParams<{ id?: string; nome?: string }>();
+
+  const { lavaRapido } = useLavaRapido(id);
+  const { servicos, loading, error } = useServicos(id);
+  const { intercorrencias } = useIntercorrencias(id);
+  const intercorrenciaRelevante = getIntercorrenciaRelevante(intercorrencias);
 
   const [showAllCategories, setShowAllCategories] = useState(false);
   const [filterVisible, setFilterVisible] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [categoriaFiltro, setCategoriaFiltro] = useState<string | null>(null);
+  const [selecionados, setSelecionados] = useState<Set<string>>(new Set());
 
-  // Estados dos Filtros
-  const [minPrice, setMinPrice] = useState(20);
-  const [maxPrice, setMaxPrice] = useState(300);
-  const [maxTime, setMaxTime] = useState(120);
-  const [selectedServiceTypes, setSelectedServiceTypes] = useState<ServiceType[]>([]);
+  // Filtros do modal. Os tetos acompanham os dados (há serviços bem acima de
+  // R$ 300 / 2h); `null` em máximo = sem limite, até o usuário mexer no slider.
+  const tetoPreco = tetoDoFiltro(servicos.map((s) => s.preco), 50, 300);
+  const tetoDuracao = tetoDoFiltro(servicos.map((s) => s.duracaoMinutos), 15, 120);
+  const [minPrice, setMinPrice] = useState(0);
+  const [maxPriceEscolhido, setMaxPrice] = useState<number | null>(null);
+  const [maxTimeEscolhido, setMaxTime] = useState<number | null>(null);
+  const maxPrice = maxPriceEscolhido ?? tetoPreco;
+  const maxTime = maxTimeEscolhido ?? tetoDuracao;
 
-  // Lista de Serviços
-  const initialServices: ServiceItem[] = [
-    {
-      id: '1',
-      title: 'Lavagem Completa',
-      desc: 'Lavagem externa e interna completa com produtos...',
-      price: 100.00,
-      time: 40,
-      image: 'https://images.unsplash.com/photo-1520340356584-f9917d1eea6f?w=500',
-      routeName: '/lavagem-completa',
-      serviceType: 'Lavagem Completa',
-      selected: true,
-    },
-    {
-      id: '2',
-      title: 'Higienização Interna',
-      desc: 'Limpeza profunda do interior do veículo, incluindo estofados...',
-      price: 80.00,
-      time: 30,
-      image: 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQx6RA5P0_G-6ZvW_sywJOQgG0sTZzEjPNkMyWjAgMib8TKu1_xRXRJWyuT&s=10',
-      routeName: '/higienizacao-interna',
-      serviceType: 'Estética (Polimento)',
-      selected: true,
-    },
-    {
-      id: '3',
-      title: 'Lavagem Externa',
-      desc: 'Lavagem detalhada da lataria com aplicação de cera protetora...',
-      price: 60.00,
-      time: 25,
-      image: 'https://images.unsplash.com/photo-1507136566006-cfc505b114fc?w=500',
-      routeName: '/lavagem-externa',
-      serviceType: 'Lavagem Básica',
-      selected: true,
-    }
-  ];
-
-  const [services, setServices] = useState<ServiceItem[]>(initialServices);
-
-  // Alterna a seleção do serviço
-  const toggleService = (serviceId: string) => {
-    setServices(prev =>
-      prev.map(item => item.id === serviceId ? { ...item, selected: !item.selected } : item)
-    );
+  const toggleService = (servicoId: string) => {
+    setSelecionados((prev) => {
+      const next = new Set(prev);
+      if (next.has(servicoId)) {
+        next.delete(servicoId);
+      } else {
+        next.add(servicoId);
+      }
+      return next;
+    });
   };
 
-  // Cálculos do Carrinho
-  const selectedServices = services.filter(s => s.selected);
-  const totalItems = selectedServices.length;
-  const totalPrice = selectedServices.reduce((sum, item) => sum + item.price, 0);
-  const totalTime = selectedServices.reduce((sum, item) => sum + item.time, 0);
+  const categorias = [...new Set(servicos.flatMap((s) => s.categorias).filter(Boolean))];
 
-  const serviceTypeOptions: ServiceType[] = [
-    'Lavagem Básica',
-    'Lavagem Completa',
-    'Estética (Polimento)',
-  ];
-
-  const toggleServiceType = (serviceType: ServiceType) => {
-    setSelectedServiceTypes(current =>
-      current.includes(serviceType)
-        ? current.filter(item => item !== serviceType)
-        : [...current, serviceType]
-    );
+  const toggleCategoriaFiltro = (categoria: string) => {
+    setCategoriaFiltro((prev) => (prev === categoria ? null : categoria));
   };
 
-  const normalizeText = (value: string) =>
-    value
-      .normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, '')
-      .toLocaleLowerCase('pt-BR');
-
-  const normalizedSearch = normalizeText(searchQuery.trim());
-  const filteredServices = services.filter(service => {
-    const matchesSearch =
-      !normalizedSearch ||
-      normalizeText(`${service.title} ${service.desc}`).includes(normalizedSearch);
-    const matchesPrice = service.price >= minPrice && service.price <= maxPrice;
-    const matchesTime = service.time <= maxTime;
-    const matchesType =
-      selectedServiceTypes.length === 0 || selectedServiceTypes.includes(service.serviceType);
-
-    return matchesSearch && matchesPrice && matchesTime && matchesType;
+  const servicosVisiveis = filtrarServicos(servicos, {
+    busca: searchQuery,
+    categoria: categoriaFiltro,
+    precoMin: minPrice,
+    precoMax: maxPrice,
+    duracaoMax: maxTime,
   });
 
-  const categories = [
-    { id: '1', title: 'Lavagem\nExterna', icon: Car },
-    { id: '2', title: 'Lavagem\nInterna', icon: Sparkles },
-    { id: '3', title: 'Polimento', icon: Droplet },
-    { id: '4', title: 'Restauração\nde faróis', icon: Eye },
-    { id: '5', title: 'Hidratação\nde Couro', icon: ShieldCheck },
-    { id: '6', title: 'Cristalização\nde Pintura', icon: Palette },
-    { id: '7', title: 'Imperme-\nabilizar', icon: Umbrella },
-    { id: '8', title: 'Remoção\nChuva Ácida', icon: CloudRain },
-    { id: '9', title: 'Aplicar\nProtetores', icon: Shield },
-  ];
+  // Cálculos do Carrinho
+  const { totalItens, totalPreco, totalDuracao } = calcularCarrinho(
+    servicos.filter((s) => selecionados.has(s.id)),
+  );
 
-  const visibleCategories = showAllCategories ? categories : categories.slice(0, 4);
+  const visibleCategories = showAllCategories ? categorias : categorias.slice(0, 4);
 
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView style={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        
-        {/* Cabeçalho dinâmico informando o Lava-rápido vindo da tela do seu amigo */}
+
+        {/* Cabeçalho dinâmico informando o Lava-rápido selecionado */}
         <View style={styles.lavaRapidoHeader}>
           <Text style={styles.lavaRapidoLabel}>Lava-rápido selecionado:</Text>
           <Text style={styles.lavaRapidoName}>{nome || 'Lava-rápido Padrão'}</Text>
+          {lavaRapido?.address && (
+            <View style={styles.enderecoRow}>
+              <MapPin color={colors.neutralGray || '#6B7280'} size={14} />
+              <Text style={styles.enderecoText}>{lavaRapido.address}</Text>
+            </View>
+          )}
         </View>
+
+        {/* Aviso de disponibilidade (intercorrência de hoje ou próxima) */}
+        {intercorrenciaRelevante && (
+          <TouchableOpacity
+            style={styles.avisoBanner}
+            onPress={() => router.push({ pathname: '/disponibilidade', params: { id, nome } })}
+          >
+            <AlertTriangle color={colors.danger} size={20} />
+            <Text style={styles.avisoTexto}>
+              {diasAte(intercorrenciaRelevante.data) === 0
+                ? `Fechado hoje: ${intercorrenciaRelevante.motivo}`
+                : `Indisponível em breve (${formatarDataBR(intercorrenciaRelevante.data)}): ${intercorrenciaRelevante.motivo}`}
+              {' — ver disponibilidade'}
+            </Text>
+          </TouchableOpacity>
+        )}
 
         {/* Barra de Pesquisa e Filtro */}
         <View style={styles.searchContainer}>
@@ -175,70 +135,79 @@ export default function ServicosScreen() {
           </TouchableOpacity>
         </View>
 
-        {/* Destaques do Dia */}
+        {/* Categorias (derivadas dos serviços reais, funcionam como filtro) */}
+        {categorias.length > 0 && (
+          <>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>Categorias</Text>
+              {categorias.length > 4 && (
+                <TouchableOpacity onPress={() => setShowAllCategories(!showAllCategories)}>
+                  <Text style={styles.seeAllText}>
+                    {showAllCategories ? 'Ver menos' : 'Ver todos'}
+                  </Text>
+                </TouchableOpacity>
+              )}
+            </View>
+
+            <View style={styles.categoriesGrid}>
+              {visibleCategories.map((categoria) => (
+                <TouchableOpacity
+                  key={categoria}
+                  style={[
+                    styles.categoryCard,
+                    categoriaFiltro === categoria && styles.categoryCardSelected,
+                  ]}
+                  onPress={() => toggleCategoriaFiltro(categoria)}
+                >
+                  <Text style={styles.categoryText}>{categoria}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </>
+        )}
+
+        {/* Serviços */}
         <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Destaques do Dia</Text>
-          <TouchableOpacity><Text style={styles.seeAllText}>Ver todos</Text></TouchableOpacity>
+          <Text style={styles.sectionTitle}>Serviços</Text>
         </View>
 
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.cardsScroll}>
-          {filteredServices.map((item) => (
-            <View key={item.id} style={styles.card}>
-              <TouchableOpacity 
-                activeOpacity={0.8}
-                onPress={() => router.push(item.routeName)}
-              >
+        {loading && <ActivityIndicator color={colors.primary} style={{ marginVertical: 20 }} />}
+        {error && <Text style={styles.errorText}>Não foi possível carregar os serviços.</Text>}
+        {!loading && !error && servicosVisiveis.length === 0 && (
+          <Text style={styles.emptyText}>
+            {servicos.length === 0
+              ? 'Nenhum serviço disponível.'
+              : 'Nenhum serviço encontrado com os filtros selecionados.'}
+          </Text>
+        )}
+
+        <View style={styles.servicesList}>
+          {servicosVisiveis.map((item) => {
+            const isSelected = selecionados.has(item.id);
+            return (
+              <View key={item.id} style={styles.card}>
                 <View style={styles.imageWrapper}>
-                  <Image source={{ uri: item.image }} style={styles.cardImage} />
-                  
-                  {/* Botão Check Selecionável */}
-                  <TouchableOpacity 
-                    style={[styles.checkBadge, !item.selected && styles.checkBadgeInactive]}
+                  <Image source={{ uri: SERVICO_IMAGEM_PLACEHOLDER }} style={styles.cardImage} />
+                  <TouchableOpacity
+                    style={[styles.checkBadge, !isSelected && styles.checkBadgeInactive]}
                     onPress={() => toggleService(item.id)}
                   >
-                    {item.selected && <Check color={colors.white} size={14} />}
+                    {isSelected && <Check color={colors.white} size={14} />}
                   </TouchableOpacity>
                 </View>
 
                 <View style={styles.cardContent}>
-                  <Text style={styles.cardTitle}>{item.title}</Text>
-                  <Text style={styles.cardDesc} numberOfLines={2}>{item.desc}</Text>
-                  <View style={styles.cardFooter}>
-                    <View style={styles.timeBadge}>
-                      <Clock color={colors.neutralGray || '#6B7280'} size={14} />
-                      <Text style={styles.timeText}>{item.time} min</Text>
-                    </View>
-                    <Text style={styles.priceText}>R$ {item.price.toFixed(2).replace('.', ',')}</Text>
-                  </View>
+                  <Text style={styles.cardTitle}>{item.nome}</Text>
+                  {item.itens.length > 0 && (
+                    <Text style={styles.cardItens}>
+                      Inclui: {item.itens.map((itemDoServico) => itemDoServico.nome).join(', ')}
+                    </Text>
+                  )}
+                  <Text style={styles.priceText}>
+                    R$ {item.preco.toFixed(2).replace('.', ',')} · ~{formatarDuracao(item.duracaoMinutos)}
+                  </Text>
                 </View>
-              </TouchableOpacity>
-            </View>
-          ))}
-          {filteredServices.length === 0 && (
-            <Text style={styles.emptyResultsText}>
-              Nenhum serviço encontrado com os filtros selecionados.
-            </Text>
-          )}
-        </ScrollView>
-
-        {/* Categorias */}
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Categorias</Text>
-          <TouchableOpacity onPress={() => setShowAllCategories(!showAllCategories)}>
-            <Text style={styles.seeAllText}>
-              {showAllCategories ? 'Ver menos' : 'Ver todos'}
-            </Text>
-          </TouchableOpacity>
-        </View>
-
-        <View style={styles.categoriesGrid}>
-          {visibleCategories.map((item) => {
-            const IconComponent = item.icon;
-            return (
-              <TouchableOpacity key={item.id} style={styles.categoryCard}>
-                <IconComponent color={colors.white} size={26} />
-                <Text style={styles.categoryText}>{item.title}</Text>
-              </TouchableOpacity>
+              </View>
             );
           })}
         </View>
@@ -247,8 +216,11 @@ export default function ServicosScreen() {
       {/* Rodapé Dinâmico */}
       <View style={styles.cartFooterContainer}>
         <View>
-          <Text style={styles.cartItemsText}>{totalItems} {totalItems === 1 ? 'item selecionado' : 'itens selecionados'}</Text>
-          <Text style={styles.cartTotalText}>R$ {totalPrice.toFixed(2).replace('.', ',')} • {totalTime} min</Text>
+          <Text style={styles.cartItemsText}>{totalItens} {totalItens === 1 ? 'item selecionado' : 'itens selecionados'}</Text>
+          <Text style={styles.cartTotalText}>
+            R$ {totalPreco.toFixed(2).replace('.', ',')}
+            {totalDuracao > 0 && ` · ~${formatarDuracao(totalDuracao)}`}
+          </Text>
         </View>
         <TouchableOpacity style={styles.cartButton}>
           <Text style={styles.cartButtonText}>Avançar</Text>
@@ -267,7 +239,7 @@ export default function ServicosScreen() {
               },
             ]}
           >
-            
+
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Filtrar Serviços</Text>
               <TouchableOpacity
@@ -289,14 +261,14 @@ export default function ServicosScreen() {
                   <Text style={styles.subText}>Mín: R$ {minPrice.toFixed(0)}</Text>
                   <Text style={styles.subText}>Máx: R$ {maxPrice.toFixed(0)}</Text>
                 </View>
-                
+
                 <Slider
                   style={styles.sliderStyle}
-                  minimumValue={20}
-                  maximumValue={300}
+                  minimumValue={0}
+                  maximumValue={tetoPreco}
                   step={10}
                   value={minPrice}
-                  onValueChange={value => setMinPrice(Math.min(value, maxPrice))}
+                  onValueChange={(value) => setMinPrice(Math.min(value, maxPrice))}
                   minimumTrackTintColor={colors.primary}
                   maximumTrackTintColor="#D1D5DB"
                   thumbTintColor={colors.primary}
@@ -304,11 +276,11 @@ export default function ServicosScreen() {
 
                 <Slider
                   style={styles.sliderStyle}
-                  minimumValue={20}
-                  maximumValue={300}
+                  minimumValue={0}
+                  maximumValue={tetoPreco}
                   step={10}
                   value={maxPrice}
-                  onValueChange={value => setMaxPrice(Math.max(value, minPrice))}
+                  onValueChange={(value) => setMaxPrice(Math.max(value, minPrice))}
                   minimumTrackTintColor={colors.primary}
                   maximumTrackTintColor="#D1D5DB"
                   thumbTintColor={colors.primary}
@@ -318,13 +290,13 @@ export default function ServicosScreen() {
               <View style={styles.filterGroup}>
                 <View style={styles.priceLabels}>
                   <Text style={styles.filterLabel}>Tempo estimado máximo</Text>
-                  <Text style={styles.subText}>{maxTime.toFixed(0)} min</Text>
+                  <Text style={styles.subText}>{formatarDuracao(maxTime)}</Text>
                 </View>
                 <Slider
                   style={styles.sliderStyle}
                   minimumValue={15}
-                  maximumValue={120}
-                  step={5}
+                  maximumValue={tetoDuracao}
+                  step={15}
                   value={maxTime}
                   onValueChange={setMaxTime}
                   minimumTrackTintColor={colors.primary}
@@ -332,33 +304,10 @@ export default function ServicosScreen() {
                   thumbTintColor={colors.primary}
                 />
               </View>
-
-              <View style={styles.filterGroup}>
-                <Text style={styles.filterLabel}>Tipos de serviço</Text>
-                <View style={styles.chipsContainer}>
-                  {serviceTypeOptions.map(serviceType => {
-                    const isSelected = selectedServiceTypes.includes(serviceType);
-
-                    return (
-                      <TouchableOpacity
-                        key={serviceType}
-                        style={[styles.chip, isSelected && styles.chipSelected]}
-                        onPress={() => toggleServiceType(serviceType)}
-                        accessibilityRole="button"
-                        accessibilityState={{ selected: isSelected }}
-                      >
-                        <Text style={[styles.chipText, isSelected && styles.chipTextSelected]}>
-                          {serviceType}
-                        </Text>
-                      </TouchableOpacity>
-                    );
-                  })}
-                </View>
-              </View>
             </ScrollView>
 
-            <TouchableOpacity 
-              style={styles.applyFilterButton} 
+            <TouchableOpacity
+              style={styles.applyFilterButton}
               onPress={() => setFilterVisible(false)}
             >
               <Text style={styles.applyFilterText}>Aplicar Filtros</Text>
@@ -376,6 +325,20 @@ const styles = StyleSheet.create({
   lavaRapidoHeader: { marginBottom: 12, paddingBottom: 8, borderBottomWidth: 1, borderBottomColor: '#E5E7EB' },
   lavaRapidoLabel: { fontSize: 12, color: colors.neutralGray || '#6B7280' },
   lavaRapidoName: { fontSize: 18, fontWeight: '700', color: colors.primary },
+  enderecoRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4 },
+  enderecoText: { fontSize: 12, color: colors.neutralGray || '#6B7280', flexShrink: 1 },
+  avisoBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#FEF2F2',
+    borderWidth: 1,
+    borderColor: colors.danger,
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 12,
+  },
+  avisoTexto: { flex: 1, fontSize: 13, fontWeight: '600', color: colors.danger },
   searchContainer: { flexDirection: 'row', gap: 10, marginVertical: 12 },
   searchBar: {
     flex: 1,
@@ -404,18 +367,19 @@ const styles = StyleSheet.create({
   },
   sectionTitle: { fontSize: 18, fontWeight: '700', color: colors.black || '#000' },
   seeAllText: { fontSize: 13, fontWeight: '600', color: colors.primary },
-  cardsScroll: { flexDirection: 'row', marginBottom: 16 },
+  errorText: { color: colors.danger, marginBottom: 12 },
+  emptyText: { color: colors.neutralGray || '#6B7280', marginBottom: 12 },
+  servicesList: { marginBottom: 16, gap: 12 },
   card: {
-    width: 220,
+    flexDirection: 'row',
     backgroundColor: colors.white,
     borderRadius: 16,
-    marginRight: 14,
     overflow: 'hidden',
     borderWidth: 1,
     borderColor: '#E5E7EB',
   },
   imageWrapper: { position: 'relative' },
-  cardImage: { width: '100%', height: 120 },
+  cardImage: { width: 90, height: 90 },
   checkBadge: {
     position: 'absolute',
     top: 8,
@@ -432,36 +396,27 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.white,
   },
-  cardContent: { padding: 12 },
+  cardContent: { flex: 1, padding: 12, justifyContent: 'center' },
   cardTitle: { fontSize: 15, fontWeight: '700', color: colors.primary },
-  cardDesc: { fontSize: 12, color: colors.neutralGray || '#6B7280', marginVertical: 6 },
-  cardFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  timeBadge: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  timeText: { fontSize: 11, color: colors.neutralGray || '#6B7280' },
+  cardItens: { fontSize: 12, color: colors.neutralGray || '#6B7280', marginVertical: 4 },
   priceText: { fontSize: 14, fontWeight: '700', color: colors.black || '#000' },
-  emptyResultsText: {
-    width: 280,
-    color: colors.neutralGray || '#6B7280',
-    fontSize: 14,
-    lineHeight: 20,
-    paddingVertical: 24,
-  },
   categoriesGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 20 },
   categoryCard: {
-    width: '23%',
-    height: 90,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    backgroundColor: colors.white,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  categoryCardSelected: {
     backgroundColor: colors.primary,
-    borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 6,
+    borderColor: colors.primary,
   },
   categoryText: {
-    fontSize: 10,
+    fontSize: 13,
     fontWeight: '600',
-    color: colors.white,
-    textAlign: 'center',
-    marginTop: 4,
+    color: colors.black || '#000',
   },
   cartFooterContainer: {
     backgroundColor: colors.white,
@@ -483,11 +438,11 @@ const styles = StyleSheet.create({
   },
   cartButtonText: { color: colors.white, fontWeight: '700', fontSize: 14 },
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', flexDirection: 'row' },
-  modalContent: { 
-    width: '82%', 
-    backgroundColor: colors.white, 
-    padding: 20, 
-    justifyContent: 'space-between' 
+  modalContent: {
+    width: '82%',
+    backgroundColor: colors.white,
+    padding: 20,
+    justifyContent: 'space-between'
   },
   modalHeader: {
     flexDirection: 'row',
@@ -507,31 +462,6 @@ const styles = StyleSheet.create({
   subText: { fontSize: 12, color: colors.neutralGray || '#6B7280' },
   priceLabels: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 },
   sliderStyle: { width: '100%', height: 36 },
-  chipsContainer: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-    marginTop: 12,
-  },
-  chip: {
-    borderWidth: 1,
-    borderColor: colors.primary,
-    borderRadius: 999,
-    paddingHorizontal: 14,
-    paddingVertical: 9,
-    backgroundColor: colors.white,
-  },
-  chipSelected: {
-    backgroundColor: colors.primary,
-  },
-  chipText: {
-    color: colors.primary,
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  chipTextSelected: {
-    color: colors.white,
-  },
   applyFilterButton: {
     backgroundColor: colors.primary,
     borderRadius: 12,

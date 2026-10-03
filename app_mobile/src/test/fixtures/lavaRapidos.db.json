@@ -1,0 +1,39 @@
+{
+  "lavaRapidos": [
+    {
+      "id": "1",
+      "name": "Aqua Shine Lava-Rápido",
+      "address": "Rua Canhemborá, 120 - Vila Gustavo, São Paulo - SP, CEP 02253010",
+      "rating": 4.8,
+      "reviewsCount": 124,
+      "distance": "1.2 km",
+      "time": "5 min",
+      "price": 45,
+      "isOpen": true,
+      "image": "https://placehold.co/300x300?text=Aqua+Shine",
+      "latitude": -23.5505,
+      "longitude": -46.6333
+    },
+    {
+      "id": "2",
+      "name": "Lava Rápido Centro",
+      "rating": 4.5,
+      "reviewsCount": 89,
+      "distance": "2.4 km",
+      "time": "8 min",
+      "price": 39,
+      "isOpen": true,
+      "image": "https://placehold.co/300x300?text=Centro",
+      "latitude": -23.5506,
+      "longitude": -46.6341
+    }
+  ],
+  "servicos": [
+    { "id": "s1", "lavaRapidoId": "1", "nome": "Lavagem simples", "categoria": "Lavagem", "preco": 40, "ativo": true },
+    { "id": "s2", "lavaRapidoId": "1", "nome": "Polimento", "categoria": "Estética", "preco": 120, "ativo": false },
+    { "id": "s3", "lavaRapidoId": "2", "nome": "Lavagem completa", "categoria": "Lavagem", "preco": 70, "ativo": true }
+  ],
+  "intercorrencias": [
+    { "id": "i1", "lavaRapidoId": "1", "data": "2026-10-12", "motivo": "Feriado", "diaInteiro": true, "horaInicio": null, "horaFim": null }
+  ]
+}

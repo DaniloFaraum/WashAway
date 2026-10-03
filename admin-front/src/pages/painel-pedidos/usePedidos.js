@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react'
 import { getPedidos, updatePedidoStatus } from './service/pedidos.service.js'
+import { useFetch } from '../../hooks/useFetch.js'
+import { useToast } from '../../hooks/useToast.js'
 
 /**
  * Encapsula a busca de pedidos, a atualização de status e o controle do
@@ -15,17 +16,8 @@ import { getPedidos, updatePedidoStatus } from './service/pedidos.service.js'
  * }}
  */
 export function usePedidos() {
-  const [pedidos, setPedidos] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState(null)
-  const [toast, setToast] = useState({ open: false, message: '', severity: 'success' })
-
-  useEffect(() => {
-    getPedidos()
-      .then(setPedidos)
-      .catch((err) => setError(err.message))
-      .finally(() => setLoading(false))
-  }, [])
+  const { data: pedidos, setData: setPedidos, loading, error } = useFetch(getPedidos)
+  const { toast, showToast, closeToast } = useToast()
 
   async function handleStatusChange(id, status) {
     try {
@@ -33,15 +25,11 @@ export function usePedidos() {
       setPedidos((atuais) =>
         atuais.map((pedido) => (pedido.id === id ? pedidoAtualizado : pedido)),
       )
-      setToast({ open: true, message: 'Status atualizado.', severity: 'success' })
+      showToast('Status atualizado.')
     } catch (err) {
-      setToast({ open: true, message: `Erro ao atualizar status: ${err.message}`, severity: 'error' })
+      showToast(`Erro ao atualizar status: ${err.message}`, 'error')
     }
   }
 
-  function handleCloseToast() {
-    setToast((atual) => ({ ...atual, open: false }))
-  }
-
-  return { pedidos, loading, error, toast, handleStatusChange, handleCloseToast }
+  return { pedidos: pedidos ?? [], loading, error, toast, handleStatusChange, handleCloseToast: closeToast }
 }

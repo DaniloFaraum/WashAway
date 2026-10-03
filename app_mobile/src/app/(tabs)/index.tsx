@@ -5,6 +5,8 @@ import { useRouter } from 'expo-router';
 import * as Location from 'expo-location';
 import { useEffect, useState } from 'react';
 import {
+  ActivityIndicator,
+  Alert,
   FlatList,
   Keyboard,
   KeyboardAvoidingView,
@@ -22,6 +24,10 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { CarWashCard } from '@/components/CarWashCard';
 import { colors } from '@/constants/colors';
+import { centeredStyle } from '@/constants/commonStyles';
+import { formatarPrecoAPartirDe } from '@/features/lava-rapidos/formatarPrecoAPartirDe';
+import { useLavaRapidos } from '@/features/lava-rapidos/useLavaRapidos';
+import { useTrocarEmpresa } from '@/features/lava-rapidos/onboarding/useTrocarEmpresa';
 
 let MapView: any = null;
 let Marker: any = null;
@@ -38,76 +44,10 @@ function parseDistance(distance: string) {
   return parseFloat(distance.replace(/[^\d.,]/g, '').replace(',', '.')) || 0;
 }
 
-const mockData = [
-  {
-    id: '1',
-    name: 'Aqua Shine Lava-Rápido',
-    rating: 4.8,
-    reviewsCount: 124,
-    distance: '1.2 km',
-    time: '5 min',
-    price: 45,
-    isOpen: true,
-    image: require('../../../assets/images/lava1.jpg'),
-    latitude: -23.5505,
-    longitude: -46.6333,
-  },
-  {
-    id: '2',
-    name: 'Lava Rápido Centro',
-    rating: 4.5,
-    reviewsCount: 89,
-    distance: '2.4 km',
-    time: '8 min',
-    price: 39,
-    isOpen: true,
-    image: require('../../../assets/images/lava2.jpg'),
-    latitude: -23.5506,
-    longitude: -46.6341,
-  },
-  {
-    id: '3',
-    name: 'Super Wash Express',
-    rating: 4.2,
-    reviewsCount: 56,
-    distance: '3.1 km',
-    time: '12 min',
-    price: 55,
-    isOpen: false,
-    image: require('../../../assets/images/lava3.jpg'),
-    latitude: -23.5498,
-    longitude: -46.6324,
-  },
-  {
-    id: '4',
-    name: 'Brilho Total Premium',
-    rating: 5.0,
-    reviewsCount: 208,
-    distance: '0.7 km',
-    time: '3 min',
-    price: 69,
-    isOpen: true,
-    image: require('../../../assets/images/lava1.jpg'),
-    latitude: -23.5513,
-    longitude: -46.6329,
-  },
-  {
-    id: '5',
-    name: 'Crystal Jet Wash',
-    rating: 4.6,
-    reviewsCount: 141,
-    distance: '4.8 km',
-    time: '16 min',
-    price: 42,
-    isOpen: false,
-    image: require('../../../assets/images/lava2.jpg'),
-    latitude: -23.5492,
-    longitude: -46.6348,
-  },
-];
-
 export default function HomeScreen() {
   const router = useRouter();
+  const { lavaRapidos, loading: loadingLavaRapidos, error: lavaRapidosError } = useLavaRapidos();
+  const { trocarEmpresa } = useTrocarEmpresa();
 
   const [fontsLoaded] = useFonts({
     Viga_400Regular,
@@ -196,24 +136,56 @@ export default function HomeScreen() {
     setTypedAddress('');
   }
 
+  function handleTrocarEmpresa() {
+    Alert.alert(
+      'Trocar lava-rápido?',
+      'Você vai escolher outro lava-rápido.',
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Trocar',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await trocarEmpresa();
+              router.replace('/onboarding');
+            } catch {
+              Alert.alert('Não foi possível trocar de lava-rápido. Tente de novo.');
+            }
+          },
+        },
+      ],
+    );
+  }
+
   const header = (
     <View style={styles.header}>
       <Text style={styles.title}>
         WASH <Text style={styles.titleAccent}>YOUR</Text> WAY
       </Text>
 
-      <Pressable
-        style={styles.locationButton}
-        accessibilityRole="button"
-        accessibilityLabel="Alterar localização"
-        onPress={() => {
-          setTypedAddress('');
-          setIsAddressModalVisible(true);
-        }}>
-        <Text style={styles.locationText} numberOfLines={1}>
-          📍 {currentAddress} ▾
-        </Text>
-      </Pressable>
+      <View style={styles.locationRow}>
+        <Pressable
+          style={styles.locationButton}
+          accessibilityRole="button"
+          accessibilityLabel="Alterar localização"
+          onPress={() => {
+            setTypedAddress('');
+            setIsAddressModalVisible(true);
+          }}>
+          <Text style={styles.locationText} numberOfLines={1}>
+            📍 {currentAddress} ▾
+          </Text>
+        </Pressable>
+
+        <Pressable
+          style={styles.trocarEmpresaButton}
+          accessibilityRole="button"
+          accessibilityLabel="Trocar lava-rápido"
+          onPress={handleTrocarEmpresa}>
+          <Ionicons name="swap-horizontal-outline" size={18} color={colors.primary} />
+        </Pressable>
+      </View>
 
       <View style={styles.searchBar}>
         <Ionicons name="search-outline" size={20} color={colors.neutralGray} />
@@ -257,7 +229,25 @@ export default function HomeScreen() {
     </View>
   );
 
-  let result = mockData.filter((item) =>
+  if (loadingLavaRapidos) {
+    return (
+      <SafeAreaView style={[styles.container, centeredStyle]}>
+        <ActivityIndicator color={colors.primary} size="large" />
+      </SafeAreaView>
+    );
+  }
+
+  if (lavaRapidosError) {
+    return (
+      <SafeAreaView style={[styles.container, centeredStyle]}>
+        <Text style={styles.mapUnavailableText}>
+          Não foi possível carregar os lava-rápidos: {lavaRapidosError}
+        </Text>
+      </SafeAreaView>
+    );
+  }
+
+  let result = lavaRapidos.filter((item) =>
     item.name.toLowerCase().includes(searchQuery.toLowerCase()),
   );
 
@@ -316,7 +306,7 @@ export default function HomeScreen() {
               identifier={item.id}
               coordinate={{ latitude: item.latitude, longitude: item.longitude }}
               title={item.name}
-              description={`A partir de R$ ${item.price.toFixed(2).replace('.', ',')}`}
+              description={formatarPrecoAPartirDe(item.price)}
               onPress={() =>
                 router.push({
                   pathname: '/servicos',
@@ -476,9 +466,15 @@ const styles = StyleSheet.create({
     color: colors.primary,
     fontFamily: 'Viga_400Regular',
   },
-  locationButton: {
+  locationRow: {
+    flexDirection: 'row',
     alignSelf: 'center',
+    alignItems: 'center',
     maxWidth: '90%',
+    gap: 8,
+  },
+  locationButton: {
+    flexShrink: 1,
     backgroundColor: colors.primary,
     borderRadius: 22,
     paddingHorizontal: 18,
@@ -488,6 +484,16 @@ const styles = StyleSheet.create({
     color: colors.white,
     fontSize: 14,
     fontWeight: '600',
+  },
+  trocarEmpresaButton: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.white,
+    borderWidth: 1.5,
+    borderColor: colors.primary,
   },
   searchBar: {
     flexDirection: 'row',

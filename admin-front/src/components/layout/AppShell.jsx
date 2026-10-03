@@ -3,11 +3,14 @@ import Drawer from '@mui/material/Drawer'
 import Toolbar from '@mui/material/Toolbar'
 import Typography from '@mui/material/Typography'
 import Divider from '@mui/material/Divider'
+import Chip from '@mui/material/Chip'
+import Button from '@mui/material/Button'
+import Stack from '@mui/material/Stack'
 import Sidebar from './Sidebar.jsx'
 
 const DRAWER_WIDTH = 240
 
-function AppShell({ children }) {
+function AppShell({ children, empresaLogada, onSair, onReabrir }) {
   return (
     <Box sx={{ display: 'flex' }}>
       <Drawer
@@ -15,16 +18,47 @@ function AppShell({ children }) {
         sx={{
           width: DRAWER_WIDTH,
           flexShrink: 0,
-          '& .MuiDrawer-paper': { width: DRAWER_WIDTH, boxSizing: 'border-box' },
+          '& .MuiDrawer-paper': {
+            width: DRAWER_WIDTH,
+            boxSizing: 'border-box',
+            display: 'flex',
+            flexDirection: 'column',
+          },
         }}
       >
-        <Toolbar>
+        <Toolbar sx={{ flexDirection: 'column', alignItems: 'flex-start', justifyContent: 'center', py: 1 }}>
           <Typography variant="h6" noWrap>
             WashAway
           </Typography>
+          {empresaLogada && (
+            <>
+              <Typography variant="caption" color="text.secondary" noWrap>
+                {empresaLogada.name}
+              </Typography>
+              <Stack direction="row" spacing={1} alignItems="center" sx={{ mt: 0.5 }}>
+                <Chip
+                  size="small"
+                  label={empresaLogada.isOpen ? 'Aberto' : 'Fechado'}
+                  color={empresaLogada.isOpen ? 'success' : 'error'}
+                />
+                {!empresaLogada.isOpen && empresaLogada.intercorrenciaAtiva && (
+                  <Button size="small" onClick={onReabrir}>
+                    Reabrir
+                  </Button>
+                )}
+              </Stack>
+              {!empresaLogada.isOpen && empresaLogada.intercorrenciaAtiva && (
+                <Typography variant="caption" color="text.secondary" noWrap>
+                  Motivo: {empresaLogada.intercorrenciaAtiva.motivo}
+                </Typography>
+              )}
+            </>
+          )}
         </Toolbar>
         <Divider />
-        <Sidebar />
+        <Box sx={{ flexGrow: 1, minHeight: 0, display: 'flex' }}>
+          <Sidebar onSair={onSair} />
+        </Box>
       </Drawer>
       <Box component="main" sx={{ flexGrow: 1, p: 3 }}>
         {children}
