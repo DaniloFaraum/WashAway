@@ -157,7 +157,7 @@ describe('DELETE /lavaRapidos/:id', () => {
       },
     })
     const servico = await prisma.servico.create({
-      data: { lavaRapidoId: lavaRapido.id, nome: 'Lavagem', categoria: 'Lavagem', preco: 40 },
+      data: { lavaRapidoId: lavaRapido.id, nome: 'Lavagem', preco: 40 },
     })
     const intercorrencia = await prisma.intercorrencia.create({
       data: { lavaRapidoId: lavaRapido.id, data: '2026-12-01', motivo: 'Teste', diaInteiro: true },
@@ -349,5 +349,69 @@ describe('POST /lavaRapidos/login', () => {
       .send({ cnpj: '99999999000199', senha: 'admin' })
 
     expect(response.status).toBe(401)
+  })
+})
+
+describe('price ("a partir de") calculado a partir dos serviços', () => {
+  let comServicosId: string
+  let semServicosId: string
+
+  function dadosLavaRapido(name: string, cnpj: string) {
+    return {
+      name,
+      cnpj,
+      senha: 'hash-fake-nao-usado-nestes-testes',
+      rating: 0,
+      reviewsCount: 0,
+      distance: '',
+      time: '',
+      price: 999,
+      isOpen: true,
+      image: 'https://placehold.co/300x300?text=Teste',
+      latitude: 0,
+      longitude: 0,
+    }
+  }
+
+  beforeAll(async () => {
+    comServicosId = (await prisma.lavaRapido.create({ data: dadosLavaRapido('Com serviços', '12121212000112') })).id
+    semServicosId = (await prisma.lavaRapido.create({ data: dadosLavaRapido('Sem serviços', '13131313000113') })).id
+
+    await prisma.servico.createMany({
+      data: [
+        { lavaRapidoId: comServicosId, nome: 'Barato inativo', preco: 10, ativo: false },
+        { lavaRapidoId: comServicosId, nome: 'Simples', preco: 40, ativo: true },
+        { lavaRapidoId: comServicosId, nome: 'Completa', preco: 70, ativo: true },
+      ],
+    })
+  })
+
+  afterAll(async () => {
+    await prisma.lavaRapido.deleteMany({ where: { id: { in: [comServicosId, semServicosId] } } })
+    await prisma.$disconnect()
+  })
+
+  it('na listagem, price é o menor preço entre os serviços ativos (ignora inativos e a coluna fixa)', async () => {
+    const response = await supertest(app).get('/lavaRapidos')
+
+    const item = response.body.find((entry: { id: string }) => entry.id === comServicosId)
+    expect(item.price).toBe(40)
+  })
+
+  it('na listagem, price é null quando o lava-rápido não tem serviço ativo', async () => {
+    const response = await supertest(app).get('/lavaRapidos')
+
+    const item = response.body.find((entry: { id: string }) => entry.id === semServicosId)
+    expect(item.price).toBeNull()
+  })
+
+  it('na busca por id, price segue a mesma regra', async () => {
+    const [comServicos, semServicos] = await Promise.all([
+      supertest(app).get(`/lavaRapidos/${comServicosId}`),
+      supertest(app).get(`/lavaRapidos/${semServicosId}`),
+    ])
+
+    expect(comServicos.body.price).toBe(40)
+    expect(semServicos.body.price).toBeNull()
   })
 })

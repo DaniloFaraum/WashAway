@@ -23,6 +23,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { CarWashCard } from '@/components/CarWashCard';
 import { colors } from '@/constants/colors';
 import { centeredStyle } from '@/constants/commonStyles';
+import { formatarPrecoAPartirDe } from '@/features/lava-rapidos/formatarPrecoAPartirDe';
 import { useLavaRapidos } from '@/features/lava-rapidos/useLavaRapidos';
 import { useTrocarEmpresa } from '@/features/lava-rapidos/onboarding/useTrocarEmpresa';
 
@@ -294,7 +295,7 @@ export default function HomeScreen() {
               identifier={item.id}
               coordinate={{ latitude: item.latitude, longitude: item.longitude }}
               title={item.name}
-              description={`A partir de R$ ${item.price.toFixed(2).replace('.', ',')}`}
+              description={formatarPrecoAPartirDe(item.price)}
               onPress={() =>
                 router.push({
                   pathname: '/servicos',

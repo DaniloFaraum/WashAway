@@ -191,12 +191,12 @@ function Login({ onEntrar, onCadastrar }) {
 
               {modo === 'cadastrar' && (
                 <Typography variant="body2" color="text.secondary">
-                  A senha padrão de toda empresa cadastrada é <strong>admin</strong>.
+                  Depois de enviar, você verá o contrato de parceria para assinar.
                 </Typography>
               )}
 
               <Button type="submit" variant="contained" size="large" disabled={enviando}>
-                {modo === 'entrar' ? 'Entrar' : 'Cadastrar'}
+                {modo === 'entrar' ? 'Entrar' : 'Solicitar cadastro'}
               </Button>
             </Stack>
           </Box>

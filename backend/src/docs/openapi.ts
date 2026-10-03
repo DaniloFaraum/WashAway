@@ -15,7 +15,7 @@ const lavaRapidoSchema = {
     reviewsCount: { type: 'integer' },
     distance: { type: 'string' },
     time: { type: 'string' },
-    price: { type: 'number' },
+    price: { type: 'number', nullable: true, description: 'Calculado ("a partir de"): menor preço entre os serviços ativos; null sem serviço ativo.' },
     isOpen: { type: 'boolean', description: 'Calculado: coluna do banco E sem intercorrência ativa agora.' },
     image: { type: 'string' },
     latitude: { type: 'number' },
@@ -34,6 +34,42 @@ const intercorrenciaSchema = {
     horaInicio: { type: 'string', nullable: true, example: '14:00' },
     horaFim: { type: 'string', nullable: true, example: '16:00' },
     reaberta: { type: 'boolean' },
+  },
+}
+
+const contratoSchema = {
+  type: 'object',
+  properties: {
+    id: { type: 'string' },
+    versao: { type: 'integer' },
+    titulo: { type: 'string' },
+    conteudo: { type: 'string' },
+    vigente: { type: 'boolean' },
+    criadoEm: { type: 'string', format: 'date-time' },
+  },
+}
+
+const solicitacaoOnboardingSchema = {
+  type: 'object',
+  properties: {
+    id: { type: 'string' },
+    name: { type: 'string' },
+    address: { type: 'string', nullable: true },
+    cnpj: { type: 'string' },
+    status: { type: 'string', enum: ['aguardando_contrato', 'concluida'] },
+    contratoId: { type: 'string' },
+    aceitoEm: { type: 'string', format: 'date-time', nullable: true },
+    lavaRapidoId: { type: 'string', nullable: true },
+    criadoEm: { type: 'string', format: 'date-time' },
+    contrato: {
+      type: 'object',
+      properties: {
+        id: { type: 'string' },
+        versao: { type: 'integer' },
+        titulo: { type: 'string' },
+        conteudo: { type: 'string' },
+      },
+    },
   },
 }
 
@@ -71,10 +107,36 @@ const servicoSchema = {
     id: { type: 'string' },
     lavaRapidoId: { type: 'string' },
     nome: { type: 'string' },
-    categoria: { type: 'string' },
     preco: { type: 'number' },
     ativo: { type: 'boolean' },
+    itens: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: { id: { type: 'string' }, nome: { type: 'string' }, categoria: { type: 'string' }, duracaoMinutos: { type: 'integer' } },
+      },
+    },
+    categorias: { type: 'array', items: { type: 'string' }, description: 'Derivadas (distintas) dos itens do combo.' },
+    duracaoMinutos: { type: 'integer', description: 'Derivada: soma da duração dos itens do combo.' },
   },
+}
+
+const itemServicoSchema = {
+  type: 'object',
+  properties: {
+    id: { type: 'string' },
+    nome: { type: 'string' },
+    descricao: { type: 'string' },
+    categoria: { type: 'string' },
+    duracaoMinutos: { type: 'integer', description: 'Duração estimada do item, em minutos.' },
+    ativo: { type: 'boolean' },
+  },
+}
+
+const dadosServicoProperties = {
+  nome: { type: 'string', maxLength: 60 },
+  preco: { type: 'number', exclusiveMinimum: 0 },
+  itemIds: { type: 'array', minItems: 1, items: { type: 'string' }, description: 'Ids de itens ativos do catálogo (GET /itensServico), sem repetição.' },
 }
 
 const veiculoSchema = {
@@ -109,8 +171,11 @@ export const openApiDocument = {
       LavaRapidoComDisponibilidade: lavaRapidoDetalheSchema,
       Pedido: pedidoSchema,
       Servico: servicoSchema,
+      ItemServico: itemServicoSchema,
       Intercorrencia: intercorrenciaSchema,
       Veiculo: veiculoSchema,
+      Contrato: contratoSchema,
+      SolicitacaoOnboarding: solicitacaoOnboardingSchema,
     },
   },
   paths: {
@@ -127,7 +192,7 @@ export const openApiDocument = {
       },
       post: {
         tags: ['lavaRapidos'],
-        summary: 'Cadastra um lava-rápido (senha fixada como hash de "admin")',
+        summary: 'Cadastra um lava-rápido direto — legado/interno (seed, testes); o admin-front usa o fluxo /onboarding',
         requestBody: {
           required: true,
           content: {
@@ -236,11 +301,50 @@ export const openApiDocument = {
         summary: 'Lista serviços',
         parameters: [lavaRapidoIdParam],
         responses: {
-          200: { description: 'Lista de serviços.', content: { 'application/json': { schema: { type: 'array', items: { $ref: '#/components/schemas/Servico' } } } } },
+          200: { description: 'Lista de serviços (combos) com seus itens.', content: { 'application/json': { schema: { type: 'array', items: { $ref: '#/components/schemas/Servico' } } } } },
+        },
+      },
+      post: {
+        tags: ['servicos'],
+        summary: 'Cria um serviço (combo de itens do catálogo) para um lava-rápido',
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                required: ['lavaRapidoId', 'nome', 'preco', 'itemIds'],
+                properties: { lavaRapidoId: { type: 'string' }, ...dadosServicoProperties },
+              },
+            },
+          },
+        },
+        responses: {
+          201: { description: 'Criado.', content: { 'application/json': { schema: { $ref: '#/components/schemas/Servico' } } } },
+          400: { description: 'Body inválido ou itens inexistentes/inativos no catálogo (`itemIdsInvalidos`).', content: { 'application/json': { schema: { $ref: '#/components/schemas/Erro' } } } },
+          404: { description: 'Lava-rápido não encontrado.', content: { 'application/json': { schema: { $ref: '#/components/schemas/Erro' } } } },
         },
       },
     },
     '/servicos/{id}': {
+      put: {
+        tags: ['servicos'],
+        summary: 'Edita nome, preço e itens de um serviço (substitui os itens)',
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: { type: 'object', required: ['nome', 'preco', 'itemIds'], properties: dadosServicoProperties },
+            },
+          },
+        },
+        responses: {
+          200: { description: 'Atualizado.', content: { 'application/json': { schema: { $ref: '#/components/schemas/Servico' } } } },
+          400: { description: 'Body inválido ou itens inexistentes/inativos no catálogo (`itemIdsInvalidos`).', content: { 'application/json': { schema: { $ref: '#/components/schemas/Erro' } } } },
+          404: { description: 'Serviço não encontrado.', content: { 'application/json': { schema: { $ref: '#/components/schemas/Erro' } } } },
+        },
+      },
       patch: {
         tags: ['servicos'],
         summary: 'Atualiza só o campo ativo',
@@ -257,6 +361,15 @@ export const openApiDocument = {
           200: { description: 'Atualizado.', content: { 'application/json': { schema: { $ref: '#/components/schemas/Servico' } } } },
           400: { description: 'body deve conter só { ativo: boolean }.', content: { 'application/json': { schema: { $ref: '#/components/schemas/Erro' } } } },
           404: { description: 'Serviço não encontrado.', content: { 'application/json': { schema: { $ref: '#/components/schemas/Erro' } } } },
+        },
+      },
+    },
+    '/itensServico': {
+      get: {
+        tags: ['itensServico'],
+        summary: 'Lista o catálogo global de itens ativos (só leitura)',
+        responses: {
+          200: { description: 'Itens ativos, ordenados por categoria e nome.', content: { 'application/json': { schema: { type: 'array', items: { $ref: '#/components/schemas/ItemServico' } } } } },
         },
       },
     },
@@ -327,6 +440,77 @@ export const openApiDocument = {
         parameters: [lavaRapidoIdParam],
         responses: {
           200: { description: 'Lista de veículos (deduplicados por placa).', content: { 'application/json': { schema: { type: 'array', items: { $ref: '#/components/schemas/Veiculo' } } } } },
+        },
+      },
+    },
+    '/contratos/vigente': {
+      get: {
+        tags: ['onboarding'],
+        summary: 'Contrato vigente do onboarding',
+        responses: {
+          200: { description: 'Contrato vigente.', content: { 'application/json': { schema: { $ref: '#/components/schemas/Contrato' } } } },
+          404: { description: 'Nenhum contrato vigente.', content: { 'application/json': { schema: { $ref: '#/components/schemas/Erro' } } } },
+        },
+      },
+    },
+    '/onboarding/solicitacoes': {
+      post: {
+        tags: ['onboarding'],
+        summary: 'Solicita o cadastro de uma empresa (validação: só duplicidade de cnpj; aprovação automática)',
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                required: ['name', 'cnpj'],
+                properties: {
+                  name: { type: 'string' },
+                  address: { type: 'string' },
+                  cnpj: { type: 'string', example: '00000000000101', description: '14 dígitos numéricos.' },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          201: { description: 'Criada já como aguardando_contrato, com o contrato vigente.', content: { 'application/json': { schema: { $ref: '#/components/schemas/SolicitacaoOnboarding' } } } },
+          200: { description: 'Já havia solicitação pendente com esse cnpj — devolvida para retomar.', content: { 'application/json': { schema: { $ref: '#/components/schemas/SolicitacaoOnboarding' } } } },
+          400: { description: 'name ausente ou cnpj com formato inválido.', content: { 'application/json': { schema: { $ref: '#/components/schemas/Erro' } } } },
+          409: { description: 'cnpj já cadastrado como lava-rápido.', content: { 'application/json': { schema: { $ref: '#/components/schemas/Erro' } } } },
+          503: { description: 'Nenhum contrato vigente cadastrado.', content: { 'application/json': { schema: { $ref: '#/components/schemas/Erro' } } } },
+        },
+      },
+    },
+    '/onboarding/solicitacoes/{id}': {
+      get: {
+        tags: ['onboarding'],
+        summary: 'Status + contrato de uma solicitação',
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+        responses: {
+          200: { description: 'Encontrada.', content: { 'application/json': { schema: { $ref: '#/components/schemas/SolicitacaoOnboarding' } } } },
+          404: { description: 'Não encontrada.', content: { 'application/json': { schema: { $ref: '#/components/schemas/Erro' } } } },
+        },
+      },
+    },
+    '/onboarding/solicitacoes/{id}/aceite': {
+      post: {
+        tags: ['onboarding'],
+        summary: 'Assina o contrato (mock "eu aceito") e cria o lava-rápido',
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: { type: 'object', required: ['aceite'], properties: { aceite: { type: 'string', example: 'eu aceito' } } },
+            },
+          },
+        },
+        responses: {
+          201: { description: 'Contrato aceito; lava-rápido criado (senha padrão "admin").', content: { 'application/json': { schema: { $ref: '#/components/schemas/LavaRapido' } } } },
+          400: { description: 'aceite diferente de "eu aceito".', content: { 'application/json': { schema: { $ref: '#/components/schemas/Erro' } } } },
+          404: { description: 'Solicitação não encontrada.', content: { 'application/json': { schema: { $ref: '#/components/schemas/Erro' } } } },
+          409: { description: 'Solicitação já concluída, ou cnpj cadastrado por outro caminho.', content: { 'application/json': { schema: { $ref: '#/components/schemas/Erro' } } } },
         },
       },
     },

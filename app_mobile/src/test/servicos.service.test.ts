@@ -15,7 +15,19 @@ describe('servicos.service', () => {
     const fetchMock = vi.spyOn(global, 'fetch').mockResolvedValue({
       ok: true,
       json: async () => [
-        { id: 's1', lavaRapidoId: '1', nome: 'Lavagem simples', categoria: 'Lavagem', preco: 40, ativo: true },
+        {
+          id: 's1',
+          lavaRapidoId: '1',
+          nome: 'Lavagem simples',
+          preco: 40,
+          ativo: true,
+          itens: [
+            { id: 'it1', nome: 'Lavagem externa', categoria: 'Lavagem', duracaoMinutos: 20 },
+            { id: 'it5', nome: 'Secagem', categoria: 'Secagem e acabamento', duracaoMinutos: 10 },
+          ],
+          categorias: ['Lavagem', 'Secagem e acabamento'],
+          duracaoMinutos: 30,
+        },
       ],
     } as Response)
 
@@ -23,7 +35,19 @@ describe('servicos.service', () => {
 
     expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining('/servicos?lavaRapidoId=1'), undefined)
     expect(servicos).toEqual([
-      { id: 's1', lavaRapidoId: '1', nome: 'Lavagem simples', categoria: 'Lavagem', preco: 40, ativo: true },
+      {
+        id: 's1',
+        lavaRapidoId: '1',
+        nome: 'Lavagem simples',
+        preco: 40,
+        ativo: true,
+        itens: [
+          { id: 'it1', nome: 'Lavagem externa', categoria: 'Lavagem', duracaoMinutos: 20 },
+          { id: 'it5', nome: 'Secagem', categoria: 'Secagem e acabamento', duracaoMinutos: 10 },
+        ],
+        categorias: ['Lavagem', 'Secagem e acabamento'],
+        duracaoMinutos: 30,
+      },
     ])
   })
 

@@ -7,9 +7,11 @@ function servico(overrides: Partial<Servico>): Servico {
     id: '1',
     lavaRapidoId: '1',
     nome: 'Serviço',
-    categoria: 'Lavagem',
     preco: 10,
     ativo: true,
+    itens: [{ id: 'it1', nome: 'Lavagem externa', categoria: 'Lavagem', duracaoMinutos: 20 }],
+    categorias: ['Lavagem'],
+    duracaoMinutos: 20,
     ...overrides,
   }
 }

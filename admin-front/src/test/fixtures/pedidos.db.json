@@ -20,8 +20,42 @@
     }
   ],
   "servicos": [
-    { "id": "1", "nome": "Lavagem simples", "categoria": "Lavagem", "preco": 40, "ativo": true, "lavaRapidoId": "lr-1" },
-    { "id": "2", "nome": "Polimento", "categoria": "Estética", "preco": 120, "ativo": false, "lavaRapidoId": "lr-2" }
+    {
+      "id": "1",
+      "nome": "Lavagem simples",
+      "preco": 40,
+      "ativo": true,
+      "lavaRapidoId": "lr-1",
+      "itens": [
+        { "id": "i1", "nome": "Lavagem externa", "categoria": "Lavagem", "duracaoMinutos": 20 },
+        { "id": "i5", "nome": "Secagem", "categoria": "Secagem e acabamento", "duracaoMinutos": 10 }
+      ],
+      "categorias": ["Lavagem", "Secagem e acabamento"],
+      "duracaoMinutos": 30
+    },
+    {
+      "id": "2",
+      "nome": "Polimento",
+      "preco": 120,
+      "ativo": false,
+      "lavaRapidoId": "lr-2",
+      "itens": [
+        { "id": "i1", "nome": "Lavagem externa", "categoria": "Lavagem", "duracaoMinutos": 20 },
+        { "id": "i5", "nome": "Secagem", "categoria": "Secagem e acabamento", "duracaoMinutos": 10 },
+        { "id": "i7", "nome": "Polimento", "categoria": "Estética e proteção", "duracaoMinutos": 120 }
+      ],
+      "categorias": ["Lavagem", "Secagem e acabamento", "Estética e proteção"],
+      "duracaoMinutos": 150
+    }
+  ],
+  "itensServico": [
+    { "id": "i1", "nome": "Lavagem externa", "descricao": "Lavagem da carroceria", "categoria": "Lavagem", "duracaoMinutos": 20, "ativo": true },
+    { "id": "i2", "nome": "Lavagem de rodas", "descricao": "Rodas e caixas de roda", "categoria": "Lavagem", "duracaoMinutos": 15, "ativo": true },
+    { "id": "i3", "nome": "Aspiração", "descricao": "Aspiração de bancos, tapetes e porta-malas", "categoria": "Limpeza interna", "duracaoMinutos": 15, "ativo": true },
+    { "id": "i4", "nome": "Limpeza de vidros", "descricao": "Vidros por dentro e por fora", "categoria": "Limpeza interna", "duracaoMinutos": 10, "ativo": true },
+    { "id": "i5", "nome": "Secagem", "descricao": "Secagem manual da carroceria", "categoria": "Secagem e acabamento", "duracaoMinutos": 10, "ativo": true },
+    { "id": "i6", "nome": "Pretinho nos pneus", "descricao": "Revitalização dos pneus", "categoria": "Secagem e acabamento", "duracaoMinutos": 5, "ativo": true },
+    { "id": "i7", "nome": "Polimento", "descricao": "Remoção de riscos leves e brilho da pintura", "categoria": "Estética e proteção", "duracaoMinutos": 120, "ativo": true }
   ],
   "intercorrencias": [
     { "id": "1", "data": "2026-10-12", "motivo": "Feriado", "diaInteiro": true, "lavaRapidoId": "lr-1" }

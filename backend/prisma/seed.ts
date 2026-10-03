@@ -8,6 +8,23 @@ const prisma = new PrismaClient()
 // Hasheada aqui do mesmo jeito que o cadastro real (POST /lava-rapidos) faz.
 const SENHA_PADRAO_HASH = bcrypt.hashSync(SENHA_PADRAO, 10)
 
+// Contrato mock do onboarding (docs/plan/onboarding-contrato-empresa) — termos
+// fictícios; o aceite é o texto "eu aceito" digitado pelo dono no admin-front.
+const CONTRATO_MOCK = {
+  versao: 1,
+  titulo: 'Termos de parceria WashAway',
+  conteudo: [
+    '1. A empresa parceira declara que as informações enviadas no cadastro são verdadeiras.',
+    '2. A WashAway exibirá a empresa no aplicativo para consumidores, junto com seus serviços, preços e disponibilidade.',
+    '3. A empresa se compromete a manter serviços, preços e disponibilidade atualizados no painel.',
+    '4. Os pedidos recebidos pelo aplicativo devem ser atendidos conforme o horário combinado com o consumidor.',
+    '5. Este é um contrato de demonstração, sem valor legal.',
+    '',
+    'Para assinar, digite "eu aceito" no campo abaixo.',
+  ].join('\n'),
+  vigente: true,
+}
+
 const lavaRapidosData = [
   {
     name: 'Aqua Shine Lava-Rápido',
@@ -86,9 +103,48 @@ const lavaRapidosData = [
   },
 ]
 
+// Catálogo global de itens — a loja só monta combos com eles (não cria itens).
+const itensCatalogoData = [
+  { nome: 'Lavagem externa', descricao: 'Lavagem da carroceria', categoria: 'Lavagem', duracaoMinutos: 20 },
+  { nome: 'Lavagem de rodas', descricao: 'Rodas e caixas de roda', categoria: 'Lavagem', duracaoMinutos: 15 },
+  { nome: 'Lavagem do motor', descricao: 'Limpeza do compartimento do motor', categoria: 'Lavagem', duracaoMinutos: 30 },
+  { nome: 'Lavagem de chassi', descricao: 'Lavagem por baixo do veículo', categoria: 'Lavagem', duracaoMinutos: 20 },
+  { nome: 'Aspiração', descricao: 'Aspiração de bancos, tapetes e porta-malas', categoria: 'Limpeza interna', duracaoMinutos: 15 },
+  { nome: 'Limpeza de painel', descricao: 'Painel e plásticos internos', categoria: 'Limpeza interna', duracaoMinutos: 15 },
+  { nome: 'Limpeza de vidros', descricao: 'Vidros por dentro e por fora', categoria: 'Limpeza interna', duracaoMinutos: 10 },
+  { nome: 'Higienização de bancos', descricao: 'Limpeza profunda dos estofados', categoria: 'Limpeza interna', duracaoMinutos: 60 },
+  { nome: 'Higienização de teto e carpete', descricao: 'Limpeza profunda de teto e carpete', categoria: 'Limpeza interna', duracaoMinutos: 60 },
+  { nome: 'Oxi-sanitização', descricao: 'Eliminação de odores e germes do ar-condicionado e cabine', categoria: 'Limpeza interna', duracaoMinutos: 30 },
+  { nome: 'Secagem', descricao: 'Secagem manual da carroceria', categoria: 'Secagem e acabamento', duracaoMinutos: 10 },
+  { nome: 'Pretinho nos pneus', descricao: 'Revitalização dos pneus', categoria: 'Secagem e acabamento', duracaoMinutos: 5 },
+  { nome: 'Hidratação de couro', descricao: 'Hidratação de bancos de couro', categoria: 'Secagem e acabamento', duracaoMinutos: 40 },
+  { nome: 'Enceramento', descricao: 'Aplicação de cera protetora', categoria: 'Estética e proteção', duracaoMinutos: 30 },
+  { nome: 'Polimento', descricao: 'Remoção de riscos leves e brilho da pintura', categoria: 'Estética e proteção', duracaoMinutos: 120 },
+  { nome: 'Cristalização', descricao: 'Proteção da pintura com efeito espelhado', categoria: 'Estética e proteção', duracaoMinutos: 90 },
+  { nome: 'Vitrificação', descricao: 'Revestimento cerâmico de longa duração', categoria: 'Estética e proteção', duracaoMinutos: 180 },
+  { nome: 'Descontaminação de pintura', descricao: 'Remoção de contaminantes com clay bar', categoria: 'Estética e proteção', duracaoMinutos: 45 },
+]
+
+const combosData = [
+  { nome: 'Lavagem simples', preco: 40, ativo: true, itens: ['Lavagem externa', 'Secagem'] },
+  {
+    nome: 'Lavagem completa',
+    preco: 70,
+    ativo: true,
+    itens: ['Lavagem externa', 'Lavagem de rodas', 'Aspiração', 'Limpeza de vidros', 'Secagem', 'Pretinho nos pneus'],
+  },
+  { nome: 'Polimento', preco: 120, ativo: false, itens: ['Lavagem externa', 'Secagem', 'Polimento'] },
+]
+
 async function main() {
+  // Onboarding: solicitações referenciam Contrato, então saem antes dele.
+  await prisma.solicitacaoOnboarding.deleteMany()
+  await prisma.contrato.deleteMany()
+  await prisma.contrato.create({ data: CONTRATO_MOCK })
+
   await prisma.intercorrencia.deleteMany()
   await prisma.servico.deleteMany()
+  await prisma.itemServico.deleteMany()
   await prisma.pedido.deleteMany()
   await prisma.lavaRapido.deleteMany()
 
@@ -134,19 +190,29 @@ async function main() {
     await prisma.pedido.create({ data })
   }
 
+  const itemIdPorNome = new Map<string, string>()
+  for (const data of itensCatalogoData) {
+    const item = await prisma.itemServico.create({ data })
+    itemIdPorNome.set(item.nome, item.id)
+  }
+
   // Dados de servicos/intercorrencias hoje só em admin-front/mock-server/db.json,
   // replicados aqui por lava-rápido pra sair do json-server isolado.
   let servicosCount = 0
   let intercorrenciasCount = 0
   for (const lavaRapido of lavaRapidos) {
-    await prisma.servico.createMany({
-      data: [
-        { lavaRapidoId: lavaRapido.id, nome: 'Lavagem simples', categoria: 'Lavagem', preco: 40, ativo: true },
-        { lavaRapidoId: lavaRapido.id, nome: 'Lavagem completa', categoria: 'Lavagem', preco: 70, ativo: true },
-        { lavaRapidoId: lavaRapido.id, nome: 'Polimento', categoria: 'Estética', preco: 120, ativo: false },
-      ],
-    })
-    servicosCount += 3
+    for (const combo of combosData) {
+      await prisma.servico.create({
+        data: {
+          lavaRapidoId: lavaRapido.id,
+          nome: combo.nome,
+          preco: combo.preco,
+          ativo: combo.ativo,
+          itens: { create: combo.itens.map((nomeItem) => ({ itemId: itemIdPorNome.get(nomeItem)! })) },
+        },
+      })
+    }
+    servicosCount += combosData.length
 
     await prisma.intercorrencia.createMany({
       data: [

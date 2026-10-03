@@ -23,7 +23,8 @@
 1. `cd backend && npm install`.
 2. `npm run docker:up` — sobe o Postgres (`docker compose up -d --wait`).
 3. `npx prisma migrate dev` (só a primeira vez, ou quando o schema mudar) — aplica as migrations em `prisma/migrations/` no banco de dev.
-4. `npm run prisma:seed` — popula `washaway` com 5 lava-rápidos (cada um com `address` preenchido — mesma rua/bairro/cidade/CEP, número diferente por lava-rápido — pra o consumidor sempre ter um endereço pra ver no app_mobile), 3 pedidos, e 3 serviços + 2 intercorrências por lava-rápido (mesmos dados que já estavam nos `db.json` dos front-ends, agora ligados via `lavaRapidoId`).
+4. `npm run prisma:seed` — popula `washaway` com 5 lava-rápidos (cada um com `address` preenchido — mesma rua/bairro/cidade/CEP, número diferente por lava-rápido — pra o consumidor sempre ter um endereço pra ver no app_mobile), 3 pedidos, o catálogo global de 18 itens de serviço, e 3 serviços (combos de itens do catálogo) + 2 intercorrências por lava-rápido (mesmos dados que já estavam nos `db.json` dos front-ends, agora ligados via `lavaRapidoId`).
+   - **Atenção: o seed é destrutivo** — começa com `deleteMany()` em todas as tabelas (apaga empresas cadastradas pela UI). Para dados de apresentação use `npm run prisma:demo` (`prisma/demo.ts`): só insere, pula empresas cujo CNPJ já existe, nunca apaga. Cria 6 empresas em SP com serviços (combos), pedidos de hoje/ontem/amanhã em vários status, intercorrências (feriados, uma parcial e uma empresa fechada hoje) e uma solicitação de onboarding pendente (CNPJ `72645819000163`). Requer o catálogo e o contrato do seed já no banco.
 5. `npm run dev` — sobe o Express em `http://localhost:4000` (`tsx watch src/server.ts`).
 
 ## 4. Domínio implementado
@@ -64,14 +65,27 @@ model Pedido {
   fotos        String[]     # URLs estáticas (mock) — upload real não existe (seção 7)
 }
 
-model Servico {
+model Servico {              # serviço da loja = combo de itens do catálogo
   id           String     @id @default(cuid())
   lavaRapidoId String
   lavaRapido   LavaRapido @relation(fields: [lavaRapidoId], references: [id])
-  nome         String
-  categoria    String
-  preco        Float
+  nome         String     # nome comercial livre (ex.: "Lavagem completa")
+  preco        Float      # preço total do combo (item não tem preço)
   ativo        Boolean    @default(true)
+  itens        ServicoItem[]   # categorias do serviço são derivadas dos itens
+}
+
+model ItemServico {          # catálogo global, mantido só via seed/banco
+  id        String  @id @default(cuid())
+  nome      String  @unique
+  descricao String
+  categoria String
+  ativo     Boolean @default(true)   # aposentar item sem apagar
+}
+
+model ServicoItem {          # N:N Servico ↔ ItemServico, @@id([servicoId, itemId])
+  servicoId String           # onDelete: Cascade
+  itemId    String
 }
 
 model Intercorrencia {
@@ -87,15 +101,35 @@ model Intercorrencia {
 }
 ```
 
-`Servico` e `Intercorrencia` foram adicionados na task `migrar-servicos-disponibilidade-veiculos-backend` (`docs/plan/migrar-servicos-disponibilidade-veiculos-backend/`) pra tirar essas 3 telas do `json-server` isolado do admin-front. `Veiculo` **não ganhou tabela própria** — `GET /veiculos` deriva a lista a partir de `Pedido.veiculo` (ver seção 5).
+`Servico` e `Intercorrencia` foram adicionados na task `migrar-servicos-disponibilidade-veiculos-backend` (`docs/plan/migrar-servicos-disponibilidade-veiculos-backend/`) pra tirar essas 3 telas do `json-server` isolado do admin-front.
+
+**Catálogo × combo** (`docs/plan/servicos-combos-catalogo/`): a loja não declara em texto livre o que faz — ela monta seus `Servico`s (combos) escolhendo 1+ `ItemServico` de um catálogo global (lavagem externa, aspiração, secagem, polimento…, 18 itens em 4 categorias no seed). Não existe rota pra criar item; o catálogo só muda via seed/banco. O campo livre `Servico.categoria` foi removido (migration `20261003020000_servicos_combos_catalogo`, que também apaga os `Servico` antigos — só dado de seed); a API devolve `categorias` derivadas dos itens. **Duração** (`docs/plan/tempo-estimado-preco-servicos/`): cada `ItemServico` tem `duracaoMinutos` (migration `20261003030000_duracao_item_servico`, valores no seed); a duração do combo é **derivada** na resposta (soma dos itens), sem coluna própria. `Veiculo` **não ganhou tabela própria** — `GET /veiculos` deriva a lista a partir de `Pedido.veiculo` (ver seção 5).
 
 **Desvio do plano — `Intercorrencia.data` é `String`, não `DateTime`**: o plano original especificava `DateTime`, mas `admin-front/src/pages/disponibilidade/Disponibilidade.jsx` casa esse campo por igualdade exata de string no formato `"YYYY-MM-DD"` (marcação de dias no calendário via `dayjs().format('YYYY-MM-DD')`). Um `DateTime` serializaria como ISO completo (`"2026-10-12T00:00:00.000Z"`) e quebraria silenciosamente esse match — nenhum dia apareceria marcado no calendário. `String` guarda exatamente o formato que o front já espera, sem semântica de data no servidor (não há nenhuma ordenação/cálculo por data feito no backend que justificasse `DateTime`).
 
-`LavaRapido` usa o formato de campos do **app_mobile** (`name`, `rating`, `reviewsCount`, `distance`, `time`, `price`, `image`), não o esboço inicial deste spec (`nome`/`endereco`) — decisão tomada na implementação pra bater exatamente com `lavaRapidos.model.ts` sem exigir nenhuma mudança de `model` no front. `distance`/`time` continuam sendo campos estáticos persistidos (copiando o mock), não calculados a partir da localização real do consumidor — mesma limitação que já existia, não resolvida aqui.
+`LavaRapido` usa o formato de campos do **app_mobile** (`name`, `rating`, `reviewsCount`, `distance`, `time`, `price`, `image`), não o esboço inicial deste spec (`nome`/`endereco`) — decisão tomada na implementação pra bater exatamente com `lavaRapidos.model.ts` sem exigir nenhuma mudança de `model` no front. **`price` é calculado** (`tempo-estimado-preco-servicos`): `GET /lavaRapidos` e `GET /lavaRapidos/:id` devolvem `price` = menor `preco` entre os `Servico`s **ativos** da loja (um `groupBy` só para a lista), ou `null` sem serviço ativo — a coluna `LavaRapido.price` continua no banco mas não é mais o valor exibido. `distance`/`time` continuam sendo campos estáticos persistidos (copiando o mock), não calculados a partir da localização real do consumidor — mesma limitação que já existia, não resolvida aqui.
 
 `cnpj`/`senha` foram adicionados na task `selecao-empresa-admin-front` (`docs/plan/selecao-empresa-admin-front/`) pra dar ao admin-front um login real por empresa: `cnpj` é único (formato validado só como 14 dígitos numéricos, sem dígito verificador); `senha` é sempre o hash bcrypt de `"admin"` — fixa e proposital (fora de escopo: troca de senha, JWT, expiração de sessão). Nenhuma rota expõe `senha` em resposta (`create`/`login` removem o campo antes de responder).
 
 **`isOpen` é calculado, não é o valor cru da coluna** (task `isopen-intercorrencia-backend`, `docs/plan/isopen-intercorrencia-backend/`): a coluna `LavaRapido.isOpen` continua existindo (fixada `true` no cadastro/seed, nunca escrita depois), mas `GET /lava-rapidos` e `GET /lava-rapidos/:id` retornam `isOpen: false` sempre que houver uma `Intercorrencia` "ativa agora" pra aquele lava-rápido — de dia inteiro (`diaInteiro: true`) na data de hoje, ou parcial (`diaInteiro: false`) com o horário atual do servidor dentro de `horaInicio`–`horaFim`. Intercorrências marcadas `reaberta: true` não contam mais (ver `PATCH /intercorrencias/:id`, seção 5) — é como o dono reverte manualmente um fechamento automático (ex.: intercorrência cadastrada por engano, ou que terminou antes do previsto). `GET /lava-rapidos/:id` (mas não a listagem, pra não pesar) também retorna `intercorrenciaAtiva: {...} | null` com a intercorrência que está causando o fechamento agora, se houver. Cálculo feito na leitura (sem cron/job), sem tratamento de fuso horário (assume o fuso do servidor, mesma premissa já usada pras strings `data`/`horaInicio`/`horaFim`).
+
+**Onboarding com contrato** (task `onboarding-contrato-empresa`, `docs/plan/onboarding-contrato-empresa/`, migration `20261003010000_onboarding_contrato`): dois models novos, separados de `LavaRapido` de propósito ("BackEnd Onboard" × "BackEnd Aplicação", como módulos do mesmo Express/banco):
+
+```prisma
+model Contrato {                 # repositório de contratos — versionado, um vigente por vez
+  id, versao Int @unique, titulo, conteudo, vigente Boolean, criadoEm
+}
+
+enum SolicitacaoStatus { aguardando_contrato  concluida }
+
+model SolicitacaoOnboarding {
+  id, name, address?, cnpj, status SolicitacaoStatus,
+  contratoId -> Contrato,        # versão que a empresa vai aceitar/aceitou
+  aceitoEm DateTime?, lavaRapidoId String? @unique, criadoEm
+}
+```
+
+Uma empresa só vira `LavaRapido` (e só aparece em `GET /lavaRapidos`/app_mobile, e só consegue logar) **depois de aceitar o contrato** — por isso nenhum endpoint da aplicação precisa filtrar "pendentes". A validação da empresa é **só duplicidade de CNPJ** com **aprovação automática** (a solicitação já nasce `aguardando_contrato`); o aceite é o texto mock `"eu aceito"`. O seed insere o contrato mock (`versao: 1`, `vigente: true`); trocar o texto = nova versão via banco/seed (sem UI).
 
 **Nota sobre a migration `20260926011840_add_login_fields`**: `prisma migrate dev` é interativo (pede confirmação quando detecta perda de dado — os 5 `LavaRapido` seed não tinham `cnpj`/`senha`) e esse ambiente não suporta prompt interativo. A migration foi escrita à mão (`DELETE FROM "Pedido"; DELETE FROM "LavaRapido";` antes de adicionar as colunas `NOT NULL`, seguro pois é só dado de seed/dev) e aplicada com `npx prisma migrate deploy` (não interativo) + `npx prisma generate`, depois repopulada via `npm run prisma:seed`.
 
@@ -112,12 +146,21 @@ model Intercorrencia {
 | `/lava-rapidos/:id` | `DELETE` | Exclui o lava-rápido **em cascata** (`onDelete: Cascade` em `Pedido`/`Servico`/`Intercorrencia`, migration `20260926040000_lavarapido_delete_cascade`) — apaga junto seus pedidos, serviços e intercorrências. `204` se excluído, `404` se não existir. |
 | `/pedidos` | `GET` | Lista todos, mais recentes primeiro, com `lavaRapidoId`. Aceita `?lavaRapidoId=` opcional pra filtrar por empresa (usado pelo admin-front após o login). |
 | `/pedidos/:id` | `PATCH` | Atualiza **só** o `status` (body `{ status }`); `400` se o status não for um dos 3 válidos, `404` se o pedido não existir. |
-| `/servicos` | `GET` | Lista serviços. Aceita `?lavaRapidoId=` opcional. |
+| `/servicos` | `GET` | Lista serviços (combos). Aceita `?lavaRapidoId=` opcional. Cada um vem com `itens: [{ id, nome, categoria, duracaoMinutos }]`, `categorias: string[]` (distintas, derivadas dos itens) e `duracaoMinutos` (soma dos itens). |
+| `/servicos` | `POST` | Cria um combo: body `{ lavaRapidoId, nome, preco, itemIds }`. `400` se `nome` vazio/maior que 60, `preco` ≤ 0, `itemIds` vazio/com repetição, ou algum item inexistente/inativo no catálogo (resposta traz `itemIdsInvalidos`); `404` se o lava-rápido não existir. `201` com o serviço (já com `itens`/`categorias`). |
+| `/servicos/:id` | `PUT` | Edita nome, preço e itens (body `{ nome, preco, itemIds }`, mesma validação do `POST`); substitui os itens numa transação. `404` se o serviço não existir. Sem `DELETE`: a loja desativa (pedidos antigos guardam o nome). |
 | `/servicos/:id` | `PATCH` | Atualiza **só** o `ativo` (body `{ ativo: boolean }`, nenhum outro campo); `400` se o body tiver outra coisa, `404` se o serviço não existir. |
+| `/itensServico` | `GET` | Catálogo global: itens `ativo: true` (com `duracaoMinutos`), ordenados por categoria e nome. Só leitura — não há rota pra criar/editar item. |
 | `/intercorrencias` | `GET` | Lista intercorrências. Aceita `?lavaRapidoId=` opcional. |
 | `/intercorrencias` | `POST` | Cria uma intercorrência: body `{ lavaRapidoId, data, motivo, diaInteiro, horaInicio?, horaFim? }`; `400` se `horaInicio`/`horaFim` vierem com `diaInteiro: true`, ou faltarem com `diaInteiro: false`. |
 | `/intercorrencias/:id` | `PATCH` | "Reabre" manualmente: body **só** `{ reaberta: true }` (`400` se vier outra coisa); a partir daí essa intercorrência para de contar no cálculo de `isOpen` (ver nota acima). `404` se o id não existir. |
 | `/veiculos` | `GET` | Lista veículos **derivados** dos `Pedido`s (não é uma tabela própria — ver seção 4): extrai `veiculo` (JSON) de cada pedido filtrado por `?lavaRapidoId=` (opcional) e deduplica por `placa` (usada como `id` na resposta). |
+| `/contratos/vigente` | `GET` | Contrato vigente do onboarding (maior `versao` com `vigente: true`); `404` se não houver. |
+| `/onboarding/solicitacoes` | `POST` | Body `{ name, address?, cnpj }`. `400` se `name` faltar/`cnpj` não tiver 14 dígitos; `409` se o `cnpj` já for um `LavaRapido`; `200` devolvendo a solicitação existente se já houver uma `aguardando_contrato` com o mesmo `cnpj` (retomar); `503` se não houver contrato vigente; senão `201` com a solicitação (`status: aguardando_contrato`) + `contrato: { id, versao, titulo, conteudo }`. |
+| `/onboarding/solicitacoes/:id` | `GET` | Status + contrato da solicitação; `404` se não existir. |
+| `/onboarding/solicitacoes/:id/aceite` | `POST` | Body `{ aceite: "eu aceito" }` (trim, case-insensitive; senão `400`). Numa transação: cria o `LavaRapido` (mesma `criarLavaRapido` do `POST /lavaRapidos`, senha `admin`) e marca a solicitação `concluida` + `aceitoEm` + `lavaRapidoId`. `201` com o `LavaRapido` (sem `senha`); `404` se não existir; `409` se já concluída (ou se o CNPJ foi cadastrado por outro caminho nesse meio-tempo). |
+
+**`POST /lavaRapidos` é legado/interno** desde `onboarding-contrato-empresa`: continua funcionando (seed, testes, uso administrativo), mas o admin-front cadastra empresas só pelo fluxo `/onboarding`.
 
 **Desvio da decisão original do plano**: o plano previa uma rota específica `PATCH /pedidos/:id/status`. Na implementação, isso quebraria com o `pedidos.routes.js` do admin-front (que já usa `PATCH /pedidos/:id` genérico) e com o `json-server` de fallback (que não suporta sub-rotas customizadas — não tem `--routes`/rewrite nessa versão). Mantida `PATCH /pedidos/:id`, com a mesma segurança pretendida (só `status` é aceito, qualquer outro campo no body é ignorado) garantida na validação do controller, não na URL. Isso preserva o critério "zero mudança de código além da `BASE_URL`" nos dois front-ends.
 
@@ -142,8 +185,11 @@ backend/
 │   │   └── openapi.ts                # documento OpenAPI 3.0 (objeto TS, escrito à mão) servido em /api-docs
 │   ├── modules/
 │   │   ├── lava-rapidos/{lavaRapidos.routes,controller,service}.ts
+│   │   ├── contratos/{contratos.routes,controller,service}.ts       # "BackEnd Onboard": contrato vigente
+│   │   ├── onboarding/{onboarding.routes,controller,service,validation}.ts  # solicitação → aceite → cria LavaRapido
 │   │   ├── pedidos/{pedidos.routes,controller,service}.ts
-│   │   ├── servicos/{servicos.routes,controller,service}.ts
+│   │   ├── servicos/{servicos.routes,controller,service,validation}.ts
+│   │   ├── itens-servico/{itensServico.routes,controller,service}.ts   # catálogo global, só leitura
 │   │   ├── intercorrencias/{intercorrencias.routes,controller,service,validation}.ts
 │   │   └── veiculos/{veiculos.routes,controller,service}.ts   # sem model Prisma próprio — deriva de Pedido
 │   ├── utils/
@@ -153,8 +199,11 @@ backend/
 │       ├── lavaRapidos.test.ts
 │       ├── pedidos.test.ts
 │       ├── servicos.test.ts
+│       ├── itensServico.test.ts
 │       ├── intercorrencias.test.ts
 │       ├── veiculos.test.ts
+│       ├── contratos.test.ts
+│       ├── onboarding.test.ts
 │       └── openApiDocs.test.ts      # smoke test: /api-docs (HTML) e /api-docs.json (OpenAPI cru) respondem
 └── vitest.config.ts                 # aponta DATABASE_URL pro banco de teste; exclui dist/ (ver nota)
 ```
@@ -176,7 +225,7 @@ Usuario
 - **Upload de fotos do veículo**: `Pedido.fotos` continua array de URLs estáticas — sem endpoint de upload nem storage.
 - **Divergência `Pedido.servico` (string) vs. seleção múltipla** (`app_mobile/servicos.tsx` deixa marcar vários serviços): não resolvida — `Pedido.servico` no banco continua um `String` só, copiando o que `admin-front/pedidos.model.js` já fazia.
 - **`POST /pedidos`**: nenhum front cria pedido pela UI ainda; não implementado.
-- **Editar/excluir `Servico`/`Intercorrencia`**: fora de escopo (mesmo escopo "PDV" de `telas-servicos-disponibilidade-veiculos`) — só listar + ativar/desativar serviço; intercorrência só cria e "reabre" (`PATCH .../reaberta`, task `isopen-intercorrencia-backend`), não edita/exclui de verdade.
+- **Excluir `Servico` / editar ou excluir `Intercorrencia`**: fora de escopo — serviço pode ser criado/editado/ativado (`servicos-combos-catalogo`), mas não excluído; intercorrência só cria e "reabre" (`PATCH .../reaberta`, task `isopen-intercorrencia-backend`), não edita/exclui de verdade.
 - **Deploy/hosting em produção**: não definido; só ambiente local via Docker Compose.
 
 ## 8. Referências

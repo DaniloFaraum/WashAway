@@ -49,9 +49,32 @@ model Servico {
   lavaRapidoId String
   lavaRapido   LavaRapido @relation(fields: [lavaRapidoId], references: [id], onDelete: Cascade)
   nome         String
-  categoria    String
   preco        Float
   ativo        Boolean    @default(true)
+  itens        ServicoItem[]
+}
+
+// Catálogo global de itens (serviços "atômicos" de lava-rápido), mantido só via
+// seed/banco — a loja não cria itens, só monta seus `Servico`s (combos) com eles.
+model ItemServico {
+  id        String        @id @default(cuid())
+  nome      String        @unique
+  descricao String
+  categoria String
+  // Duração estimada em minutos; a duração de um combo (Servico) é a soma dos
+  // seus itens, derivada na resposta da API (sem coluna própria).
+  duracaoMinutos Int
+  ativo     Boolean       @default(true)
+  servicos  ServicoItem[]
+}
+
+model ServicoItem {
+  servicoId String
+  servico   Servico     @relation(fields: [servicoId], references: [id], onDelete: Cascade)
+  itemId    String
+  item      ItemServico @relation(fields: [itemId], references: [id])
+
+  @@id([servicoId, itemId])
 }
 
 // `data` é String (não DateTime): o admin-front (Disponibilidade.jsx) casa esse
@@ -67,4 +90,36 @@ model Intercorrencia {
   horaInicio   String?
   horaFim      String?
   reaberta     Boolean    @default(false)
+}
+
+// Repositório de contratos do onboarding — versionado, um vigente por vez.
+// Trocar o texto = inserir nova versão via banco/seed (sem UI nesta task).
+model Contrato {
+  id           String                  @id @default(cuid())
+  versao       Int                     @unique
+  titulo       String
+  conteudo     String
+  vigente      Boolean                 @default(false)
+  criadoEm     DateTime                @default(now())
+  solicitacoes SolicitacaoOnboarding[]
+}
+
+enum SolicitacaoStatus {
+  aguardando_contrato
+  concluida
+}
+
+// Separada de LavaRapido de propósito: só vira LavaRapido quem aceitou o
+// contrato, então nenhum endpoint da aplicação precisa filtrar pendentes.
+model SolicitacaoOnboarding {
+  id           String            @id @default(cuid())
+  name         String
+  address      String?
+  cnpj         String
+  status       SolicitacaoStatus @default(aguardando_contrato)
+  contratoId   String
+  contrato     Contrato          @relation(fields: [contratoId], references: [id])
+  aceitoEm     DateTime?
+  lavaRapidoId String?           @unique
+  criadoEm     DateTime          @default(now())
 }

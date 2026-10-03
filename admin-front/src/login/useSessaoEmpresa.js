@@ -1,33 +1,61 @@
 import { useEffect, useState } from 'react'
-import { getEmpresaLogadaId, limparSessao, setEmpresaLogadaId } from './sessao.storage.js'
-import { cadastrar, entrar, getLavaRapido } from './service/lavaRapidos.service.js'
+import {
+  getEmpresaLogadaId,
+  getSolicitacaoOnboardingId,
+  limparSessao,
+  limparSolicitacaoOnboarding,
+  setEmpresaLogadaId,
+  setSolicitacaoOnboardingId,
+} from './sessao.storage.js'
+import { entrar, getLavaRapido } from './service/lavaRapidos.service.js'
+import { aceitarContrato, getSolicitacao, solicitar } from './service/onboarding.service.js'
 import { reabrirIntercorrencia } from './service/intercorrencias.service.js'
 
 /**
  * @returns {{
  *   empresaLogada: import('./service/lavaRapidos.model.js').LavaRapido | null,
+ *   solicitacaoPendente: import('./service/onboarding.model.js').SolicitacaoOnboarding | null,
  *   loading: boolean,
  *   entrar: (credenciais: { cnpj: string, senha: string }) => Promise<void>,
  *   cadastrar: (dados: { name: string, address?: string, cnpj: string }) => Promise<void>,
+ *   aceitarContrato: () => Promise<void>,
+ *   cancelarOnboarding: () => void,
  *   sair: () => void,
  *   reabrir: () => Promise<void>,
  * }}
  */
 export function useSessaoEmpresa() {
   const [empresaLogada, setEmpresaLogada] = useState(null)
+  const [solicitacaoPendente, setSolicitacaoPendente] = useState(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    const id = getEmpresaLogadaId()
-    if (!id) {
-      setLoading(false)
+    const empresaId = getEmpresaLogadaId()
+    if (empresaId) {
+      getLavaRapido(empresaId)
+        .then(setEmpresaLogada)
+        .catch(() => limparSessao())
+        .finally(() => setLoading(false))
       return
     }
 
-    getLavaRapido(id)
-      .then(setEmpresaLogada)
-      .catch(() => limparSessao())
-      .finally(() => setLoading(false))
+    // Retoma o onboarding de quem fechou a aba antes de assinar o contrato.
+    const solicitacaoId = getSolicitacaoOnboardingId()
+    if (solicitacaoId) {
+      getSolicitacao(solicitacaoId)
+        .then((solicitacao) => {
+          if (solicitacao.status === 'aguardando_contrato') {
+            setSolicitacaoPendente(solicitacao)
+          } else {
+            limparSolicitacaoOnboarding()
+          }
+        })
+        .catch(() => limparSolicitacaoOnboarding())
+        .finally(() => setLoading(false))
+      return
+    }
+
+    setLoading(false)
   }, [])
 
   async function handleEntrar(credenciais) {
@@ -37,9 +65,23 @@ export function useSessaoEmpresa() {
   }
 
   async function handleCadastrar(dados) {
-    const empresa = await cadastrar(dados)
+    const solicitacao = await solicitar(dados)
+    setSolicitacaoOnboardingId(solicitacao.id)
+    setSolicitacaoPendente(solicitacao)
+  }
+
+  async function handleAceitarContrato() {
+    if (!solicitacaoPendente) return
+    const empresa = await aceitarContrato(solicitacaoPendente.id)
+    limparSolicitacaoOnboarding()
+    setSolicitacaoPendente(null)
     setEmpresaLogadaId(empresa.id)
     setEmpresaLogada(empresa)
+  }
+
+  function cancelarOnboarding() {
+    limparSolicitacaoOnboarding()
+    setSolicitacaoPendente(null)
   }
 
   function sair() {
@@ -53,5 +95,15 @@ export function useSessaoEmpresa() {
     setEmpresaLogada(await getLavaRapido(empresaLogada.id))
   }
 
-  return { empresaLogada, loading, entrar: handleEntrar, cadastrar: handleCadastrar, sair, reabrir }
+  return {
+    empresaLogada,
+    solicitacaoPendente,
+    loading,
+    entrar: handleEntrar,
+    cadastrar: handleCadastrar,
+    aceitarContrato: handleAceitarContrato,
+    cancelarOnboarding,
+    sair,
+    reabrir,
+  }
 }

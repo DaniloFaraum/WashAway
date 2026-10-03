@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import {
   View, Text, StyleSheet, TextInput, ScrollView,
   TouchableOpacity, Image, Modal, Switch, ActivityIndicator
@@ -15,6 +15,8 @@ import { colors } from '@/constants/colors';
 import { useLavaRapido } from '@/features/lava-rapidos/useLavaRapido';
 import { useServicos } from '@/features/servicos/useServicos';
 import type { Servico } from '@/features/servicos/service/servicos.model';
+import { calcularCarrinho } from '@/features/servicos/calcularCarrinho';
+import { formatarDuracao } from '@/utils/formatarDuracao';
 import { useIntercorrencias, getIntercorrenciaRelevante, diasAte } from '@/features/intercorrencias/useIntercorrencias';
 import { formatarDataBR } from '@/features/intercorrencias/formatarData';
 
@@ -42,11 +44,6 @@ export default function ServicosScreen() {
   const [maxPrice, setMaxPrice] = useState(300);
   const [distance, setDistance] = useState(10);
 
-  // Ao carregar os serviços do lava-rápido, seleciona todos por padrão
-  useEffect(() => {
-    setSelecionados(new Set(servicos.map((s) => s.id)));
-  }, [servicos]);
-
   const toggleService = (servicoId: string) => {
     setSelecionados((prev) => {
       const next = new Set(prev);
@@ -59,20 +56,20 @@ export default function ServicosScreen() {
     });
   };
 
-  const categorias = [...new Set(servicos.map((s) => s.categoria).filter(Boolean))];
+  const categorias = [...new Set(servicos.flatMap((s) => s.categorias).filter(Boolean))];
 
   const toggleCategoriaFiltro = (categoria: string) => {
     setCategoriaFiltro((prev) => (prev === categoria ? null : categoria));
   };
 
   const servicosVisiveis = categoriaFiltro
-    ? servicos.filter((s) => s.categoria === categoriaFiltro)
+    ? servicos.filter((s) => s.categorias.includes(categoriaFiltro))
     : servicos;
 
   // Cálculos do Carrinho
-  const selectedServices = servicos.filter((s) => selecionados.has(s.id));
-  const totalItems = selectedServices.length;
-  const totalPrice = selectedServices.reduce((sum, item) => sum + item.preco, 0);
+  const { totalItens, totalPreco, totalDuracao } = calcularCarrinho(
+    servicos.filter((s) => selecionados.has(s.id)),
+  );
 
   const visibleCategories = showAllCategories ? categorias : categorias.slice(0, 4);
 
@@ -182,8 +179,14 @@ export default function ServicosScreen() {
 
                 <View style={styles.cardContent}>
                   <Text style={styles.cardTitle}>{item.nome}</Text>
-                  <Text style={styles.cardCategoria}>{item.categoria}</Text>
-                  <Text style={styles.priceText}>R$ {item.preco.toFixed(2).replace('.', ',')}</Text>
+                  {item.itens.length > 0 && (
+                    <Text style={styles.cardItens}>
+                      Inclui: {item.itens.map((itemDoServico) => itemDoServico.nome).join(', ')}
+                    </Text>
+                  )}
+                  <Text style={styles.priceText}>
+                    R$ {item.preco.toFixed(2).replace('.', ',')} · ~{formatarDuracao(item.duracaoMinutos)}
+                  </Text>
                 </View>
               </View>
             );
@@ -194,8 +197,11 @@ export default function ServicosScreen() {
       {/* Rodapé Dinâmico */}
       <View style={styles.cartFooterContainer}>
         <View>
-          <Text style={styles.cartItemsText}>{totalItems} {totalItems === 1 ? 'item selecionado' : 'itens selecionados'}</Text>
-          <Text style={styles.cartTotalText}>R$ {totalPrice.toFixed(2).replace('.', ',')}</Text>
+          <Text style={styles.cartItemsText}>{totalItens} {totalItens === 1 ? 'item selecionado' : 'itens selecionados'}</Text>
+          <Text style={styles.cartTotalText}>
+            R$ {totalPreco.toFixed(2).replace('.', ',')}
+            {totalDuracao > 0 && ` · ~${formatarDuracao(totalDuracao)}`}
+          </Text>
         </View>
         <TouchableOpacity style={styles.cartButton}>
           <Text style={styles.cartButtonText}>Avançar</Text>
@@ -375,7 +381,7 @@ const styles = StyleSheet.create({
   },
   cardContent: { flex: 1, padding: 12, justifyContent: 'center' },
   cardTitle: { fontSize: 15, fontWeight: '700', color: colors.primary },
-  cardCategoria: { fontSize: 12, color: colors.neutralGray || '#6B7280', marginVertical: 4 },
+  cardItens: { fontSize: 12, color: colors.neutralGray || '#6B7280', marginVertical: 4 },
   priceText: { fontSize: 14, fontWeight: '700', color: colors.black || '#000' },
   categoriesGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 20 },
   categoryCard: {

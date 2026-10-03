@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 
 import { colors } from '@/constants/colors';
+import { formatarPrecoAPartirDe } from '@/features/lava-rapidos/formatarPrecoAPartirDe';
 
 export type CarWashCardProps = {
   id: string;
@@ -18,15 +19,11 @@ export type CarWashCardProps = {
   reviewsCount: number;
   distance: string;
   time: string;
-  price: number;
+  price: number | null;
   isOpen: boolean;
   image: string;
   rank: number;
 };
-
-function formatPrice(price: number) {
-  return price.toFixed(2).replace('.', ',');
-}
 
 export function CarWashCard({
   id,
@@ -70,7 +67,7 @@ export function CarWashCard({
             {distance} • {time}
           </Text>
 
-          <Text style={styles.price}>A partir de R$ {formatPrice(price)}</Text>
+          <Text style={styles.price}>{formatarPrecoAPartirDe(price)}</Text>
 
           <View style={[styles.statusBadge, isOpen ? styles.statusOpen : styles.statusClosed]}>
             <Text style={styles.statusText}>{isOpen ? 'ABERTO' : 'FECHADO'}</Text>
