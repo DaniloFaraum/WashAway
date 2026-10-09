@@ -6,7 +6,6 @@ import * as Location from 'expo-location';
 import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   FlatList,
   Keyboard,
   KeyboardAvoidingView,
@@ -23,11 +22,11 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { CarWashCard } from '@/components/CarWashCard';
+import { MenuConta } from '@/components/MenuConta';
 import { colors } from '@/constants/colors';
 import { centeredStyle } from '@/constants/commonStyles';
 import { formatarPrecoAPartirDe } from '@/features/lava-rapidos/formatarPrecoAPartirDe';
 import { useLavaRapidos } from '@/features/lava-rapidos/useLavaRapidos';
-import { useTrocarEmpresa } from '@/features/lava-rapidos/onboarding/useTrocarEmpresa';
 
 let MapView: any = null;
 let Marker: any = null;
@@ -47,7 +46,6 @@ function parseDistance(distance: string) {
 export default function HomeScreen() {
   const router = useRouter();
   const { lavaRapidos, loading: loadingLavaRapidos, error: lavaRapidosError } = useLavaRapidos();
-  const { trocarEmpresa } = useTrocarEmpresa();
 
   const [fontsLoaded] = useFonts({
     Viga_400Regular,
@@ -136,28 +134,6 @@ export default function HomeScreen() {
     setTypedAddress('');
   }
 
-  function handleTrocarEmpresa() {
-    Alert.alert(
-      'Trocar lava-rápido?',
-      'Você vai escolher outro lava-rápido.',
-      [
-        { text: 'Cancelar', style: 'cancel' },
-        {
-          text: 'Trocar',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await trocarEmpresa();
-              router.replace('/onboarding');
-            } catch {
-              Alert.alert('Não foi possível trocar de lava-rápido. Tente de novo.');
-            }
-          },
-        },
-      ],
-    );
-  }
-
   const header = (
     <View style={styles.header}>
       <Text style={styles.title}>
@@ -178,13 +154,7 @@ export default function HomeScreen() {
           </Text>
         </Pressable>
 
-        <Pressable
-          style={styles.trocarEmpresaButton}
-          accessibilityRole="button"
-          accessibilityLabel="Trocar lava-rápido"
-          onPress={handleTrocarEmpresa}>
-          <Ionicons name="swap-horizontal-outline" size={18} color={colors.primary} />
-        </Pressable>
+        <MenuConta />
       </View>
 
       <View style={styles.searchBar}>
@@ -484,16 +454,6 @@ const styles = StyleSheet.create({
     color: colors.white,
     fontSize: 14,
     fontWeight: '600',
-  },
-  trocarEmpresaButton: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.white,
-    borderWidth: 1.5,
-    borderColor: colors.primary,
   },
   searchBar: {
     flexDirection: 'row',

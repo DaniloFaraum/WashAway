@@ -207,6 +207,9 @@ const SOLICITACAO_PENDENTE = {
   address: 'Av. Vital Brasil, 1100 - Butantã, São Paulo - SP, CEP 05503001',
 }
 
+// Cliente de exemplo do app (I2) — senha conhecida SÓ para desenvolvimento/demo.
+const CLIENTE_DEMO = { nome: 'Mariana Souza', email: 'mariana@exemplo.com', senha: '123456' }
+
 function fotos(placa: string, quantidade = 0) {
   return Array.from({ length: quantidade }, (_, i) => `https://placehold.co/400x300?text=${placa}+foto+${i + 1}`)
 }
@@ -294,6 +297,14 @@ async function main() {
   if (contrato && !solicitacaoExiste) {
     await prisma.solicitacaoOnboarding.create({ data: { ...SOLICITACAO_PENDENTE, contratoId: contrato.id } })
     console.log(`+ Solicitação pendente: ${SOLICITACAO_PENDENTE.name} (CNPJ ${SOLICITACAO_PENDENTE.cnpj})`)
+  }
+
+  const clienteExiste = await prisma.cliente.findUnique({ where: { email: CLIENTE_DEMO.email } })
+  if (!clienteExiste) {
+    await prisma.cliente.create({
+      data: { nome: CLIENTE_DEMO.nome, email: CLIENTE_DEMO.email, senha: bcrypt.hashSync(CLIENTE_DEMO.senha, 10) },
+    })
+    console.log(`+ Cliente do app: ${CLIENTE_DEMO.email} / senha "${CLIENTE_DEMO.senha}"`)
   }
 
   console.log(`Demo concluída: ${criadas} empresas novas. Senha de todas: "${SENHA_PADRAO}".`)

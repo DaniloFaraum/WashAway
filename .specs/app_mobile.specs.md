@@ -33,16 +33,16 @@
 ### 3.1 Como rodar
 
 1. `cd app_mobile && npm install` (só na primeira vez, ou quando `package.json` mudar).
-2. Suba o back-end de verdade (`WashAway/backend/`, ver `backend.specs.md`) em `http://localhost:4000` — é o padrão agora pra feature `lava-rapidos` (Home + onboarding). Pra usar o `json-server` como fallback manual: `npm run mock-server` (porta 3003) + `EXPO_PUBLIC_API_BASE_URL=http://localhost:3003`.
+2. Suba o back-end de verdade (`WashAway/backend/`, ver `backend.specs.md`) em `http://localhost:4000` — é o padrão agora (login/cadastro, Home e demais telas). Cliente de exemplo para entrar: `mariana@exemplo.com` / `123456` (criado por `npm run prisma:demo` no backend — só desenvolvimento). Pra usar o `json-server` como fallback manual: `npm run mock-server` (porta 3003) + `EXPO_PUBLIC_API_BASE_URL=http://localhost:3003`.
 3. Em outro terminal (a partir da raiz do repo `washaway/WashAway/`): `python3 scripts/run.py --project app_mobile` (ou `cd app_mobile && npm start`) — abre o Metro Bundler.
 4. No terminal do Metro, escolher a plataforma: `w` para abrir no navegador (web, `http://localhost:8081` por padrão), `a`/`i` para emulador Android/iOS, ou escanear o QR code com o app **Expo Go**. Também dá pra pedir direto: `python3 scripts/run.py --project app_mobile --web` (ou `npm run web`), `npm run android`, `npm run ios`.
-5. Sem o passo 2 (algum back-end no ar em `BASE_URL`), a Home/onboarding ficam em loading indefinido / mostram erro de rede (buscam os lava-rápidos via `fetch`, sem fallback pra dado fixo).
+5. Sem o passo 2 (algum back-end no ar em `BASE_URL`), o login/cadastro mostram erro de rede e a Home fica em loading indefinido / mostra erro de rede (buscam os lava-rápidos via `fetch`, sem fallback pra dado fixo).
 6. No web, a aba "Mapa" da Home mostra uma mensagem de indisponibilidade em vez do mapa (ver seção 6, item 13) — pra ver o mapa de verdade é preciso rodar em Android/iOS (emulador ou Expo Go).
 
 ### 3.2 Como testar
 
 - `python3 scripts/test.py --project app_mobile` (a partir de `WashAway/`) ou `cd app_mobile && npm run test` — roda a suíte Vitest. Sobe e derruba sozinho um `json-server` de teste (porta 3004, separada da de dev) via `globalSetup` — não precisa do passo manual do `mock-server`.
-- Cobertura hoje: `src/test/lavaRapidos.service.test.ts`, `src/test/servicos.service.test.ts`, `src/test/intercorrencias.service.test.ts`, `src/test/useServicos.test.ts` (filtro de `ativo`), `src/test/useIntercorrencias.test.ts` (`diasAte`/`getIntercorrenciaRelevante`), `src/test/carrinho.test.ts` (`calcularCarrinho`, `formatarDuracao`, `formatarPreco`, `price` nullable) e `src/test/filtrarServicos.test.ts` (busca/categoria/preço/duração da tela de serviços). `src/test/servicosSelecionados.test.ts` cobre o carrinho compartilhado entre a lista e o detalhe do serviço. As telas em si continuam sem teste.
+- Cobertura hoje: `src/test/lavaRapidos.service.test.ts`, `src/test/servicos.service.test.ts`, `src/test/intercorrencias.service.test.ts`, `src/test/useServicos.test.ts` (filtro de `ativo`), `src/test/useIntercorrencias.test.ts` (`diasAte`/`getIntercorrenciaRelevante`), `src/test/carrinho.test.ts` (`calcularCarrinho`, `formatarDuracao`, `formatarPreco`, `price` nullable) e `src/test/filtrarServicos.test.ts` (busca/categoria/preço/duração da tela de serviços). `src/test/servicosSelecionados.test.ts` cobre o carrinho compartilhado entre a lista e o detalhe do serviço. Conta do cliente (I1/I2, `fetch` mockado): `validarCadastro.test.ts`, `clientes.service.test.ts`, `auth.service.test.ts`, `httpClient.test.ts` e `tokenStorage.test.ts` (mocka `react-native`/`expo-secure-store` com `vi.mock`). As telas em si continuam sem teste.
 - `npm run lint` (`expo lint`) continua disponível, mas não substitui teste.
 - **Lugar na pirâmide do projeto** (estratégia completa em `backend.specs.md`, seção 6.1): o app testa services, hooks e funções puras (contra `json-server` de teste ou `fetch` mockado); regras de negócio e status HTTP são testados no backend. Sem testes de tela nesta sprint.
 - **Cobertura:** `npm run test:coverage` gera relatório em `coverage/` (v8, só relatório, não bloqueia PR).
@@ -58,7 +58,10 @@ app_mobile/
 │   └── db.json                   # dados da feature lava-rapidos (uso manual/dev)
 ├── src/
 │   ├── app/                      # ROTAS REAIS (expo-router, convenção "src directory")
-│   │   ├── _layout.tsx           # Stack raiz: (tabs) | onboarding | servicos | disponibilidade | servicos/[servicoId]
+│   │   ├── _layout.tsx           # SessaoClienteProvider + gate de sessão; Stack raiz: (tabs) | login | cadastro | meus-dados | servicos | disponibilidade | servicos/[servicoId]
+│   │   ├── login.tsx             # I2: login do cliente (params: email, expirada=1)
+│   │   ├── cadastro.tsx          # I1: cadastro → entra logado
+│   │   ├── meus-dados.tsx        # I2: nome e e-mail (GET /clientes/me), somente leitura
 │   │   ├── (tabs)/
 │   │   │   ├── _layout.tsx       # renderiza <AppTabs /> (NativeTabs)
 │   │   │   ├── index.tsx         # Home: busca/lista/mapa de lava-rápidos (consome lavaRapidos.service.ts)
@@ -66,7 +69,17 @@ app_mobile/
 │   │   ├── servicos.tsx          # serviços do lava-rápido escolhido (backend real — migrado); categorias como filtro; banner de intercorrência
 │   │   ├── disponibilidade.tsx   # lista as intercorrências futuras do lava-rápido (novo)
 │   │   └── servicos/[servicoId].tsx   # detalhe real do serviço (combo): itens, preço e duração; "Selecionar" marca no carrinho da lista (I21 parte 1)
+│   ├── services/
+│   │   └── httpClient.ts         # apiFetch (token + 401 → sessão expirada + ErroRede) — compartilhado
 │   ├── features/
+│   │   ├── auth/                 # I2
+│   │   │   ├── service/{auth.routes,auth.service}.ts   # entrar(email, senha), me()
+│   │   │   ├── SessaoClienteProvider.tsx   # contexto + useSessaoCliente()
+│   │   │   ├── tokenStorage.ts   # expo-secure-store (nativo) / localStorage (só Expo web)
+│   │   │   └── authStyles.ts     # estilos compartilhados de login/cadastro
+│   │   ├── clientes/             # I1
+│   │   │   ├── service/{clientes.routes,model,service}.ts   # cadastrarCliente + erros tipados
+│   │   │   └── validarCadastro.ts   # validação do formulário (função pura)
 │   │   ├── lava-rapidos/
 │   │   │   └── service/
 │   │   │       ├── lavaRapidos.routes.ts    # endpoints
@@ -92,6 +105,8 @@ app_mobile/
 │   │   └── useIntercorrencias.test.ts
 │   ├── components/
 │   │   ├── app-tabs.tsx / .web.tsx   # definição da tab bar (NativeTabs)
+│   │   ├── MenuConta.tsx         # I2: botão com a inicial do cliente no cabeçalho da Home → Meus dados / Sair
+│   │   ├── CampoFormulario.tsx   # campo com rótulo + erro (login/cadastro)
 │   │   ├── CarWashCard.tsx       # card de lava-rápido (usado na Home; `image` agora é URL, não `require()` local — ver seção 4.1)
 │   │   ├── Header.tsx, VehicleBar.tsx   # migrados de .js no I21 parte 1 (fontes/cores corrigidas); hoje sem uso — guardados para o fluxo do I3/I13 (VehicleBar ainda mostra um carro fixo)
 │   │   ├── themed-text.tsx, themed-view.tsx, ui/collapsible.tsx, external-link.tsx, web-badge.tsx  # componentes do template starter (usados só por explore.tsx)
@@ -116,13 +131,19 @@ app_mobile/
 `docs/plan/estrutura-app-mobile/` avaliou trazer a organização do `admin-front` (página dona do seu `service/routes/model`, testado contra `json-server`) para cá. Como o `app_mobile` usa **expo-router** (rotas por arquivo, não configuráveis em código), a convenção foi adaptada:
 
 - Os arquivos em `src/app/*.tsx` continuam existindo e são a rota de verdade (exigência do expo-router) — mas viram consumidores finos de uma `feature` em `src/features/<nome>/`, que é quem tem o `service/` (mesmo padrão do admin-front: `routes.ts`+`model.ts`+`service.ts`).
-- **Piloto**: `src/features/lava-rapidos/`, consumido por `(tabs)/index.tsx` (Home) e pelo onboarding. `src/features/servicos/` e `src/features/intercorrencias/` seguem o mesmo padrão, consumidos por `servicos.tsx`/`disponibilidade.tsx`. O detalhe do serviço (`servicos/[servicoId].tsx`) reaproveita `useServicos` e acha o serviço pelo id (I21 parte 1); o antigo `detail.tsx` com mock local foi removido.
+- **Piloto**: `src/features/lava-rapidos/`, consumido por `(tabs)/index.tsx` (Home). `src/features/servicos/` e `src/features/intercorrencias/` seguem o mesmo padrão, consumidos por `servicos.tsx`/`disponibilidade.tsx`. O detalhe do serviço (`servicos/[servicoId].tsx`) reaproveita `useServicos` e acha o serviço pelo id (I21 parte 1); o antigo `detail.tsx` com mock local foi removido.
 - **Back-end real por padrão** (`WashAway/backend/`, ver `backend.specs.md`): `lavaRapidos.service.ts`/`servicos.service.ts`/`intercorrencias.service.ts` usam `BACKEND_API_BASE_URL` (`http://localhost:4000`) como fallback quando `EXPO_PUBLIC_API_BASE_URL` não está definida. `json-server` (`npm run mock-server`, porta 3003) continua disponível como fallback manual (defina a env var pra usá-lo) e é quem roda automaticamente nos testes (`globalSetup`, porta 3004) — os testes não são afetados pela troca de padrão, exceto os de `servicos`/`intercorrencias` (mockam `fetch` por causa do bug do json-server citado na seção 3).
 - Variável de ambiente do service: `process.env.EXPO_PUBLIC_API_BASE_URL` (convenção do Expo/Metro para inlinar env vars no bundle — **não** `import.meta.env`, que é específico do Vite/admin-front).
 - Test runner: **Vitest** (não Jest/`jest-expo`) — só é possível porque `service.ts`/`model.ts`/`routes.ts` são TS puro, sem import de `react-native`/`expo-router`. Testar componentes/telas exigiria Jest + `jest-expo`, decisão maior, fora do escopo desse piloto.
 - **Mudança de contrato do `image`**: a Home mockava `image` como `require('.../lava1.jpg')` (asset local, um número de módulo RN). Isso não é serializável em JSON/API — o `db.json`/fixture usam URLs (`https://placehold.co/...`) e `CarWashCard` passou a esperar `image: string` (`<Image source={{ uri: image }} />`) em vez de `ImageSourcePropType`. As imagens locais (`assets/images/lava*.jpg`) pararam de ser referenciadas pela Home.
-- **Onboarding (escolha da empresa)**: `docs/plan/onboarding-lava-rapido/` implementou um fluxo restrito à escolha do lava-rápido (não confundir com um onboarding de conta/cadastro). `src/features/lava-rapidos/onboarding/empresaSelecionada.storage.ts` lê/grava o id escolhido via `@react-native-async-storage/async-storage` (chave `@washaway/empresaSelecionadaId`), e agora também expõe `clearEmpresaSelecionada()`. `src/app/_layout.tsx` usa o hook `useEmpresaSelecionadaGate` e navegação **imperativa** (`router.replace('/onboarding')` num `useEffect`) pra mandar pro onboarding quando nada foi escolhido ainda — **não** `<Redirect>` (ver achado de review: `<Redirect>` depende de `useFocusEffect`/`useNavigation`, cujo comportamento no layout raiz, fora de qualquer `Stack.Screen`, não é confiável). A escolha é local ao aparelho; a partir do `backend-mvp` (`WashAway/.specs/backend.specs.md`) os `id`s de lava-rápido escolhidos já vêm do mesmo Postgres que o `painel-pedidos` do admin-front usa — a escolha em si continua sem sincronizar com o backend (não existe conceito de conta/usuário ainda).
-- **Trocar de lava-rápido** (`docs/plan/trocar-lava-rapido-app-mobile/`): a Home (`(tabs)/index.tsx`) tem um botão "Trocar lava-rápido" ao lado do botão de localização; toca → `Alert.alert` de confirmação → confirmando, `useEmpresaSelecionadaGate().trocarEmpresa()` limpa a escolha (`clearEmpresaSelecionada`) e `router.replace('/onboarding')` volta pro onboarding. Resolve a limitação que existia antes (só dava pra escolher uma vez, sem jeito de voltar).
+- **Conta do cliente: cadastro, login e sessão** (I1 + I2, `docs/plan/i1-cadastro-cliente/` e `docs/plan/i2-login-cliente/`, entregues juntos):
+  - **Fluxo**: o app abre no **login** quando não há sessão (link "Criar conta" → `/cadastro`). Cadastro ok → "Conta criada!" → login automático com as mesmas credenciais → Home. Login ok → Home.
+  - **Gate de sessão** em `src/app/_layout.tsx`: `RootLayout` envolve tudo em `SessaoClienteProvider`; `RootNavigator` espera fontes + checagem da sessão e, num `useEffect`, usa navegação **imperativa** (`router.replace`, não `<Redirect>` — `<Redirect>` depende de `useFocusEffect`/`useNavigation`, cujo comportamento no layout raiz não é confiável): sem token fora de `login`/`cadastro` → `/login` (ou `/login?expirada=1`); com token em `login`/`cadastro` → `/(tabs)`. As telas não navegam sozinhas depois de entrar/sair — o gate faz isso.
+  - **Sessão** (`features/auth/SessaoClienteProvider.tsx`, `useSessaoCliente()` → `{ cliente, token, carregando, expirada, entrar, sair }`): no boot lê o token salvo e valida com `GET /clientes/me` (401 → limpa; sem rede → mantém o token e `cliente` fica `null` até a próxima chamada). `entrar` grava o token; `sair` apaga.
+  - **Token guardado** em `features/auth/tokenStorage.ts` (`getToken`/`setToken`/`limparToken`): `expo-secure-store` no celular (Keychain/Keystore, nunca AsyncStorage). **Limitação de desenvolvimento**: no Expo web o SecureStore não existe e o token fica no `localStorage` do navegador.
+  - **`src/services/httpClient.ts`** (compartilhado — I3, I13, I18 usam nas rotas autenticadas): `apiFetch(path, init)` devolve o `Response` cru; injeta `Authorization: Bearer <token>` quando há sessão; põe `Content-Type: application/json` quando o body é string; falha de rede vira `ErroRede`; **401 de uma requisição que levou token** (qualquer tela) chama o handler da sessão (`registrarAoExpirarSessao`), que encerra a sessão e o gate leva para o login com "Sua sessão expirou". 401 sem token (ex.: senha errada no login) não dispara isso.
+  - **Menu de conta**: o botão "Trocar lava-rápido" da Home virou `components/MenuConta.tsx` — círculo com a inicial do nome; abre "Meus dados" (`/meus-dados`, somente leitura) e "Sair". "Meus veículos" está pronto no menu, mas oculto (`MOSTRAR_MEUS_VEICULOS`) até a tela do I3.
+  - **Onboarding de escolha de lava-rápido removido** (decisão do PO no I2): `onboarding.tsx`, `features/lava-rapidos/onboarding/` e a dependência `@react-native-async-storage/async-storage` saíram; a escolha do lava-rápido acontece na própria Home.
 - **Serviços e disponibilidade** (`docs/plan/servicos-disponibilidade-app-mobile/`): `servicos.tsx` migrou do mock local pro backend real (`GET /servicos?lavaRapidoId=`, usando o `id` já recebido via navegação, antes ignorado — achado #9 resolvido pra essa tela). `useServicos()` filtra só `ativo: true`. Card do serviço foi simplificado (`nome`/`categoria`/`preco`; sem `desc`/tempo, que não existem no model real; imagem é um placeholder fixo, não por serviço). A seção "Categorias" deixou de ser decorativa: agora é derivada dos valores distintos de `categoria` dos serviços retornados e funciona como filtro (toca de novo pra limpar). Tela nova `/disponibilidade` lista as intercorrências futuras do lava-rápido (`GET /intercorrencias?lavaRapidoId=`); `servicos.tsx` mostra um banner de aviso (com link pra essa tela) quando há intercorrência pra hoje ou pros próximos 3 dias (`getIntercorrenciaRelevante()` em `useIntercorrencias.ts`).
 - **Endereço do lava-rápido em `servicos.tsx`**: `lavaRapidos.model.ts` ganhou o campo `address` (`string | null`); `lavaRapidos.service.ts` ganhou `getLavaRapido(id)` (`GET /lavaRapidos/:id`) e `useLavaRapido(id)` (novo hook, `src/features/lava-rapidos/useLavaRapido.ts`). `servicos.tsx` usa esse hook e mostra o endereço (com ícone de pin) logo abaixo do nome do lava-rápido no cabeçalho, quando existir — resolve o pedido do consumidor de saber onde fica a empresa antes de agendar. Dados de seed (`backend/prisma/seed.ts`) e o banco de dev foram atualizados com um endereço de exemplo (mesma rua/bairro/cidade, número diferente por lava-rápido) — antes todos tinham `address: null`.
 - **Horário de funcionamento em `servicos.tsx`** (I19 parte 1, `docs/plan/i19-horario-funcionamento/`): `LavaRapido` (`lavaRapidos.model.ts`) ganhou `horarios: { diaSemana, fechado, abertura, fechamento, definido }[]` (vem só em `GET /lavaRapidos/:id`; na listagem fica `[]`). Helper puro `src/features/lava-rapidos/formatarHorario.ts`: `formatarHorarioDoDia` ("08:00–18:00", "Fechado" ou "Horário não informado"), `resumirSemana` (agrupa dias seguidos a partir da segunda: "Seg a sex: 08:00–18:00", "Sáb: 08:00–12:00", "Dom: fechado"), `horarioDeHoje` (dia da semana no fuso fixo `America/Sao_Paulo`, via `diaSemanaNoFuso` — espelha o `FUSO_LAVA_RAPIDOS` do backend; se o backend for configurado com outro `TZ_LAVA_RAPIDOS`, mudar a constante do app também) e `temHorarioDefinido`. No cabeçalho, abaixo do endereço, aparece "Hoje: 08:00–18:00" (ícone de relógio); um toque expande/recolhe a semana. Sem nenhum dia definido, nada é mostrado. O ABERTO/FECHADO do card da Home continua vindo de `isOpen`, que agora o backend calcula com o horário de funcionamento. Testes: `src/test/formatarHorario.test.ts` e `src/test/lavaRapidos.model.test.ts` (normalização de `horarios`).
@@ -133,7 +154,9 @@ app_mobile/
 
 ## 5. Rotas e navegação
 
-- `/onboarding` — primeira tela quando não há empresa (lava-rápido) escolhida ainda no aparelho (ver seção 4.1); lista simplificada (nome + distância) vinda de `getLavaRapidos()`, sem mapa/filtros/busca. Escolher navega para `/(tabs)` e não aparece mais nas próximas aberturas — a menos que o consumidor toque em "Trocar lava-rápido" na Home, que volta pra cá.
+- `/login` — primeira tela sem sessão (ver seção 4.1). Params opcionais: `email` (pré-preenche) e `expirada=1` (mostra "Sua sessão expirou"). "E-mail ou senha incorretos" no 401. Link "Criar conta" → `/cadastro`.
+- `/cadastro` — nome, e-mail, senha e confirmação, com erro abaixo de cada campo; "Este e-mail já está cadastrado" com atalho "Entrar" (→ `/login?email=`); falha de rede mantém os campos e o botão vira "Tentar de novo". Sucesso → entra logado.
+- `/meus-dados` — nome e e-mail do cliente (`GET /clientes/me`), aberta pelo menu de conta.
 - `/(tabs)` → `AppTabs` (NativeTabs) com 2 abas: **Home** (`index.tsx`) e **Explore** (`explore.tsx`, boilerplate — seção 6).
 - `/servicos` — recebe `id`/`nome` via `useLocalSearchParams` (passados pelo `CarWashCard` da Home ou pelo `Marker` do mapa). Busca os serviços reais do lava-rápido (`GET /servicos?lavaRapidoId=<id>`, só `ativo: true`); categorias filtram a lista; mostra banner de intercorrência relevante com link pra `/disponibilidade`.
 - `/disponibilidade` — recebe `id`/`nome`; lista as intercorrências futuras do lava-rápido (`GET /intercorrencias?lavaRapidoId=<id>`), ordenadas por data.
@@ -163,8 +186,10 @@ Achados de leitura direta do código (não são convenções combinadas — são
 
 | Rota | Tela | Status | Observação |
 |---|---|---|---|
-| `/onboarding` | `onboarding.tsx` | Funcional (via json-server real da feature `lava-rapidos`) | Só escolha da empresa; persistência local via AsyncStorage (seção 4.1). |
-| `/(tabs)` → Home | `index.tsx` | Funcional (backend real) | Lista de `GET /lavaRapidos` com "a partir de" calculado (ou "Sem serviços disponíveis"); busca por texto, filtros (aberto/avaliação/distância), toggle lista/mapa, localização via GPS ou endereço digitado, "Trocar lava-rápido". |
+| `/login` | `login.tsx` | Funcional (backend real) | Login do cliente (I2); primeira tela sem sessão. |
+| `/cadastro` | `cadastro.tsx` | Funcional (backend real) | Cadastro (I1) → entra logado. |
+| `/meus-dados` | `meus-dados.tsx` | Funcional (backend real) | Somente leitura (I2). |
+| `/(tabs)` → Home | `index.tsx` | Funcional (backend real) | Lista de `GET /lavaRapidos` com "a partir de" calculado (ou "Sem serviços disponíveis"); busca por texto, filtros (aberto/avaliação/distância), toggle lista/mapa, localização via GPS ou endereço digitado; menu de conta (Meus dados / Sair). |
 | `/(tabs)` → Explore | `explore.tsx` | Não é produto | Boilerplate do template Expo — achado #8. |
 | `/servicos` | `servicos.tsx` | Funcional (backend real) | Usa o `id` recebido; card mostra itens incluídos, preço e duração; busca + categorias + modal de preço/tempo filtram; carrinho começa vazio e soma preço e duração; banner de intercorrência; horário de funcionamento de hoje no cabeçalho (toque expande a semana). |
 | `/disponibilidade` | `disponibilidade.tsx` | Funcional (backend real) | Lista intercorrências futuras do lava-rápido. |
@@ -185,5 +210,6 @@ Histórico relevante em `app_mobile/` (branch `main` do repo `WashAway`):
 - `WashAway/.specs/admin-front.specs.md` — spec irmã, do lado do dono do lava-rápido; os dois projetos falam com o mesmo back-end (`backend.specs.md`).
 - `docs/plan/estrutura-app-mobile/` — plano e decisões por trás da convenção `service` por feature (seção 4.1), com o piloto `lava-rapidos`.
 - `docs/logs/estrutura-app-mobile.md` — o que foi de fato implementado do plano acima.
-- `docs/plan/trocar-lava-rapido-app-mobile/` — botão de trocar lava-rápido na Home.
+- `docs/plan/trocar-lava-rapido-app-mobile/` — botão de trocar lava-rápido na Home (substituído pelo menu de conta no I2).
+- `docs/plan/i1-cadastro-cliente/`, `docs/plan/i2-login-cliente/` — cadastro, login, sessão e `httpClient`.
 - `docs/plan/servicos-disponibilidade-app-mobile/` — migração de `servicos.tsx` pro backend real + tela `/disponibilidade` (intercorrências).

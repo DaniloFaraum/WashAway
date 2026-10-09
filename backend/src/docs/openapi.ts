@@ -169,12 +169,50 @@ const lavaRapidoIdParam = {
   description: 'Filtra pela empresa dona do recurso.',
 }
 
+const clienteSchema = {
+  type: 'object',
+  description: 'Cliente do app (nunca inclui a senha).',
+  properties: {
+    id: { type: 'string' },
+    nome: { type: 'string' },
+    email: { type: 'string', format: 'email', description: 'Sempre normalizado (sem espaços nas pontas, minúsculas).' },
+    criadoEm: { type: 'string', format: 'date-time' },
+  },
+}
+
+const loginClienteSchema = {
+  type: 'object',
+  properties: {
+    token: { type: 'string', description: 'JWT HS256 — enviar como `Authorization: Bearer <token>`.' },
+    expiraEm: { type: 'string', format: 'date-time', description: 'Fim da validade do token (JWT_EXPIRES_IN, padrão 7 dias).' },
+    cliente: { $ref: '#/components/schemas/Cliente' },
+  },
+}
+
+const erroCadastroClienteSchema = {
+  type: 'object',
+  properties: {
+    error: { type: 'string' },
+    campos: {
+      type: 'object',
+      description: 'Mensagem por campo inválido.',
+      properties: { nome: { type: 'string' }, email: { type: 'string' }, senha: { type: 'string' } },
+    },
+  },
+  required: ['error', 'campos'],
+}
+
+const erroAutenticacao = {
+  401: { description: 'Sem token, token inválido/expirado ou cliente inexistente.', content: { 'application/json': { schema: { $ref: '#/components/schemas/Erro' } } } },
+  403: { description: 'Token válido, mas de outro tipo de usuário (ex.: lava-rápido).', content: { 'application/json': { schema: { $ref: '#/components/schemas/Erro' } } } },
+}
+
 export const openApiDocument = {
   openapi: '3.0.3',
   info: {
     title: 'WashAway — API',
     version: '1.0.0',
-    description: 'Backend do WashAway (admin-front + app_mobile). Sem autenticação/middleware nas rotas — ver WashAway/.specs/backend.specs.md seção 7.',
+    description: 'Backend do WashAway (admin-front + app_mobile). Rotas do cliente logado usam `Authorization: Bearer <token>` (JWT, `POST /auth/cliente/login`); as demais ainda são públicas — ver WashAway/.specs/backend.specs.md.',
   },
   servers: [{ url: 'http://localhost:4000' }],
   components: {
@@ -190,9 +228,75 @@ export const openApiDocument = {
       Veiculo: veiculoSchema,
       Contrato: contratoSchema,
       SolicitacaoOnboarding: solicitacaoOnboardingSchema,
+      Cliente: clienteSchema,
+      LoginCliente: loginClienteSchema,
+      ErroCadastroCliente: erroCadastroClienteSchema,
+    },
+    securitySchemes: {
+      bearerAuth: { type: 'http', scheme: 'bearer', bearerFormat: 'JWT' },
     },
   },
   paths: {
+    '/auth/cliente/cadastro': {
+      post: {
+        tags: ['clientes'],
+        summary: 'Cadastro de cliente do app (público)',
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                required: ['nome', 'email', 'senha'],
+                properties: {
+                  nome: { type: 'string' },
+                  email: { type: 'string', format: 'email', description: 'Único sem diferenciar maiúsculas.' },
+                  senha: { type: 'string', minLength: 6 },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          201: { description: 'Criado (sem a senha).', content: { 'application/json': { schema: { $ref: '#/components/schemas/Cliente' } } } },
+          400: { description: 'Nome vazio, e-mail ausente/inválido ou senha com menos de 6 caracteres.', content: { 'application/json': { schema: { $ref: '#/components/schemas/ErroCadastroCliente' } } } },
+          409: { description: 'Este e-mail já está cadastrado.', content: { 'application/json': { schema: { $ref: '#/components/schemas/Erro' } } } },
+        },
+      },
+    },
+    '/auth/cliente/login': {
+      post: {
+        tags: ['clientes'],
+        summary: 'Login do cliente por e-mail + senha (público)',
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                required: ['email', 'senha'],
+                properties: { email: { type: 'string', format: 'email' }, senha: { type: 'string' } },
+              },
+            },
+          },
+        },
+        responses: {
+          200: { description: 'Credenciais válidas: token de acesso + cliente.', content: { 'application/json': { schema: { $ref: '#/components/schemas/LoginCliente' } } } },
+          401: { description: '"E-mail ou senha incorretos" — mesma resposta para e-mail inexistente e senha errada.', content: { 'application/json': { schema: { $ref: '#/components/schemas/Erro' } } } },
+        },
+      },
+    },
+    '/clientes/me': {
+      get: {
+        tags: ['clientes'],
+        summary: 'Dados do cliente logado',
+        security: [{ bearerAuth: [] }],
+        responses: {
+          200: { description: 'Cliente do token (sem a senha).', content: { 'application/json': { schema: { $ref: '#/components/schemas/Cliente' } } } },
+          ...erroAutenticacao,
+        },
+      },
+    },
     '/lavaRapidos': {
       get: {
         tags: ['lavaRapidos'],

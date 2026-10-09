@@ -24,7 +24,7 @@
 2. `npm run docker:up` — sobe o Postgres (`docker compose up -d --wait`).
 3. `npx prisma migrate dev` (só a primeira vez, ou quando o schema mudar) — aplica as migrations em `prisma/migrations/` no banco de dev.
 4. `npm run prisma:seed` — popula `washaway` com 5 lava-rápidos (cada um com `address` preenchido — mesma rua/bairro/cidade/CEP, número diferente por lava-rápido — pra o consumidor sempre ter um endereço pra ver no app_mobile), 3 pedidos, o catálogo global de 18 itens de serviço, e 3 serviços (combos de itens do catálogo) + 2 intercorrências por lava-rápido (mesmos dados que já estavam nos `db.json` dos front-ends, agora ligados via `lavaRapidoId`).
-   - **Atenção: o seed é destrutivo** — começa com `deleteMany()` em todas as tabelas (apaga empresas cadastradas pela UI). Para dados de apresentação use `npm run prisma:demo` (`prisma/demo.ts`): só insere, pula empresas cujo CNPJ já existe, nunca apaga. Cria 6 empresas em SP com serviços (combos), pedidos de hoje/ontem/amanhã em vários status, intercorrências (feriados, uma parcial e uma empresa fechada hoje) e uma solicitação de onboarding pendente (CNPJ `72645819000163`). Requer o catálogo e o contrato do seed já no banco.
+   - **Atenção: o seed é destrutivo** — começa com `deleteMany()` em todas as tabelas (apaga empresas cadastradas pela UI). Para dados de apresentação use `npm run prisma:demo` (`prisma/demo.ts`): só insere, pula empresas cujo CNPJ já existe, nunca apaga. Cria 6 empresas em SP com serviços (combos), pedidos de hoje/ontem/amanhã em vários status, intercorrências (feriados, uma parcial e uma empresa fechada hoje) e uma solicitação de onboarding pendente (CNPJ `72645819000163`). Também cria o **cliente de exemplo do app** `mariana@exemplo.com` / senha `123456` (I2 — senha conhecida **só para desenvolvimento/demo**; idempotente pelo e-mail). Requer o catálogo e o contrato do seed já no banco.
 5. `npm run dev` — sobe o Express em `http://localhost:4000` (`tsx watch src/server.ts`).
 
 ## 4. Domínio implementado
@@ -156,6 +156,20 @@ Uma empresa só vira `LavaRapido` (e só aparece em `GET /lavaRapidos`/app_mobil
 
 **Nota sobre a migration `20260926011840_add_login_fields`**: `prisma migrate dev` é interativo (pede confirmação quando detecta perda de dado — os 5 `LavaRapido` seed não tinham `cnpj`/`senha`) e esse ambiente não suporta prompt interativo. A migration foi escrita à mão (`DELETE FROM "Pedido"; DELETE FROM "LavaRapido";` antes de adicionar as colunas `NOT NULL`, seguro pois é só dado de seed/dev) e aplicada com `npx prisma migrate deploy` (não interativo) + `npx prisma generate`, depois repopulada via `npm run prisma:seed`.
 
+**Cliente do app** (I1, `docs/plan/i1-cadastro-cliente/`, migration `20261009102907_cliente`):
+
+```prisma
+model Cliente {
+  id       String   @id @default(cuid())
+  nome     String
+  email    String   @unique   // salvo normalizado: trim + minúsculas
+  senha    String             // hash bcrypt (custo 10)
+  criadoEm DateTime @default(now())
+}
+```
+
+O `email` é gravado e buscado **normalizado** (`normalizarEmail` em `clientes.validation.ts`), então o `@unique` garante unicidade sem diferenciar maiúsculas (`Ana@X.com` × `ana@x.com` → `409`). `clientes.service.ts` expõe `criarCliente`, `getClienteByEmail(email)` (normaliza antes), `getClienteById(id)`, `omitSenhaCliente` e `autenticarCliente(email, senha)`. A senha nunca sai em resposta nem em log: os controllers não logam o body e o middleware de erro de `app.ts` responde `400` a JSON malformado **sem** logar o erro do body-parser (que carrega o body cru).
+
 ## 5. Contrato de API implementado
 
 **Documentação interativa** (`docs/plan/swagger-backend/`): `GET /api-docs` serve a UI do Swagger (`swagger-ui-express`) com todas as rotas abaixo; `GET /api-docs.json` devolve o documento OpenAPI 3.0 cru (útil pra importar em Postman/Insomnia). Documento escrito à mão em `backend/src/docs/openapi.ts` (objeto TS, não gerado via `swagger-jsdoc`/comentários) — precisa ser atualizado manualmente quando uma rota muda; não há teste que garanta que o spec bate com o comportamento real além do smoke test de que os endpoints respondem.
@@ -179,6 +193,9 @@ Uma empresa só vira `LavaRapido` (e só aparece em `GET /lavaRapidos`/app_mobil
 | `/intercorrencias` | `POST` | Cria uma intercorrência: body `{ lavaRapidoId, data, motivo, diaInteiro, horaInicio?, horaFim? }`; `400` se `horaInicio`/`horaFim` vierem com `diaInteiro: true`, ou faltarem com `diaInteiro: false`. |
 | `/intercorrencias/:id` | `PATCH` | "Reabre" manualmente: body **só** `{ reaberta: true }` (`400` se vier outra coisa); a partir daí essa intercorrência para de contar no cálculo de `isOpen` (ver nota acima). `404` se o id não existir. |
 | `/veiculos` | `GET` | Lista veículos **derivados** dos `Pedido`s (não é uma tabela própria — ver seção 4): extrai `veiculo` (JSON) de cada pedido filtrado por `?lavaRapidoId=` (opcional) e deduplica por `placa` (usada como `id` na resposta). |
+| `/auth/cliente/cadastro` | `POST` | Público (I1). Body `{ nome, email, senha }`: nome obrigatório (trim), e-mail obrigatório no formato `^[^\s@]+@[^\s@]+\.[^\s@]+$`, senha com no mínimo 6 caracteres. `400 { error, campos: { nome?, email?, senha? } }`; `409 { error: 'Este e-mail já está cadastrado' }` (sem diferenciar maiúsculas); `201` com o `Cliente` sem `senha`. |
+| `/auth/cliente/login` | `POST` | Público (I2). Body `{ email, senha }` (e-mail normalizado). `200 { token, expiraEm, cliente }` (cliente sem `senha`); `401 { error: 'E-mail ou senha incorretos' }` — **mesma** resposta para e-mail inexistente, senha errada ou body incompleto (e o mesmo tempo de resposta: compara com um hash fictício quando o e-mail não existe). |
+| `/clientes/me` | `GET` | `autenticar('cliente')` (I2). `200` com o cliente do token (sem `senha`); `401` sem token, com token inválido/expirado ou se o cliente não existir mais; `403` com token de outro tipo. Recursos do cliente logado ficam em `/clientes/me/...` (I3, I13, I18). |
 | `/contratos/vigente` | `GET` | Contrato vigente do onboarding (maior `versao` com `vigente: true`); `404` se não houver. |
 | `/onboarding/solicitacoes` | `POST` | Body `{ name, address?, cnpj }`. `400` se `name` faltar/`cnpj` não tiver 14 dígitos; `409` se o `cnpj` já for um `LavaRapido`; `200` devolvendo a solicitação existente se já houver uma `aguardando_contrato` com o mesmo `cnpj` (retomar); `503` se não houver contrato vigente; senão `201` com a solicitação (`status: aguardando_contrato`) + `contrato: { id, versao, titulo, conteudo }`. |
 | `/onboarding/solicitacoes/:id` | `GET` | Status + contrato da solicitação; `404` se não existir. |
@@ -188,7 +205,7 @@ Uma empresa só vira `LavaRapido` (e só aparece em `GET /lavaRapidos`/app_mobil
 
 **Desvio da decisão original do plano**: o plano previa uma rota específica `PATCH /pedidos/:id/status`. Na implementação, isso quebraria com o `pedidos.routes.js` do admin-front (que já usa `PATCH /pedidos/:id` genérico) e com o `json-server` de fallback (que não suporta sub-rotas customizadas — não tem `--routes`/rewrite nessa versão). Mantida `PATCH /pedidos/:id`, com a mesma segurança pretendida (só `status` é aceito, qualquer outro campo no body é ignorado) garantida na validação do controller, não na URL. Isso preserva o critério "zero mudança de código além da `BASE_URL`" nos dois front-ends.
 
-As 3 telas `Serviços`/`Disponibilidade`/`Veículos` do admin-front usam este backend real desde `migrar-servicos-disponibilidade-veiculos-backend` (ver `admin-front.specs.md` seção 8) — o `json-server` próprio delas continua existindo só como fallback manual, mesmo padrão já adotado pra `/pedidos`. `/auth` e `POST /pedidos` continuam não implementados.
+As 3 telas `Serviços`/`Disponibilidade`/`Veículos` do admin-front usam este backend real desde `migrar-servicos-disponibilidade-veiculos-backend` (ver `admin-front.specs.md` seção 8) — o `json-server` próprio delas continua existindo só como fallback manual, mesmo padrão já adotado pra `/pedidos`. `POST /pedidos` continua não implementado (I13). Autenticação: ver seção 5.2.
 
 ## 5.1 E-mail (outbox + worker)
 
@@ -223,12 +240,32 @@ model EventoEmail {
 
 **Testes:** `src/test/email.test.ts` (enfileirar com commit deixa `pendente`; com rollback não deixa nada) e helper `emailsEnfileirados(destinatario)` em `src/test/helpers/email.ts` para os consumidores conferirem o e-mail sem rodar o worker. Worker: `scripts/test_email_worker.py` (`unittest`, contra `washaway_test`, transporte falso) — `python3 scripts/test.py --project email-worker`.
 
+## 5.2 Autenticação (token de acesso)
+
+Planos `docs/plan/i2-login-cliente/` (infra + cliente) e `i17-*` (lava-rápido, interno, escopo de troca de senha). **Contrato único** para cliente, lava-rápido e interno:
+
+- **Token**: JWT **HS256** (`jsonwebtoken`), segredo em `JWT_SECRET` (obrigatório — `server.ts` chama `garantirConfiguracaoDoToken()` e não sobe sem ele; nunca no código), validade `JWT_EXPIRES_IN` (padrão `7d`). Nos testes, `vitest.config.ts` define um segredo fixo de teste.
+- **Payload**: `{ sub: <id>, tipo: 'cliente' | 'lavaRapido' | 'interno', permissoes?: string[], escopo?: string }`. `permissoes` só para `interno` (ex.: `['admin']`); `escopo` marca token de uso restrito (ex.: `'trocar-senha'`, i17-senha-gerada).
+- **`src/auth/token.ts`**:
+  - `assinarToken({ id, tipo, permissoes?, escopo? }): string`
+  - `verificarToken(token): Autenticacao` — `{ id, tipo, permissoes, escopo? }` (`permissoes` vira `[]` quando ausente); lança erro se o token for inválido, expirado, assinado com outro segredo/algoritmo (inclusive `alg: none`) ou com payload fora do contrato (sem `sub`, `tipo` desconhecido).
+  - `expiracaoDoToken(token): string` (ISO) e `garantirConfiguracaoDoToken()`.
+- **`src/auth/types.ts`**: `TIPOS_USUARIO`, `TipoUsuario`, `Autenticacao` e a tipagem global `Express.Request['auth']`.
+- **`src/middlewares/autenticar.ts`** — `autenticar(...tipos: TipoUsuario[])` (**autenticação**: quem é). Lê `Authorization: Bearer <token>`:
+  - sem header/esquema `Bearer`, token inválido ou expirado → **`401 { error }`**;
+  - token válido de um tipo fora de `tipos` → **`403 { error }`**;
+  - token com `escopo` (uso restrito) → **`403 { error }`** — o i17-senha-gerada libera o escopo `trocar-senha` só na rota de troca;
+  - ok → `req.auth = { id, tipo, permissoes, escopo? }` e `next()`.
+  - Chamar sem nenhum tipo lança erro na montagem da rota. Uso: `router.get('/me', autenticar('cliente'), asyncHandler(me))`; o I17 usa `autenticar('lavaRapido')` e `autenticar('interno')`.
+- **Permissão** fica separada: `autorizar(...permissoes)` (`src/middlewares/autorizar.ts`, i17-interno-exclusao) depois de `autenticar`, `403` se faltar a permissão.
+- Rotas públicas de leitura (`/lavaRapidos`, `/servicos`, `/intercorrencias`) continuam sem token.
+
 ## 6. Organização de pastas
 
 ```
 backend/
 ├── docker-compose.yml
-├── .env.example                     # DATABASE_URL, TEST_DATABASE_URL, PORT
+├── .env.example                     # DATABASE_URL, TEST_DATABASE_URL, PORT, JWT_SECRET, JWT_EXPIRES_IN, EMAIL_*
 ├── prisma/
 │   ├── schema.prisma
 │   ├── migrations/                  # geradas por `prisma migrate dev`
@@ -239,10 +276,17 @@ backend/
 │   ├── server.ts                    # importa createApp() e sobe na porta 4000
 │   ├── config/
 │   │   └── prisma.ts                # PrismaClient singleton
+│   ├── auth/
+│   │   ├── token.ts                 # assinarToken / verificarToken (JWT HS256) — seção 5.2
+│   │   └── types.ts                 # TipoUsuario, Autenticacao, req.auth
+│   ├── middlewares/
+│   │   ├── asyncHandler.ts
+│   │   └── autenticar.ts            # autenticar(...tipos) → req.auth; 401/403
 │   ├── docs/
 │   │   └── openapi.ts                # documento OpenAPI 3.0 (objeto TS, escrito à mão) servido em /api-docs
 │   ├── modules/
 │   │   ├── lava-rapidos/{lavaRapidos.routes,controller,service}.ts
+│   │   ├── clientes/{clientes.routes,controller,service,validation}.ts  # I1/I2: /auth/cliente/{cadastro,login}, /clientes/me
 │   │   ├── contratos/{contratos.routes,controller,service}.ts       # "BackEnd Onboard": contrato vigente
 │   │   ├── onboarding/{onboarding.routes,controller,service,validation}.ts  # solicitação → aceite → cria LavaRapido
 │   │   ├── pedidos/{pedidos.routes,controller,service}.ts
@@ -268,6 +312,9 @@ backend/
 │       ├── veiculos.test.ts
 │       ├── contratos.test.ts
 │       ├── onboarding.test.ts
+│       ├── clientes.test.ts         # I1: cadastro
+│       ├── clientesAuth.test.ts     # I2: login, /clientes/me, token expirado/inválido
+│       ├── autenticar.test.ts       # contrato do middleware (401 × 403, escopo, vários tipos)
 │       └── openApiDocs.test.ts      # smoke test: /api-docs (HTML) e /api-docs.json (OpenAPI cru) respondem
 └── vitest.config.ts                 # projetos `unit` e `integracao`; cobertura v8; exclui dist/ (ver nota)
 ```
@@ -289,9 +336,9 @@ Pirâmide do projeto (vale para os três projetos; aqui o detalhe do backend):
 **Banco de teste — um por worker.** O `globalSetup` (projeto `integracao`) sobe o Postgres do docker-compose (pulado quando `CI=true`; no GitHub Actions o Postgres é um `services:` do job), cria `washaway_test_1..N` (N = `maxWorkers` do Vitest) se não existirem e roda `prisma migrate deploy` em cada um (e no `washaway_test` base, usado pelo teste do worker de e-mail). O `setupBancoDoWorker.ts` aponta o `DATABASE_URL` de cada worker para `washaway_test_<VITEST_POOL_ID>`. Nada é apagado no setup — os bancos acumulam o que um teste interrompido deixar, por isso as factories geram valores únicos. Nunca aponta para o banco de dev `washaway`.
 
 **Helpers (`src/test/helpers/`):**
-- `factories.ts` — `criarLavaRapidoTeste(overrides)` (com `senha` em texto puro opcional, gravada com bcrypt), `criarItemServicoTeste`, `criarServicoTeste(lavaRapidoId, { itemIds })`, `criarPedidoTeste(lavaRapidoId, overrides)`, mais `cnpjUnico()`, `placaUnica()`, `sufixoUnico()`. Cada factory registra o id criado para limpeza. `criarClienteTeste` (I1) e `criarVeiculoTeste` (I3) entram aqui junto com os models, no mesmo formato.
+- `factories.ts` — `criarLavaRapidoTeste(overrides)` (com `senha` em texto puro opcional, gravada com bcrypt), `criarItemServicoTeste`, `criarServicoTeste(lavaRapidoId, { itemIds })`, `criarPedidoTeste(lavaRapidoId, overrides)`, `criarClienteTeste(overrides)` (I1; `senha` em texto puro opcional — padrão `SENHA_CLIENTE_TESTE` —, gravada com bcrypt; e-mail único), mais `cnpjUnico()`, `placaUnica()`, `sufixoUnico()`. Cada factory registra o id criado para limpeza. `criarVeiculoTeste` (I3) entra aqui junto com o model, no mesmo formato.
 - `limpeza.ts` — `limparDadosDeTeste()` apaga só o que as factories (ou `registrarParaLimpeza(modelo, id)`) registraram neste arquivo, na ordem certa. Nada de `deleteMany` global.
-- `auth.ts` — `comToken(req, token)` (header `Authorization: Bearer`); `tokenDeCliente(cliente)` e `tokenDeLavaRapido(lavaRapido)` são stubs que lançam erro até o I2/I17 definirem o token — quem implementar troca o corpo, mantendo a assinatura.
+- `auth.ts` — `comToken(req, token)` (header `Authorization: Bearer`); `tokenDeCliente(cliente)` gera o token direto com `assinarToken` (sem passar pela rota de login); `tokenDeLavaRapido(lavaRapido)` ainda é stub que lança erro até o I17 — quem implementar troca o corpo, mantendo a assinatura.
 - `email.ts` — `emailsEnfileirados(destinatario)` (I17-email, seção 5.1).
 
 **Esqueleto de um arquivo de integração:**
@@ -332,7 +379,7 @@ Usuario
 
 `Servico` e `Veiculo` (que apareciam aqui antes) já existem — `Servico` como model Prisma real, `Veiculo` derivado de `Pedido.veiculo` (ver seção 4/5).
 
-- **Autenticação**: `admin-front` agora tem login real por `LavaRapido` (CNPJ + senha fixa "admin", ver seção 4/5) — mas é proposital e simples: sem JWT, sem expiração de sessão, sem troca/recuperação de senha, sem validação de dígito verificador do CNPJ. Os endpoints continuam sem middleware de auth (qualquer request pode chamar `GET /pedidos`, `GET /lava-rapidos`, etc. — só o `login`/`cadastro` em si têm alguma validação). `app_mobile` continua sem login nenhum.
+- **Autenticação**: a infraestrutura de token (JWT) e o login do **cliente** existem (seção 5.2). O login do `admin-front` por `LavaRapido` (CNPJ + senha fixa "admin") ainda não emite token: as rotas de gestão (`GET /pedidos`, `POST /servicos` etc.) continuam sem middleware até o I17 (`autenticar('lavaRapido')`). Sem refresh token, troca/recuperação de senha do cliente.
 - **Upload de fotos do veículo**: `Pedido.fotos` continua array de URLs estáticas — sem endpoint de upload nem storage.
 - **Divergência `Pedido.servico` (string) vs. seleção múltipla** (`app_mobile/servicos.tsx` deixa marcar vários serviços): não resolvida — `Pedido.servico` no banco continua um `String` só, copiando o que `admin-front/pedidos.model.js` já fazia.
 - **`POST /pedidos`**: nenhum front cria pedido pela UI ainda; não implementado.

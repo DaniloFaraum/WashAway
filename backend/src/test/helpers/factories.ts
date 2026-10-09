@@ -10,8 +10,7 @@ import { registrarParaLimpeza } from './limpeza.js'
 // - aceita `overrides` com qualquer campo do model;
 // - registra o id criado em `limpeza.ts` (basta `limparDadosDeTeste()` no afterAll).
 //
-// `criarClienteTeste` (I1) e `criarVeiculoTeste` (I3) entram aqui junto com os
-// models Cliente/Veiculo, seguindo o mesmo formato.
+// `criarVeiculoTeste` (I3) entra aqui junto com o model Veiculo, no mesmo formato.
 
 let sequencia = 0
 
@@ -115,4 +114,26 @@ export async function criarPedidoTeste(
   })
   registrarParaLimpeza('pedido', pedido.id)
   return pedido
+}
+
+type ClienteOverrides = Partial<Omit<Prisma.ClienteUncheckedCreateInput, 'senha'>> & {
+  /** Senha em texto puro; a factory grava o hash bcrypt (útil pra testar login). */
+  senha?: string
+}
+
+/** Senha padrão dos clientes da factory (em texto puro, pra testar login). */
+export const SENHA_CLIENTE_TESTE = 'senha-de-teste'
+
+export async function criarClienteTeste(overrides: ClienteOverrides = {}) {
+  const { senha = SENHA_CLIENTE_TESTE, ...resto } = overrides
+  const cliente = await prisma.cliente.create({
+    data: {
+      nome: `Cliente de teste ${sufixoUnico()}`,
+      email: `cliente-${sufixoUnico()}@teste.washaway.dev`,
+      senha: await bcrypt.hash(senha, 4),
+      ...resto,
+    },
+  })
+  registrarParaLimpeza('cliente', cliente.id)
+  return cliente
 }

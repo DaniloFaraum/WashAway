@@ -93,6 +93,16 @@ model Intercorrencia {
   reaberta     Boolean    @default(false)
 }
 
+// Cliente do app (I1). `email` é salvo normalizado (trim + minúsculas), então o
+// @unique já garante unicidade sem diferenciar maiúsculas. `senha` = hash bcrypt.
+model Cliente {
+  id       String   @id @default(cuid())
+  nome     String
+  email    String   @unique
+  senha    String
+  criadoEm DateTime @default(now())
+}
+
 // Horário semanal (I19): um intervalo por dia, hora local (FUSO_LAVA_RAPIDOS,
 // src/utils/fusoHorario.ts). Lava-rápido sem horário cadastrado para o dia =
 // sem restrição de horário (só as intercorrências fecham).

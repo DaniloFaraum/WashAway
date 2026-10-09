@@ -1,15 +1,16 @@
 import type { Test } from 'supertest'
+import { assinarToken } from '../../auth/token.js'
 
-// Helpers de autenticação pros testes de rota protegida.
+// Helpers de autenticação pros testes de rota protegida. Os tokens são gerados
+// direto com `assinarToken` (mesmo segredo da aplicação — JWT_SECRET de teste
+// no vitest.config.ts), sem passar pela rota de login.
 //
-// O formato do token ainda não existe: `tokenDeCliente` é definido pelo I2
-// (login de cliente) e `tokenDeLavaRapido` pelo I17 (sessão do lava-rápido).
-// Quem implementar essas histórias troca os stubs abaixo pela geração real
-// (assinando com o mesmo segredo/serviço da aplicação, sem passar pela rota de
-// login), mantendo as assinaturas.
+// `tokenDeLavaRapido` é definido pelo I17 (sessão do lava-rápido): quem
+// implementar troca o stub abaixo por `assinarToken({ id, tipo: 'lavaRapido' })`,
+// mantendo a assinatura.
 
 export function tokenDeCliente(cliente: { id: string }): string {
-  throw new Error(`tokenDeCliente(${cliente.id}): definir junto com o I2 (token de cliente)`)
+  return assinarToken({ id: cliente.id, tipo: 'cliente' })
 }
 
 export function tokenDeLavaRapido(lavaRapido: { id: string }): string {
