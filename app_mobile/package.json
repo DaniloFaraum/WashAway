@@ -40,6 +40,8 @@
   "devDependencies": {
     "@types/react": "~19.2.2",
     "@vitest/coverage-v8": "^5.0.3",
+    "eslint": "^9.0.0",
+    "eslint-config-expo": "~57.0.2",
     "json-server": "^1.0.0-beta.15",
     "typescript": "~6.0.3",
     "vitest": "^5.0.1"
