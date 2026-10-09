@@ -16,30 +16,22 @@ export type PartesLocais = {
 
 const DIAS: Record<string, number> = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 }
 
-const formatadores = new Map<string, Intl.DateTimeFormat>()
-
-function formatador(fuso: string): Intl.DateTimeFormat {
-  let f = formatadores.get(fuso)
-  if (!f) {
-    f = new Intl.DateTimeFormat('en-US', {
-      timeZone: fuso,
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit',
-      weekday: 'short',
-      hourCycle: 'h23',
-    })
-    formatadores.set(fuso, f)
-  }
-  return f
-}
+// Um formatador só: o fuso é único para todos os lava-rápidos.
+const FORMATADOR = new Intl.DateTimeFormat('en-US', {
+  timeZone: FUSO_LAVA_RAPIDOS,
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+  hour: '2-digit',
+  minute: '2-digit',
+  weekday: 'short',
+  hourCycle: 'h23',
+})
 
 /** Data, dia da semana e hora de `instante` no fuso dos lava-rápidos. */
-export function partesLocais(instante: Date, fuso: string = FUSO_LAVA_RAPIDOS): PartesLocais {
+export function partesLocais(instante: Date): PartesLocais {
   const partes: Record<string, string> = {}
-  for (const { type, value } of formatador(fuso).formatToParts(instante)) partes[type] = value
+  for (const { type, value } of FORMATADOR.formatToParts(instante)) partes[type] = value
   return {
     data: `${partes.year}-${partes.month}-${partes.day}`,
     diaSemana: DIAS[partes.weekday],

@@ -8,7 +8,7 @@ import { horarioNaoDefinido, paraHorarioDia, type HorarioDia } from './horarios.
 // horário (I9). Uma regra só para as três perguntas.
 
 export type MotivoFechado =
-  | { tipo: 'fora_do_horario'; horario: { abertura: string; fechamento: string } | null } // null = dia fechado
+  | { tipo: 'fora_do_horario'; horario: { abertura: string; fechamento: string } | null } // null = dia fechado ou sem horário definido
   | { tipo: 'intercorrencia'; intercorrencia: Intercorrencia }
 
 export type Disponibilidade = { aberto: true } | { aberto: false; motivo: MotivoFechado }
@@ -19,6 +19,30 @@ const ABERTO: Disponibilidade = { aberto: true }
 
 function horarioDoIntervalo(horario: HorarioDoDia) {
   return horario.abertura && horario.fechamento ? { abertura: horario.abertura, fechamento: horario.fechamento } : null
+}
+
+/**
+ * Primeira intercorrência (do mesmo dia) que fecha o instante `inicioLocal` ou o
+ * intervalo [inicioLocal, fimLocal): ignora as `reaberta`; a de dia inteiro
+ * sempre fecha; a parcial fecha se [horaInicio, horaFim) intercepta. Lógica
+ * pura, usada aqui e por `getIntercorrenciaAtiva` (botão "Reabrir" do painel).
+ */
+export function intercorrenciaQueFecha(
+  intercorrenciasDoDia: Intercorrencia[],
+  inicioLocal: string,
+  fimLocal?: string,
+): Intercorrencia | null {
+  return (
+    intercorrenciasDoDia.find((intercorrencia) => {
+      if (intercorrencia.reaberta) return false
+      if (intercorrencia.diaInteiro) return true
+      const { horaInicio, horaFim } = intercorrencia
+      if (!horaInicio || !horaFim) return false
+      return fimLocal === undefined
+        ? inicioLocal >= horaInicio && inicioLocal < horaFim
+        : horaInicio < fimLocal && inicioLocal < horaFim
+    }) ?? null
+  )
 }
 
 /**
@@ -50,20 +74,9 @@ export function avaliarDisponibilidade(
     }
   }
 
-  for (const intercorrencia of intercorrenciasDoDia) {
-    if (intercorrencia.reaberta) continue
-    if (intercorrencia.diaInteiro) {
-      return { aberto: false, motivo: { tipo: 'intercorrencia', intercorrencia } }
-    }
-    const { horaInicio, horaFim } = intercorrencia
-    if (!horaInicio || !horaFim) continue
-    const intercepta =
-      fimLocal === undefined
-        ? inicioLocal >= horaInicio && inicioLocal < horaFim
-        : horaInicio < fimLocal && inicioLocal < horaFim
-    if (intercepta) {
-      return { aberto: false, motivo: { tipo: 'intercorrencia', intercorrencia } }
-    }
+  const intercorrencia = intercorrenciaQueFecha(intercorrenciasDoDia, inicioLocal, fimLocal)
+  if (intercorrencia) {
+    return { aberto: false, motivo: { tipo: 'intercorrencia', intercorrencia } }
   }
 
   return ABERTO
@@ -103,7 +116,7 @@ export async function listarAbertos(
     if (localFim && localFim.data !== local.data) {
       resultado.set(id, {
         aberto: false,
-        motivo: { tipo: 'fora_do_horario', horario: horarioDoDia.fechado ? null : horarioDoIntervalo(horarioDoDia) },
+        motivo: { tipo: 'fora_do_horario', horario: horarioDoIntervalo(horarioDoDia) },
       })
       continue
     }

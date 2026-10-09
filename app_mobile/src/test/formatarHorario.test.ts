@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  diaSemanaNoFuso,
   formatarHorarioDoDia,
   horarioDeHoje,
   resumirSemana,
@@ -65,6 +66,13 @@ describe('horarioDeHoje / temHorarioDefinido', () => {
   it('pega o dia da semana da data informada', () => {
     // 2026-10-10 é sábado.
     expect(horarioDeHoje(PADRAO, new Date(2026, 9, 10, 10, 0))).toEqual(aberto(6, '08:00', '12:00'))
+  })
+
+  it('usa o dia no fuso dos lava-rápidos (America/Sao_Paulo), não o do aparelho', () => {
+    // 2026-10-10T02:30Z é sábado em UTC, mas ainda sexta 23:30 em São Paulo.
+    const instante = new Date('2026-10-10T02:30:00Z')
+    expect(diaSemanaNoFuso(instante)).toBe(5)
+    expect(horarioDeHoje(PADRAO, instante)).toEqual(aberto(5, '08:00', '18:00'))
   })
 
   it('sem nenhum dia definido não há horário a mostrar', () => {

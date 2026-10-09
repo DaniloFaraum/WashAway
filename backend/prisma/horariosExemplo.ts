@@ -1,7 +1,7 @@
 import type { PrismaClient } from '@prisma/client'
 
 // Horários de funcionamento de exemplo (I19), usados pelo seed.ts, pelo demo.ts
-// e pelo script de dados horarios-exemplo.ts. Hora local (America/Sao_Paulo).
+// e pelo script de dados aplicar-horarios-exemplo.ts. Hora local (America/Sao_Paulo).
 
 export type DiaExemplo = { diaSemana: number; fechado: boolean; abertura: string | null; fechamento: string | null }
 
