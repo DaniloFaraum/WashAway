@@ -1,0 +1,6 @@
+# E-mails gravados pelo worker em dev (transporte "arquivo") — podem conter senha.
+.emails/
+
+# venv e cache do worker de e-mail (scripts/)
+scripts/.venv/
+__pycache__/

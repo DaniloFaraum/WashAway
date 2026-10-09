@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Para os dev servers do repo (backend, admin-front, app_mobile) e sobe de novo, em background.
+"""Para os dev servers do repo (backend, worker de e-mail, admin-front, app_mobile) e sobe de novo, em background.
 
 Sempre mata pela porta (pega o processo real, não só o wrapper `npm run` —
 `tsx watch`/`expo start` deixam processo-filho órfão segurando a porta) e
@@ -7,7 +7,7 @@ também por padrão de comando, escopado ao path deste repo, pra não sobrar
 processo velho rodando código antigo.
 
 Uso:
-    python3 restart.py                       # backend + admin-front + app_mobile
+    python3 restart.py                       # backend + email-worker + admin-front + app_mobile
     python3 restart.py --project backend      # só um projeto
     python3 restart.py --skip-stop            # só sobe, sem matar o que já tá rodando
 """
@@ -20,6 +20,10 @@ from pathlib import Path
 SCRIPT_DIR = Path(__file__).resolve().parent
 REPO_ROOT = SCRIPT_DIR.parent
 
+# Worker de e-mail usa o venv de scripts/ (psycopg); sem ele, cai no python3 atual.
+_VENV_PYTHON = SCRIPT_DIR / ".venv" / "bin" / "python"
+PYTHON_WORKER = str(_VENV_PYTHON) if _VENV_PYTHON.exists() else sys.executable
+
 PROJECTS = {
     "backend": {
         "dir": REPO_ROOT / "backend",
@@ -28,6 +32,15 @@ PROJECTS = {
         "pre": [["npm", "run", "docker:up"]],
         "cmd": ["npm", "run", "dev"],
         "log": Path("/tmp/washaway-backend.log"),
+    },
+    # Envia os e-mails do outbox (EventoEmail). Sem porta: mata só por padrão.
+    "email-worker": {
+        "dir": REPO_ROOT,
+        "port": None,
+        "pattern": "scripts/email_worker.py",
+        "pre": [],
+        "cmd": [PYTHON_WORKER, "scripts/email_worker.py"],
+        "log": Path("/tmp/washaway-email-worker.log"),
     },
     "admin-front": {
         "dir": REPO_ROOT / "admin-front",
@@ -70,7 +83,8 @@ def kill_por_padrao(padrao: str, project_dir: Path) -> None:
 
 def parar(nome: str, projeto: dict) -> None:
     print(f"Parando {nome}...")
-    kill_por_porta(projeto["port"])
+    if projeto["port"] is not None:
+        kill_por_porta(projeto["port"])
     kill_por_padrao(projeto["pattern"], projeto["dir"])
 
 
@@ -96,7 +110,7 @@ def main() -> None:
     parser.add_argument(
         "--project",
         choices=sorted(PROJECTS.keys()),
-        help="Só reinicia esse projeto (padrão: os três)",
+        help="Só reinicia esse projeto (padrão: todos)",
     )
     parser.add_argument(
         "--skip-stop",

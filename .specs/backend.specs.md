@@ -166,6 +166,39 @@ Uma empresa só vira `LavaRapido` (e só aparece em `GET /lavaRapidos`/app_mobil
 
 As 3 telas `Serviços`/`Disponibilidade`/`Veículos` do admin-front usam este backend real desde `migrar-servicos-disponibilidade-veiculos-backend` (ver `admin-front.specs.md` seção 8) — o `json-server` próprio delas continua existindo só como fallback manual, mesmo padrão já adotado pra `/pedidos`. `/auth` e `POST /pedidos` continuam não implementados.
 
+## 5.1 E-mail (outbox + worker)
+
+Plano `docs/plan/i17-email-eventos/`. Infraestrutura usada pelos e-mails do I17 (senha gerada, "esqueci minha senha", exclusão) — os e-mails em si ficam com os planos consumidores.
+
+**Fluxo:** a ação que gera e-mail chama `enfileirarEmail(tx, { tipo, destinatario, assunto, corpo })` (`src/modules/email/email.service.ts`) **dentro da sua transação** → grava um `EventoEmail` `pendente` e faz `pg_notify('email_pendente', id)` → o Postgres só entrega o `NOTIFY` no commit (rollback = nenhum e-mail) → o worker Python (`scripts/email_worker.py`) acorda, envia e atualiza o status. **Nenhum outro módulo envia e-mail direto**, e não há rota HTTP de e-mail.
+
+```prisma
+enum StatusEventoEmail { pendente enviado erro }
+enum TipoEventoEmail { teste }    # cada plano consumidor acrescenta os seus valores
+model EventoEmail {
+  id, tipo, destinatario, assunto, corpo, status @default(pendente),
+  tentativas Int @default(0), ultimoErro String?, proximaTentativaEm DateTime?,
+  criadoEm, enviadoEm DateTime?
+  @@index([status, criadoEm])
+}
+```
+
+**Worker** (`scripts/email_worker.py`, Python 3 + `psycopg` 3):
+- `LISTEN email_pendente` + varredura periódica (`EMAIL_VARREDURA_SEGUNDOS`, 30 s) como garantia caso um `NOTIFY` se perca (worker parado, reconexão).
+- Pega os eventos com `SELECT … FOR UPDATE SKIP LOCKED` (lotes de 20): dois workers juntos nunca enviam o mesmo e-mail.
+- Sucesso → `enviado` + `enviadoEm`, e o **corpo é mascarado** (`"[enviado — conteúdo removido]"`, pode conter senha). Falha → `erro`, `tentativas + 1`, `ultimoErro` e `proximaTentativaEm` com espera crescente (`EMAIL_ESPERA_BASE_SEGUNDOS` × 2^(tentativas−1): 30 s, 60 s, 120 s…). Ao atingir `EMAIL_MAX_TENTATIVAS` (5) fica em `erro` definitivo, com o motivo (reprocessar = pelo pgAdmin, voltando `status` para `pendente`).
+- Log: só id, tipo, destinatário e status — **nunca o corpo**.
+- Transportes (`EMAIL_TRANSPORTE`): `arquivo` (padrão, dev/teste) grava `WashAway/.emails/<data>-<id>.eml` (pasta no `.gitignore`; abre em qualquer cliente de e-mail ou editor de texto); `smtp` (produção) usa `SMTP_HOST`, `SMTP_PORT` (465 = SSL, senão STARTTLS), `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM`.
+- Configuração por variável de ambiente; o que faltar vem do `backend/.env` (`DATABASE_URL` etc. — ver `.env.example`).
+
+**Rodar:**
+- Instalar (uma vez): `python3 -m venv scripts/.venv && scripts/.venv/bin/pip install -r scripts/requirements.txt` (se o Python do sistema não tiver `ensurepip`: `python3 -m venv --without-pip scripts/.venv` + `get-pip.py`). O `scripts/.venv/` está no `.gitignore`.
+- `scripts/.venv/bin/python scripts/email_worker.py` (contínuo) ou `… --uma-vez` (processa os pendentes e sai; código ≠ 0 se algum envio falhar — útil em CI).
+- `python3 scripts/restart.py` já sobe o worker junto (`--project email-worker`, log em `/tmp/washaway-email-worker.log`), usando o `scripts/.venv` se existir.
+- **Ver os e-mails em dev:** arquivos em `WashAway/.emails/`; a fila fica na tabela `EventoEmail` (pgAdmin: `SELECT id, tipo, destinatario, status, tentativas, "ultimoErro" FROM "EventoEmail" ORDER BY "criadoEm" DESC`).
+
+**Testes:** `src/test/email.test.ts` (enfileirar com commit deixa `pendente`; com rollback não deixa nada) e helper `emailsEnfileirados(destinatario)` em `src/test/helpers/email.ts` para os consumidores conferirem o e-mail sem rodar o worker. Worker: `scripts/test_email_worker.py` (`unittest`, contra `washaway_test`, transporte falso) — `python3 scripts/test.py --project email-worker`.
+
 ## 6. Organização de pastas
 
 ```
@@ -192,6 +225,7 @@ backend/
 │   │   ├── servicos/{servicos.routes,controller,service,validation}.ts
 │   │   ├── itens-servico/{itensServico.routes,controller,service}.ts   # catálogo global, só leitura
 │   │   ├── intercorrencias/{intercorrencias.routes,controller,service,validation}.ts
+│   │   ├── email/email.service.ts   # enfileirarEmail — outbox de e-mail (seção 5.1)
 │   │   └── veiculos/{veiculos.routes,controller,service}.ts   # sem model Prisma próprio — deriva de Pedido
 │   ├── utils/
 │   │   └── queryParam.ts            # getStringQueryParam — normaliza ?lavaRapidoId= (string ou array), usado por todos os módulos acima

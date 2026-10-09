@@ -123,3 +123,36 @@ model SolicitacaoOnboarding {
   lavaRapidoId String?           @unique
   criadoEm     DateTime          @default(now())
 }
+
+// Outbox de e-mails (I17): gravado na mesma transação da ação que gera o
+// e-mail; o worker Python (scripts/email_worker.py) envia e marca o status.
+// Ver "E-mail (outbox + worker)" em .specs/backend.specs.md.
+enum StatusEventoEmail {
+  pendente
+  enviado
+  erro
+}
+
+// Cada plano consumidor acrescenta os seus valores (sem reescrever os dos outros).
+enum TipoEventoEmail {
+  teste
+}
+
+model EventoEmail {
+  id           String            @id @default(cuid())
+  tipo         TipoEventoEmail
+  destinatario String
+  assunto      String
+  // Pode conter senha gerada: o worker troca por "[enviado — conteúdo removido]"
+  // depois do envio, e nunca o escreve em log.
+  corpo        String
+  status       StatusEventoEmail @default(pendente)
+  tentativas   Int               @default(0)
+  ultimoErro   String?
+  // Quando o worker pode tentar de novo um evento em `erro` (espera crescente).
+  proximaTentativaEm DateTime?
+  criadoEm     DateTime          @default(now())
+  enviadoEm    DateTime?
+
+  @@index([status, criadoEm])
+}
