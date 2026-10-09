@@ -1,13 +1,39 @@
 import 'dotenv/config'
 import { defineConfig } from 'vitest/config'
-import { TEST_DATABASE_URL } from './src/test/testDatabaseUrl.js'
 
+// Dois projetos (ver "Testes" em .specs/backend.specs.md):
+// - unit: `src/**/*.unit.test.ts`, regras puras, sem Docker/banco (`npm run test:unit`);
+// - integracao: `src/test/**/*.test.ts`, HTTP via supertest contra o Postgres de
+//   teste, um banco por worker (`npm run test` roda os dois).
 export default defineConfig({
   test: {
-    globalSetup: ['./src/test/globalSetup.ts'],
     exclude: ['**/node_modules/**', '**/dist/**'],
-    env: {
-      DATABASE_URL: TEST_DATABASE_URL,
+    coverage: {
+      provider: 'v8',
+      include: ['src/**/*.ts'],
+      exclude: ['src/test/**', 'src/**/*.unit.test.ts', 'src/server.ts'],
+      reporter: ['text-summary', 'html', 'lcov'],
     },
+    projects: [
+      {
+        extends: true,
+        test: {
+          name: 'unit',
+          include: ['src/**/*.unit.test.ts'],
+          // Teste unitário não deve tocar no banco. Se tocar por engano, falha
+          // em vez de cair no banco de dev carregado pelo .env.
+          env: { DATABASE_URL: 'postgresql://sem-banco-em-teste-unitario@localhost:1/nenhum' },
+        },
+      },
+      {
+        extends: true,
+        test: {
+          name: 'integracao',
+          include: ['src/test/**/*.test.ts'],
+          globalSetup: ['./src/test/globalSetup.ts'],
+          setupFiles: ['./src/test/setupBancoDoWorker.ts'],
+        },
+      },
+    ],
   },
 })

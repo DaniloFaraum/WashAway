@@ -32,3 +32,24 @@ Informações das opções de Lava-rápido:
 - Uso de filtros para escolher a lavadora;
 - Menu lateral com drop-down para seleção de veículos por parte das lavadoras 
 	- (o consiumdor precisa previamente cadastrar o veículo no sistema, com suas informações importantes)
+
+## Testes automatizados
+
+| Nível | Projeto | O que cobre |
+|---|---|---|
+| Unitário (sem rede/banco) | backend (`*.unit.test.ts`), fronts | Regras puras: validações, placa, transições de status, "está aberto em data/hora", preço/duração, formatação |
+| Integração de API (supertest + Postgres de teste) | backend (`src/test/*.test.ts`) | Cada rota, com os casos dos critérios (sucesso, 400/401/404/409). Nível exigido pela maioria dos critérios "Testes automatizados" |
+| Service dos fronts | admin-front, app_mobile | Camada `service` contra `json-server` de teste ou servidor HTTP mínimo |
+| Ponta a ponta (só o fluxo principal) | backend (supertest) | I13: pedido criado pelo cliente aparece só no painel do lava-rápido certo |
+
+Sem testes de componente/tela por enquanto.
+
+Como rodar (a partir desta pasta):
+
+- `python3 scripts/test.py --project backend | admin-front | app_mobile` — um projeto; `--project all` roda os três e mostra um resumo.
+- `cd backend && npm run test:unit` — só os unitários, sem Docker.
+- `npm run test:coverage` em cada projeto — relatório de cobertura em `coverage/` (só relatório, não bloqueia PR).
+
+Convenção: cada critério "Testes automatizados: A, B, C" de uma história vira um `describe` com **um `it` por caso citado, com o mesmo texto**. Detalhes (bancos por worker, factories, helpers de token) em `.specs/backend.specs.md`, seção 6.1.
+
+CI: `.github/workflows/testes.yml` roda lint + testes (com cobertura) + build/typecheck dos três projetos em todo PR e push na `main`.

@@ -230,7 +230,10 @@ backend/
 │   ├── utils/
 │   │   └── queryParam.ts            # getStringQueryParam — normaliza ?lavaRapidoId= (string ou array), usado por todos os módulos acima
 │   └── test/
-│       ├── globalSetup.ts           # docker compose up + prisma migrate deploy no banco de teste
+│       ├── globalSetup.ts           # docker compose up (fora do CI) + cria/migra washaway_test_1..N (um por worker)
+│       ├── setupBancoDoWorker.ts    # setupFiles: DATABASE_URL = banco do worker (VITEST_POOL_ID)
+│       ├── testDatabaseUrl.ts       # TEST_DATABASE_URL base + nome/URL do banco de cada worker
+│       ├── helpers/                 # factories.ts, limpeza.ts, auth.ts (ver seção 6.1)
 │       ├── lavaRapidos.test.ts
 │       ├── pedidos.test.ts
 │       ├── servicos.test.ts
@@ -240,10 +243,57 @@ backend/
 │       ├── contratos.test.ts
 │       ├── onboarding.test.ts
 │       └── openApiDocs.test.ts      # smoke test: /api-docs (HTML) e /api-docs.json (OpenAPI cru) respondem
-└── vitest.config.ts                 # aponta DATABASE_URL pro banco de teste; exclui dist/ (ver nota)
+└── vitest.config.ts                 # projetos `unit` e `integracao`; cobertura v8; exclui dist/ (ver nota)
 ```
 
 **Nota**: `vitest.config.ts` exclui explicitamente `dist/**` — sem isso, depois de um `npm run build`, o Vitest também descobre e roda os `.test.js` compilados em `dist/`, duplicando cada teste (achado durante a validação desta task).
+
+## 6.1 Testes — estratégia e convenções
+
+Pirâmide do projeto (vale para os três projetos; aqui o detalhe do backend):
+
+| Nível | Onde | O que cobre | Roda com |
+|---|---|---|---|
+| **Unitário** | `src/**/*.unit.test.ts`, ao lado do código | Regras puras de domínio, sem rede nem banco: validações (`*.validation.ts`), placa (I3), transições de status (I15), "está aberto em data/hora" (I19/I20/I9), preço/duração (I13), formatação. | `npm run test:unit` (sem Docker; `DATABASE_URL` aponta pra um endereço inválido de propósito) |
+| **Integração de API** | `src/test/*.test.ts` | Cada rota via supertest → controller → service → Prisma → Postgres de teste, com os casos que a história pede (sucesso, 400/401/404/409). **É o nível exigido pela maioria dos critérios "Testes automatizados".** | `npm run test:integracao` |
+| **Ponta a ponta** | `src/test/*.test.ts` (supertest) | Só o fluxo principal do I13: cliente cria o pedido → o lava-rápido certo vê → outro lava-rápido não vê. Entra junto com o I13. | `npm run test` |
+
+`npm run test` roda unit + integração; `npm run test:coverage` faz o mesmo com relatório de cobertura (`coverage/`, só relatório, não bloqueia PR). Pela raiz: `python3 scripts/test.py --project backend` (ou `--project all` pros três projetos).
+
+**Banco de teste — um por worker.** O `globalSetup` (projeto `integracao`) sobe o Postgres do docker-compose (pulado quando `CI=true`; no GitHub Actions o Postgres é um `services:` do job), cria `washaway_test_1..N` (N = `maxWorkers` do Vitest) se não existirem e roda `prisma migrate deploy` em cada um (e no `washaway_test` base, usado pelo teste do worker de e-mail). O `setupBancoDoWorker.ts` aponta o `DATABASE_URL` de cada worker para `washaway_test_<VITEST_POOL_ID>`. Nada é apagado no setup — os bancos acumulam o que um teste interrompido deixar, por isso as factories geram valores únicos. Nunca aponta para o banco de dev `washaway`.
+
+**Helpers (`src/test/helpers/`):**
+- `factories.ts` — `criarLavaRapidoTeste(overrides)` (com `senha` em texto puro opcional, gravada com bcrypt), `criarItemServicoTeste`, `criarServicoTeste(lavaRapidoId, { itemIds })`, `criarPedidoTeste(lavaRapidoId, overrides)`, mais `cnpjUnico()`, `placaUnica()`, `sufixoUnico()`. Cada factory registra o id criado para limpeza. `criarClienteTeste` (I1) e `criarVeiculoTeste` (I3) entram aqui junto com os models, no mesmo formato.
+- `limpeza.ts` — `limparDadosDeTeste()` apaga só o que as factories (ou `registrarParaLimpeza(modelo, id)`) registraram neste arquivo, na ordem certa. Nada de `deleteMany` global.
+- `auth.ts` — `comToken(req, token)` (header `Authorization: Bearer`); `tokenDeCliente(cliente)` e `tokenDeLavaRapido(lavaRapido)` são stubs que lançam erro até o I2/I17 definirem o token — quem implementar troca o corpo, mantendo a assinatura.
+- `email.ts` — `emailsEnfileirados(destinatario)` (I17-email, seção 5.1).
+
+**Esqueleto de um arquivo de integração:**
+
+```ts
+const app = createApp()
+
+describe('POST /algo', () => {
+  let lavaRapidoId: string
+
+  beforeAll(async () => {
+    lavaRapidoId = (await criarLavaRapidoTeste()).id
+  })
+
+  afterAll(async () => {
+    await limparDadosDeTeste()
+    await prisma.$disconnect()
+  })
+
+  it('caso citado no critério, com o mesmo texto', async () => { /* ... */ })
+})
+```
+
+**Convenção para as histórias:** cada critério "Testes automatizados: A, B, C" vira um `describe` com **um `it` por caso citado, com o mesmo texto** do critério. Assim o `task-review` confere critério ↔ teste lendo os nomes.
+
+**Migração para as factories é incremental:** cada história que mexer num arquivo de teste existente migra esse arquivo. Hoje `pedidos.test.ts` é o exemplo migrado; os demais ainda criam `prisma.lavaRapido.create` à mão.
+
+**CI:** `.github/workflows/testes.yml` roda em todo PR e push na `main`, um job por projeto. Backend: `npm ci` → `prisma generate` → `npm run build` (o backend não tem linter; o `tsc` é a checagem estática) → `npm run test:coverage`.
 
 ## 7. Próximos passos / domínio ainda não implementado
 

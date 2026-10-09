@@ -13,7 +13,11 @@
     "prisma:migrate": "prisma migrate dev",
     "prisma:seed": "tsx prisma/seed.ts",
     "prisma:demo": "tsx prisma/demo.ts",
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:unit": "vitest run --project unit",
+    "test:integracao": "vitest run --project integracao",
+    "test:coverage": "vitest run --coverage",
+    "typecheck": "tsc --noEmit"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
@@ -33,6 +37,7 @@
     "@types/node": "^22.15.0",
     "@types/supertest": "^6.0.2",
     "@types/swagger-ui-express": "^4.1.8",
+    "@vitest/coverage-v8": "^5.0.3",
     "prisma": "^6.16.3",
     "supertest": "^7.1.4",
     "tsx": "^4.20.6",

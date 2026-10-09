@@ -8,6 +8,13 @@ export default defineConfig({
   test: {
     globalSetup: ['./src/test/setup/globalSetup.js'],
     setupFiles: ['./src/test/setup/localStorageShim.js'],
+    // Só relatório (npm run test:coverage), sem limite mínimo que bloqueie PR.
+    coverage: {
+      provider: 'v8',
+      include: ['src/**/*.{js,jsx}'],
+      exclude: ['src/test/**', 'src/**/*.test.*'],
+      reporter: ['text-summary', 'html', 'lcov'],
+    },
     env: {
       VITE_API_BASE_URL: TEST_SERVER_URL,
     },

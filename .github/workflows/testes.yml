@@ -1,0 +1,115 @@
+# Lint + testes + build dos três projetos, em todo PR e push na main.
+# Estratégia de testes: ver "Testes" em .specs/*.specs.md e no README.
+name: Testes
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: testes-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    services:
+      # Substitui o docker-compose local: o globalSetup pula o `docker compose up`
+      # quando CI=true e cria os bancos washaway_test_1..N neste Postgres.
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: washaway
+          POSTGRES_PASSWORD: washaway
+          POSTGRES_DB: washaway
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U washaway"
+          --health-interval 2s
+          --health-timeout 5s
+          --health-retries 15
+    env:
+      DATABASE_URL: postgresql://washaway:washaway@localhost:5432/washaway
+      TEST_DATABASE_URL: postgresql://washaway:washaway@localhost:5432/washaway_test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - run: npm ci
+      - run: npx prisma generate
+      # O backend não tem linter; o `tsc` (build) faz a checagem estática.
+      - name: Build (tsc)
+        run: npm run build
+      - name: Testes (unit + integração) com cobertura
+        run: npm run test:coverage
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: cobertura-backend
+          path: backend/coverage
+          if-no-files-found: ignore
+
+  admin-front:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: admin-front
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: admin-front/package-lock.json
+      - run: npm ci
+      - name: Lint
+        run: npm run lint
+      - name: Testes com cobertura
+        run: npm run test:coverage
+      - name: Build
+        run: npm run build
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: cobertura-admin-front
+          path: admin-front/coverage
+          if-no-files-found: ignore
+
+  app_mobile:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: app_mobile
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: app_mobile/package-lock.json
+      - run: npm ci
+      # TEMPORÁRIO: a main tem erros de lint antigos (react-hooks/set-state-in-effect
+      # e afins). O passo roda e aparece no log, mas não reprova o job até que
+      # sejam corrigidos — aí basta remover o continue-on-error.
+      - name: Lint
+        run: npm run lint
+        continue-on-error: true
+      - name: Testes com cobertura
+        run: npm run test:coverage
+      # `expo export` é pesado; a checagem de tipos cobre o "build" no CI.
+      - name: Typecheck (tsc)
+        run: npx tsc --noEmit
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: cobertura-app_mobile
+          path: app_mobile/coverage
+          if-no-files-found: ignore

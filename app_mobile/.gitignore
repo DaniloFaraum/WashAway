@@ -41,3 +41,6 @@ example
 # generated native folders
 /ios
 /android
+
+# relatório de cobertura (npm run test:coverage)
+coverage

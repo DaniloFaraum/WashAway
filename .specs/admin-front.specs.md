@@ -231,7 +231,11 @@ Regra para novas flags: mesma convenção (chave em `FEATURE_FLAGS`, consumida v
 - `src/test/setup/localStorageShim.js` (`setupFiles` do Vitest) — Node não tem `localStorage` global por padrão; esse shim (um `Map` em memória) existe só pra `sessao.storage.js` (e qualquer coisa que dependa dele, ex. `pedidos.service.js` filtrando por `lavaRapidoId`) funcionar nos testes sem precisar de `jsdom`.
 - **`lavaRapidos.service.test.js`** foge do padrão "sempre contra o `json-server` de teste" (seção 5): `entrar`/`cadastrar` fazem validação de credencial/duplicidade (401/409) que o `json-server` genérico não simula (não tem bcrypt nem checagem de unicidade). Em vez disso, o teste sobe um servidor HTTP mínimo (`node:http`, sem dependência nova) só pra devolver os status codes esperados — cobre a lógica que o admin-front realmente possui (mapear status → erro amigável, nunca expor `senha`), não a lógica de auth em si (essa é coberta nos testes do backend).
 - **`onboarding.service.test.js`** segue o mesmo padrão de servidor HTTP mínimo de `lavaRapidos.service.test.js` (o fluxo solicitação → aceite → login tem regra de estado que o `json-server` não simula).
-- Testes de componente/UI ainda não fazem parte da convenção (nenhuma task pediu isso até aqui) — se/quando entrar, atualizar esta seção.
+- Testes de componente/UI ainda não fazem parte da convenção (decisão do plano `testes-automatizados`: nenhum nesta sprint) — se/quando entrar, atualizar esta seção.
+- **Lugar na pirâmide do projeto** (estratégia completa em `backend.specs.md`, seção 6.1): o admin-front testa a camada `service` e funções puras; as regras de negócio e os status HTTP são testados no backend (integração de API).
+- **Cobertura:** `npm run test:coverage` gera relatório em `coverage/` (v8, só relatório, não bloqueia PR).
+- **Convenção para as histórias:** cada critério "Testes automatizados: A, B, C" vira um `describe` com um `it` por caso citado, com o mesmo texto.
+- **CI:** `.github/workflows/testes.yml` roda `npm run lint`, `npm run test:coverage` e `npm run build` em todo PR e push na `main`. Pela raiz, `python3 scripts/test.py --project all` roda os três projetos.
 
 ## 10. Convenções gerais de código
 

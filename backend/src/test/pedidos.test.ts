@@ -3,6 +3,8 @@ import supertest from 'supertest'
 import { createApp } from '../app.js'
 import { prisma } from '../config/prisma.js'
 import * as pedidosService from '../modules/pedidos/pedidos.service.js'
+import { criarLavaRapidoTeste, criarPedidoTeste } from './helpers/factories.js'
+import { limparDadosDeTeste } from './helpers/limpeza.js'
 
 const app = createApp()
 
@@ -11,40 +13,15 @@ describe('/pedidos', () => {
   let pedidoId: string
 
   beforeAll(async () => {
-    const lavaRapido = await prisma.lavaRapido.create({
-      data: {
-        name: 'Lava-rápido do pedido de teste',
-        cnpj: '22222222000122',
-        senha: 'hash-fake-nao-usado-nestes-testes',
-        rating: 4.5,
-        reviewsCount: 10,
-        distance: '1 km',
-        time: '5 min',
-        price: 50,
-        isOpen: true,
-        image: 'https://placehold.co/300x300?text=Teste',
-        latitude: 0,
-        longitude: 0,
-      },
-    })
+    const lavaRapido = await criarLavaRapidoTeste()
     lavaRapidoId = lavaRapido.id
 
-    const pedido = await prisma.pedido.create({
-      data: {
-        lavaRapidoId,
-        veiculo: { modelo: 'Carro de Teste', placa: 'TST0001' },
-        servico: 'Lavagem de teste',
-        horario: new Date('2026-01-01T10:00:00.000Z'),
-        status: 'pendente',
-        fotos: [],
-      },
-    })
+    const pedido = await criarPedidoTeste(lavaRapidoId, { status: 'pendente' })
     pedidoId = pedido.id
   })
 
   afterAll(async () => {
-    await prisma.pedido.deleteMany({ where: { id: pedidoId } })
-    await prisma.lavaRapido.deleteMany({ where: { id: lavaRapidoId } })
+    await limparDadosDeTeste()
     await prisma.$disconnect()
   })
 

@@ -13,5 +13,7 @@
 ## Checklist
 
 - [ ] Testado localmente
+- [ ] Testes automatizados passando no CI
+- [ ] Critérios "Testes automatizados" da história cobertos (um `it` por caso citado, com o mesmo texto)
 - [ ] Sem quebrar funcionalidades existentes
 - [ ] Imagens/screenshots adicionadas (quando aplicável)

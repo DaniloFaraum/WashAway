@@ -44,6 +44,10 @@
 - `python3 scripts/test.py --project app_mobile` (a partir de `WashAway/`) ou `cd app_mobile && npm run test` — roda a suíte Vitest. Sobe e derruba sozinho um `json-server` de teste (porta 3004, separada da de dev) via `globalSetup` — não precisa do passo manual do `mock-server`.
 - Cobertura hoje: `src/test/lavaRapidos.service.test.ts`, `src/test/servicos.service.test.ts`, `src/test/intercorrencias.service.test.ts`, `src/test/useServicos.test.ts` (filtro de `ativo`), `src/test/useIntercorrencias.test.ts` (`diasAte`/`getIntercorrenciaRelevante`), `src/test/carrinho.test.ts` (`calcularCarrinho`, `formatarDuracao`, `formatarPreco`, `price` nullable) e `src/test/filtrarServicos.test.ts` (busca/categoria/preço/duração da tela de serviços). `src/test/servicosSelecionados.test.ts` cobre o carrinho compartilhado entre a lista e o detalhe do serviço. As telas em si continuam sem teste.
 - `npm run lint` (`expo lint`) continua disponível, mas não substitui teste.
+- **Lugar na pirâmide do projeto** (estratégia completa em `backend.specs.md`, seção 6.1): o app testa services, hooks e funções puras (contra `json-server` de teste ou `fetch` mockado); regras de negócio e status HTTP são testados no backend. Sem testes de tela nesta sprint.
+- **Cobertura:** `npm run test:coverage` gera relatório em `coverage/` (v8, só relatório, não bloqueia PR).
+- **Convenção para as histórias:** cada critério "Testes automatizados: A, B, C" vira um `describe` com um `it` por caso citado, com o mesmo texto.
+- **CI:** `.github/workflows/testes.yml` roda lint, `npm run test:coverage` e `npx tsc --noEmit` em todo PR e push na `main`. O lint está com `continue-on-error` porque a `main` ainda tem erros antigos de `expo lint`; tirar quando forem corrigidos.
 - `python3 scripts/build.py --project app_mobile` (`expo export -p web`) valida o build estático de produção — não substitui os testes, mas pega erro de import/tipo que a suíte atual (só 1 teste) não cobre.
 
 ## 4. Organização de pastas
