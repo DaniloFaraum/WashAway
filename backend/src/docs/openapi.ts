@@ -195,11 +195,11 @@ const erroCadastroClienteSchema = {
     error: { type: 'string' },
     campos: {
       type: 'object',
-      description: 'Mensagem por campo inválido.',
+      description: 'Mensagem por campo inválido. Ausente quando o corpo nem é um JSON válido.',
       properties: { nome: { type: 'string' }, email: { type: 'string' }, senha: { type: 'string' } },
     },
   },
-  required: ['error', 'campos'],
+  required: ['error'],
 }
 
 const erroAutenticacao = {
@@ -282,7 +282,7 @@ export const openApiDocument = {
         },
         responses: {
           200: { description: 'Credenciais válidas: token de acesso + cliente.', content: { 'application/json': { schema: { $ref: '#/components/schemas/LoginCliente' } } } },
-          401: { description: '"E-mail ou senha incorretos" — mesma resposta para e-mail inexistente e senha errada.', content: { 'application/json': { schema: { $ref: '#/components/schemas/Erro' } } } },
+          401: { description: '"E-mail ou senha incorretos" — mesma resposta para e-mail inexistente, senha errada ou body incompleto.', content: { 'application/json': { schema: { $ref: '#/components/schemas/Erro' } } } },
         },
       },
     },
