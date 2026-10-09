@@ -111,7 +111,30 @@ model Intercorrencia {
 
 `cnpj`/`senha` foram adicionados na task `selecao-empresa-admin-front` (`docs/plan/selecao-empresa-admin-front/`) pra dar ao admin-front um login real por empresa: `cnpj` é único (formato validado só como 14 dígitos numéricos, sem dígito verificador); `senha` é sempre o hash bcrypt de `"admin"` — fixa e proposital (fora de escopo: troca de senha, JWT, expiração de sessão). Nenhuma rota expõe `senha` em resposta (`create`/`login` removem o campo antes de responder).
 
-**`isOpen` é calculado, não é o valor cru da coluna** (task `isopen-intercorrencia-backend`, `docs/plan/isopen-intercorrencia-backend/`): a coluna `LavaRapido.isOpen` continua existindo (fixada `true` no cadastro/seed, nunca escrita depois), mas `GET /lava-rapidos` e `GET /lava-rapidos/:id` retornam `isOpen: false` sempre que houver uma `Intercorrencia` "ativa agora" pra aquele lava-rápido — de dia inteiro (`diaInteiro: true`) na data de hoje, ou parcial (`diaInteiro: false`) com o horário atual do servidor dentro de `horaInicio`–`horaFim`. Intercorrências marcadas `reaberta: true` não contam mais (ver `PATCH /intercorrencias/:id`, seção 5) — é como o dono reverte manualmente um fechamento automático (ex.: intercorrência cadastrada por engano, ou que terminou antes do previsto). `GET /lava-rapidos/:id` (mas não a listagem, pra não pesar) também retorna `intercorrenciaAtiva: {...} | null` com a intercorrência que está causando o fechamento agora, se houver. Cálculo feito na leitura (sem cron/job), sem tratamento de fuso horário (assume o fuso do servidor, mesma premissa já usada pras strings `data`/`horaInicio`/`horaFim`).
+**`isOpen` é calculado, não é o valor cru da coluna** (task `isopen-intercorrencia-backend`, `docs/plan/isopen-intercorrencia-backend/`): a coluna `LavaRapido.isOpen` continua existindo (fixada `true` no cadastro/seed, nunca escrita depois), mas `GET /lava-rapidos` e `GET /lava-rapidos/:id` retornam `isOpen: false` sempre que houver uma `Intercorrencia` "ativa agora" pra aquele lava-rápido — de dia inteiro (`diaInteiro: true`) na data de hoje, ou parcial (`diaInteiro: false`) com o horário atual do servidor dentro de `horaInicio`–`horaFim`. Intercorrências marcadas `reaberta: true` não contam mais (ver `PATCH /intercorrencias/:id`, seção 5) — é como o dono reverte manualmente um fechamento automático (ex.: intercorrência cadastrada por engano, ou que terminou antes do previsto). `GET /lava-rapidos/:id` (mas não a listagem, pra não pesar) também retorna `intercorrenciaAtiva: {...} | null` com a intercorrência que está causando o fechamento agora, se houver. Cálculo feito na leitura (sem cron/job). **Atualizado pelo I19** (abaixo): o `isOpen` passou a considerar também o horário de funcionamento, e data/hora são calculadas no fuso dos lava-rápidos.
+
+**Horário de funcionamento + "está aberto?"** (I19 parte 1, `docs/plan/i19-horario-funcionamento/`, migration `20261009101307_horario_funcionamento`):
+
+```prisma
+model HorarioFuncionamento {
+  id, lavaRapidoId -> LavaRapido (onDelete: Cascade),
+  diaSemana Int,            # 0 = domingo … 6 = sábado
+  fechado Boolean @default(false),
+  abertura String?, fechamento String?   # "HH:mm" hora local; null quando fechado
+  @@unique([lavaRapidoId, diaSemana])
+}
+```
+
+- Um intervalo por dia (sem pausa de almoço). **Dia sem registro = sem restrição de horário** (só as intercorrências fecham) — vale para empresa nova do onboarding até o dono configurar.
+- **Fuso** (`src/utils/fusoHorario.ts`): `FUSO_LAVA_RAPIDOS = process.env.TZ_LAVA_RAPIDOS || 'America/Sao_Paulo'`, único para todos; `partesLocais(instante)` → `{ data: 'YYYY-MM-DD', diaSemana, hora: 'HH:mm' }` via `Intl.DateTimeFormat`. Corrigiu o bug do `intercorrencias.service.ts`, que usava a data em UTC (`toISOString`) e a hora no fuso do servidor (`toTimeString`) — com o servidor em UTC, uma intercorrência de "hoje" às 21h de Brasília contava como "amanhã".
+- **Função compartilhada** (`src/modules/horarios/disponibilidade.service.ts`), reaproveitada por I20 (validação do pedido) e I9 (busca por horário):
+  - `estaAberto(lavaRapidoId, inicio, fim?)` → `{ aberto: true } | { aberto: false, motivo }`, com `motivo` = `{ tipo: 'fora_do_horario', horario: { abertura, fechamento } | null }` (`null` = dia fechado) ou `{ tipo: 'intercorrencia', intercorrencia }`. Sem `fim`, avalia o instante; com `fim`, o intervalo `[inicio, fim)`.
+  - `listarAbertos(ids, inicio, fim?)` → `Map<id, Disponibilidade>` (uma query de horários e uma de intercorrências para todos).
+  - `getHorarioDoDia(lavaRapidoId, data)` → `{ fechado, abertura, fechamento, definido }` do dia local.
+  - Regras na função pura `avaliarDisponibilidade(horarioDoDia, intercorrenciasDoDia, inicioLocal, fimLocal?)`: aberto em `[abertura, fechamento)`; intervalo tem de caber inteiro no horário; intervalo que atravessa a meia-noite local = fechado; intercorrência de dia inteiro fecha; parcial fecha se `[horaInicio, horaFim)` intercepta; `reaberta: true` é ignorada. O horário é conferido antes das intercorrências.
+- **`isOpen`** de `GET /lavaRapidos` e `GET /lavaRapidos/:id` = coluna `isOpen` **e** `estaAberto(agora)`. O detalhe também traz `foraDoHorario: boolean` (fechado agora por estar fora do horário), `intercorrenciaAtiva` (continua, para o botão "Reabrir" do painel) e `horarios` (os 7 dias).
+- **Dados de exemplo:** `prisma/horariosExemplo.ts` (seg–sex 08:00–18:00, sáb 08:00–12:00, dom fechado, e variações); `seed.ts` e `demo.ts` usam (o `demo.ts` só cria horário para lava-rápido que ainda não tem nenhum, inclusive empresas demo já existentes; "Lava-Rápido Augusta" abre aos domingos); `npx tsx prisma/horarios-exemplo.ts` dá o horário padrão a **todo** lava-rápido sem horário (só insere, idempotente — já rodado no banco de dev).
+- A **escrita** do horário (`PUT /lavaRapidos/:id/horarios`, protegida por `autenticar('lavaRapido')`) e a seção de edição no painel são a **parte 2** do I19 (depois do I17).
 
 **Onboarding com contrato** (task `onboarding-contrato-empresa`, `docs/plan/onboarding-contrato-empresa/`, migration `20261003010000_onboarding_contrato`): dois models novos, separados de `LavaRapido` de propósito ("BackEnd Onboard" × "BackEnd Aplicação", como módulos do mesmo Express/banco):
 
@@ -140,7 +163,8 @@ Uma empresa só vira `LavaRapido` (e só aparece em `GET /lavaRapidos`/app_mobil
 | Rota | Método | Descrição |
 |---|---|---|
 | `/lava-rapidos` | `GET` | Lista todos. `isOpen` é calculado (ver nota acima); não inclui `intercorrenciaAtiva` (só o detalhe). |
-| `/lava-rapidos/:id` | `GET` | Um lava-rápido; `404` se não existir. `isOpen` é calculado (ver nota acima); inclui `intercorrenciaAtiva` (`{...} \| null`). |
+| `/lava-rapidos/:id` | `GET` | Um lava-rápido; `404` se não existir. `isOpen` é calculado (ver nota acima); inclui `intercorrenciaAtiva` (`{...} \| null`), `foraDoHorario` e `horarios` (7 dias). |
+| `/lavaRapidos/:id/horarios` | `GET` | Público. Horário semanal: sempre os 7 dias na ordem 0 (domingo) a 6; dia não cadastrado volta `{ diaSemana, fechado: false, abertura: null, fechamento: null, definido: false }`. `404` se o lava-rápido não existir. |
 | `/lava-rapidos` | `POST` | Cadastro: body `{ name, address?, cnpj }`; `400` se `cnpj` não tiver 14 dígitos numéricos ou `name` faltar; `409` se `cnpj` já existir; senha fixada como hash de `"admin"` (bcryptjs), demais campos com defaults (`rating`/`reviewsCount`/`price`/`latitude`/`longitude`: `0`, `distance`/`time`: `''`, `isOpen`: `true`, `image`: placeholder). Resposta `201` sem o campo `senha`. |
 | `/lava-rapidos/login` | `POST` | Login: body `{ cnpj, senha }`; `401` se `cnpj` não existir ou `senha` não bater (bcrypt compare); `200` com o `LavaRapido` (sem `senha`) se validar. |
 | `/lava-rapidos/:id` | `DELETE` | Exclui o lava-rápido **em cascata** (`onDelete: Cascade` em `Pedido`/`Servico`/`Intercorrencia`, migration `20260926040000_lavarapido_delete_cascade`) — apaga junto seus pedidos, serviços e intercorrências. `204` se excluído, `404` se não existir. |
@@ -226,8 +250,10 @@ backend/
 │   │   ├── itens-servico/{itensServico.routes,controller,service}.ts   # catálogo global, só leitura
 │   │   ├── intercorrencias/{intercorrencias.routes,controller,service,validation}.ts
 │   │   ├── email/email.service.ts   # enfileirarEmail — outbox de e-mail (seção 5.1)
+│   │   ├── horarios/{horarios.routes,controller,service}.ts + disponibilidade.service.ts  # I19: horário semanal + estaAberto/listarAbertos
 │   │   └── veiculos/{veiculos.routes,controller,service}.ts   # sem model Prisma próprio — deriva de Pedido
 │   ├── utils/
+│   │   ├── fusoHorario.ts           # FUSO_LAVA_RAPIDOS + partesLocais (I19)
 │   │   └── queryParam.ts            # getStringQueryParam — normaliza ?lavaRapidoId= (string ou array), usado por todos os módulos acima
 │   └── test/
 │       ├── globalSetup.ts           # docker compose up (fora do CI) + cria/migra washaway_test_1..N (um por worker)

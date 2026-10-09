@@ -1,7 +1,9 @@
 import bcrypt from 'bcryptjs'
 import type { Prisma } from '@prisma/client'
 import { prisma } from '../../config/prisma.js'
-import { getIntercorrenciaAtiva, listLavaRapidoIdsComIntercorrenciaAtiva } from '../intercorrencias/intercorrencias.service.js'
+import { estaAberto, listarAbertos } from '../horarios/disponibilidade.service.js'
+import { listarHorarios } from '../horarios/horarios.service.js'
+import { getIntercorrenciaAtiva } from '../intercorrencias/intercorrencias.service.js'
 
 export const SENHA_PADRAO = 'admin'
 
@@ -22,17 +24,19 @@ async function getPrecosAPartirDe(lavaRapidoIds?: string[]) {
   return new Map(grupos.map((grupo) => [grupo.lavaRapidoId, grupo._min.preco]))
 }
 
+// `isOpen` = coluna `isOpen` E `estaAberto(agora)` — horário de funcionamento
+// (I19) e intercorrências, pela função compartilhada de disponibilidade.
 export async function listLavaRapidos() {
-  const [lavaRapidos, intercorrenciasAtivas, precos] = await Promise.all([
-    prisma.lavaRapido.findMany(),
-    listLavaRapidoIdsComIntercorrenciaAtiva(new Date()),
-    getPrecosAPartirDe(),
-  ])
+  const [lavaRapidos, precos] = await Promise.all([prisma.lavaRapido.findMany(), getPrecosAPartirDe()])
+  const disponibilidades = await listarAbertos(
+    lavaRapidos.map((lavaRapido) => lavaRapido.id),
+    new Date(),
+  )
 
   return lavaRapidos.map((lavaRapido) => ({
     ...lavaRapido,
     price: precos.get(lavaRapido.id) ?? null,
-    isOpen: lavaRapido.isOpen && !intercorrenciasAtivas.has(lavaRapido.id),
+    isOpen: lavaRapido.isOpen && (disponibilidades.get(lavaRapido.id)?.aberto ?? true),
   }))
 }
 
@@ -44,16 +48,23 @@ export async function getLavaRapidoById(id: string) {
   const lavaRapido = await prisma.lavaRapido.findUnique({ where: { id } })
   if (!lavaRapido) return null
 
-  const [intercorrenciaAtiva, precos] = await Promise.all([
-    getIntercorrenciaAtiva(id, new Date()),
+  const agora = new Date()
+  const [disponibilidade, intercorrenciaAtiva, horarios, precos] = await Promise.all([
+    estaAberto(id, agora),
+    getIntercorrenciaAtiva(id, agora),
+    listarHorarios(id),
     getPrecosAPartirDe([id]),
   ])
 
   return {
     ...lavaRapido,
     price: precos.get(id) ?? null,
-    isOpen: lavaRapido.isOpen && !intercorrenciaAtiva,
+    isOpen: lavaRapido.isOpen && disponibilidade.aberto,
+    // O painel usa `intercorrenciaAtiva` para o botão "Reabrir" e `foraDoHorario`
+    // para explicar por que está fechado.
     intercorrenciaAtiva,
+    foraDoHorario: !disponibilidade.aberto && disponibilidade.motivo.tipo === 'fora_do_horario',
+    horarios,
   }
 }
 

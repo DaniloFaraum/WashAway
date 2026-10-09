@@ -2,6 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import supertest from 'supertest'
 import { createApp } from '../app.js'
 import { prisma } from '../config/prisma.js'
+import { partesLocais } from '../utils/fusoHorario.js'
 
 const app = createApp()
 
@@ -180,8 +181,10 @@ describe('DELETE /lavaRapidos/:id', () => {
 describe('isOpen calculado a partir de intercorrências', () => {
   let lavaRapidoId: string
 
+  // Data/hora no fuso dos lava-rápidos (America/Sao_Paulo), igual ao backend —
+  // não UTC (toISOString) nem o fuso da máquina (toTimeString).
   function horaFormatada(data: Date): string {
-    return data.toTimeString().slice(0, 5)
+    return partesLocais(data).hora
   }
 
   beforeAll(async () => {
@@ -210,7 +213,7 @@ describe('isOpen calculado a partir de intercorrências', () => {
   })
 
   it('fica isOpen: false com intercorrência de dia inteiro hoje', async () => {
-    const hoje = new Date().toISOString().slice(0, 10)
+    const hoje = partesLocais(new Date()).data
     const intercorrencia = await prisma.intercorrencia.create({
       data: { lavaRapidoId, data: hoje, motivo: 'Folga', diaInteiro: true },
     })
@@ -228,7 +231,7 @@ describe('isOpen calculado a partir de intercorrências', () => {
 
   it('fica isOpen: false com intercorrência parcial cujo intervalo inclui o horário atual', async () => {
     const agora = new Date()
-    const hoje = agora.toISOString().slice(0, 10)
+    const hoje = partesLocais(agora).data
     const inicio = horaFormatada(new Date(agora.getTime() - 60_000))
     const fim = horaFormatada(new Date(agora.getTime() + 60_000))
 
@@ -245,7 +248,7 @@ describe('isOpen calculado a partir de intercorrências', () => {
 
   it('não muda isOpen com intercorrência parcial fora do horário atual', async () => {
     const agora = new Date()
-    const hoje = agora.toISOString().slice(0, 10)
+    const hoje = partesLocais(agora).data
     const inicio = horaFormatada(new Date(agora.getTime() + 2 * 60 * 60_000))
     const fim = horaFormatada(new Date(agora.getTime() + 3 * 60 * 60_000))
 
@@ -272,7 +275,7 @@ describe('isOpen calculado a partir de intercorrências', () => {
   })
 
   it('intercorrência marcada reaberta: true deixa de fechar o isOpen', async () => {
-    const hoje = new Date().toISOString().slice(0, 10)
+    const hoje = partesLocais(new Date()).data
     const intercorrencia = await prisma.intercorrencia.create({
       data: { lavaRapidoId, data: hoje, motivo: 'Folga cancelada', diaInteiro: true },
     })

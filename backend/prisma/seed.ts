@@ -2,6 +2,7 @@ import 'dotenv/config'
 import { PrismaClient } from '@prisma/client'
 import bcrypt from 'bcryptjs'
 import { SENHA_PADRAO } from '../src/modules/lava-rapidos/lavaRapidos.service.js'
+import { criarHorariosSeNaoTiver, HORARIO_PADRAO, HORARIO_TODOS_OS_DIAS } from './horariosExemplo.js'
 
 const prisma = new PrismaClient()
 
@@ -228,6 +229,11 @@ async function main() {
       ],
     })
     intercorrenciasCount += 2
+
+    // Horário de funcionamento (I19): padrão, e o último aberto todos os dias.
+    // (Os horários antigos saem junto com o lavaRapido.deleteMany — cascade.)
+    const ultimo = lavaRapido === lavaRapidos[lavaRapidos.length - 1]
+    await criarHorariosSeNaoTiver(prisma, lavaRapido.id, ultimo ? HORARIO_TODOS_OS_DIAS : HORARIO_PADRAO)
   }
 
   console.log(

@@ -4,6 +4,7 @@ import express from 'express'
 import swaggerUi from 'swagger-ui-express'
 import { openApiDocument } from './docs/openapi.js'
 import { contratosRouter } from './modules/contratos/contratos.routes.js'
+import { horariosRouter } from './modules/horarios/horarios.routes.js'
 import { intercorrenciasRouter } from './modules/intercorrencias/intercorrencias.routes.js'
 import { itensServicoRouter } from './modules/itens-servico/itensServico.routes.js'
 import { lavaRapidosRouter } from './modules/lava-rapidos/lavaRapidos.routes.js'
@@ -24,6 +25,7 @@ export function createApp() {
   // Path camelCase (não kebab-case) pra bater com `LAVA_RAPIDOS_ROUTES.list` já
   // existente em app_mobile/src/features/lava-rapidos/service/lavaRapidos.routes.ts
   // — sem isso, o app_mobile (que não muda além da BASE_URL) recebe 404.
+  app.use('/lavaRapidos/:id/horarios', horariosRouter)
   app.use('/lavaRapidos', lavaRapidosRouter)
   app.use('/pedidos', pedidosRouter)
   app.use('/servicos', servicosRouter)

@@ -2,6 +2,7 @@ import 'dotenv/config'
 import { PrismaClient, type PedidoStatus } from '@prisma/client'
 import bcrypt from 'bcryptjs'
 import { SENHA_PADRAO } from '../src/modules/lava-rapidos/lavaRapidos.service.js'
+import { criarHorariosSeNaoTiver, HORARIO_ESTENDIDO, HORARIO_PADRAO, HORARIO_TODOS_OS_DIAS, type DiaExemplo } from './horariosExemplo.js'
 
 // Dados de demonstração para apresentação. Diferente do seed.ts, este script
 // NUNCA apaga nada: só insere, e pula toda empresa cujo CNPJ já existe — pode
@@ -28,6 +29,8 @@ type EmpresaDemo = {
   combos: Combo[]
   pedidos: PedidoDemo[]
   intercorrencias: IntercorrenciaDemo[]
+  /** Horário de funcionamento (I19); padrão: HORARIO_PADRAO. */
+  horarios?: DiaExemplo[]
 }
 
 // Feriados/folgas comuns a todas as empresas.
@@ -80,6 +83,7 @@ const empresas: EmpresaDemo[] = [
       { modelo: 'Nissan Kicks', placa: 'PQR6S09', servico: 'Completa + cera', horario: '2026-10-02T16:00:00-03:00', status: 'concluido', fotos: 2 },
     ],
     intercorrencias: [...FERIADOS, { data: '2026-10-08', motivo: 'Manutenção da lavadora de alta pressão', horaInicio: '14:00', horaFim: '17:00' }],
+    horarios: HORARIO_ESTENDIDO,
   },
   {
     name: 'Espaço Auto Spa Moema',
@@ -190,6 +194,8 @@ const empresas: EmpresaDemo[] = [
       { modelo: 'Renault Sandero', placa: 'SND1R40', servico: 'Lavagem + aspiração', horario: '2026-10-03T16:00:00-03:00', status: 'pendente', fotos: 1 },
     ],
     intercorrencias: [...FERIADOS],
+    // Aberto também aos domingos.
+    horarios: HORARIO_TODOS_OS_DIAS,
   },
 ]
 
@@ -212,8 +218,11 @@ async function main() {
 
   let criadas = 0
   for (const empresa of empresas) {
-    if (await prisma.lavaRapido.findUnique({ where: { cnpj: empresa.cnpj } })) {
-      console.log(`- ${empresa.name}: já existe, pulando`)
+    const existente = await prisma.lavaRapido.findUnique({ where: { cnpj: empresa.cnpj } })
+    if (existente) {
+      // Empresa já existe: só ganha horário de funcionamento se ainda não tiver nenhum.
+      const ganhouHorario = await criarHorariosSeNaoTiver(prisma, existente.id, empresa.horarios ?? HORARIO_PADRAO)
+      console.log(`- ${empresa.name}: já existe, pulando${ganhouHorario ? ' (horário de funcionamento adicionado)' : ''}`)
       continue
     }
 
@@ -273,6 +282,8 @@ async function main() {
         horaFim: intercorrencia.horaFim ?? null,
       })),
     })
+
+    await criarHorariosSeNaoTiver(prisma, lavaRapido.id, empresa.horarios ?? HORARIO_PADRAO)
 
     criadas += 1
     console.log(`+ ${empresa.name} (CNPJ ${empresa.cnpj}): ${empresa.combos.length} serviços, ${empresa.pedidos.length} pedidos`)

@@ -133,6 +133,20 @@ describe('/intercorrencias', () => {
     })
   })
 
+  describe('getIntercorrenciaAtiva usa data e hora no fuso dos lava-rápidos (America/Sao_Paulo)', () => {
+    it('às 02:30Z (23:30 em São Paulo) a intercorrência parcial de "hoje" local ainda vale', async () => {
+      const parcial = await prisma.intercorrencia.create({
+        data: { lavaRapidoId, data: '2026-12-01', motivo: 'Noite', diaInteiro: false, horaInicio: '23:00', horaFim: '23:59' },
+      })
+
+      // 2026-12-02T02:30Z = 2026-12-01 23:30 em São Paulo. Com UTC, a data seria "2026-12-02".
+      const ativa = await intercorrenciasService.getIntercorrenciaAtiva(lavaRapidoId, new Date('2026-12-02T02:30:00Z'))
+      expect(ativa?.id).toBe(parcial.id)
+
+      await prisma.intercorrencia.delete({ where: { id: parcial.id } })
+    })
+  })
+
   describe('erro inesperado', () => {
     afterEach(() => {
       vi.restoreAllMocks()

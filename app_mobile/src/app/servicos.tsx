@@ -9,11 +9,14 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 
 // Ícones do Lucide
 import {
-  Search, SlidersHorizontal, Check, X, AlertTriangle, MapPin
+  Search, SlidersHorizontal, Check, X, AlertTriangle, MapPin, Clock, ChevronDown, ChevronUp
 } from 'lucide-react-native';
 
 import { colors } from '@/constants/colors';
 import { useLavaRapido } from '@/features/lava-rapidos/useLavaRapido';
+import {
+  formatarHorarioDoDia, horarioDeHoje, resumirSemana, temHorarioDefinido,
+} from '@/features/lava-rapidos/formatarHorario';
 import { useServicos } from '@/features/servicos/useServicos';
 import { useServicosSelecionados } from '@/features/servicos/servicosSelecionados';
 import { calcularCarrinho } from '@/features/servicos/calcularCarrinho';
@@ -38,6 +41,8 @@ export default function ServicosScreen() {
   const intercorrenciaRelevante = getIntercorrenciaRelevante(intercorrencias);
 
   const [showAllCategories, setShowAllCategories] = useState(false);
+  const [semanaVisivel, setSemanaVisivel] = useState(false);
+  const horarios = lavaRapido?.horarios ?? [];
   const [filterVisible, setFilterVisible] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [categoriaFiltro, setCategoriaFiltro] = useState<string | null>(null);
@@ -88,6 +93,31 @@ export default function ServicosScreen() {
               <MapPin color={colors.neutralGray || '#6B7280'} size={14} />
               <Text style={styles.enderecoText}>{lavaRapido.address}</Text>
             </View>
+          )}
+          {/* Horário de funcionamento (I19): hoje, com toque para ver a semana */}
+          {temHorarioDefinido(horarios) && (
+            <TouchableOpacity
+              onPress={() => setSemanaVisivel((visivel) => !visivel)}
+              accessibilityRole="button"
+              accessibilityLabel={semanaVisivel ? 'Ocultar horários da semana' : 'Ver horários da semana'}
+            >
+              <View style={styles.enderecoRow}>
+                <Clock color={colors.neutralGray || '#6B7280'} size={14} />
+                <Text style={styles.enderecoText}>
+                  Hoje: {formatarHorarioDoDia(horarioDeHoje(horarios))}
+                </Text>
+                {semanaVisivel
+                  ? <ChevronUp color={colors.neutralGray || '#6B7280'} size={14} />
+                  : <ChevronDown color={colors.neutralGray || '#6B7280'} size={14} />}
+              </View>
+              {semanaVisivel && (
+                <View style={styles.semanaLista}>
+                  {resumirSemana(horarios).map((linha) => (
+                    <Text key={linha} style={styles.enderecoText}>{linha}</Text>
+                  ))}
+                </View>
+              )}
+            </TouchableOpacity>
           )}
         </View>
 
@@ -326,6 +356,7 @@ const styles = StyleSheet.create({
   lavaRapidoName: { fontSize: 18, fontWeight: '700', color: colors.primary },
   enderecoRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4 },
   enderecoText: { fontSize: 12, color: colors.neutralGray || '#6B7280', flexShrink: 1 },
+  semanaLista: { marginTop: 4, marginLeft: 18, gap: 2 },
   avisoBanner: {
     flexDirection: 'row',
     alignItems: 'center',

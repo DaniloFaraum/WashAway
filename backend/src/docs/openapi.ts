@@ -73,6 +73,17 @@ const solicitacaoOnboardingSchema = {
   },
 }
 
+const horarioDiaSchema = {
+  type: 'object',
+  properties: {
+    diaSemana: { type: 'integer', minimum: 0, maximum: 6, description: '0 = domingo … 6 = sábado.' },
+    fechado: { type: 'boolean' },
+    abertura: { type: 'string', nullable: true, example: '08:00', description: '"HH:mm", hora local (America/Sao_Paulo).' },
+    fechamento: { type: 'string', nullable: true, example: '18:00', description: '"HH:mm", hora local (America/Sao_Paulo).' },
+    definido: { type: 'boolean', description: 'false = dia sem horário cadastrado (sem restrição: só intercorrências fecham).' },
+  },
+}
+
 const lavaRapidoDetalheSchema = {
   allOf: [
     lavaRapidoSchema,
@@ -83,6 +94,8 @@ const lavaRapidoDetalheSchema = {
           ...intercorrenciaSchema,
           nullable: true,
         },
+        foraDoHorario: { type: 'boolean', description: 'true quando está fechado agora por estar fora do horário de funcionamento.' },
+        horarios: { type: 'array', items: horarioDiaSchema, description: 'Os 7 dias da semana, na ordem 0 a 6.' },
       },
     },
   ],
@@ -169,6 +182,7 @@ export const openApiDocument = {
       Erro: erroSchema,
       LavaRapido: lavaRapidoSchema,
       LavaRapidoComDisponibilidade: lavaRapidoDetalheSchema,
+      HorarioDia: horarioDiaSchema,
       Pedido: pedidoSchema,
       Servico: servicoSchema,
       ItemServico: itemServicoSchema,
@@ -185,7 +199,7 @@ export const openApiDocument = {
         summary: 'Lista todos os lava-rápidos',
         responses: {
           200: {
-            description: 'Lista de lava-rápidos (isOpen calculado, sem intercorrenciaAtiva).',
+            description: 'Lista de lava-rápidos (isOpen calculado pelo horário de funcionamento e pelas intercorrências; sem intercorrenciaAtiva).',
             content: { 'application/json': { schema: { type: 'array', items: { $ref: '#/components/schemas/LavaRapido' } } } },
           },
         },
@@ -245,7 +259,7 @@ export const openApiDocument = {
         parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
         responses: {
           200: {
-            description: 'Encontrado (inclui intercorrenciaAtiva).',
+            description: 'Encontrado (isOpen calculado; inclui intercorrenciaAtiva, foraDoHorario e horarios).',
             content: { 'application/json': { schema: { $ref: '#/components/schemas/LavaRapidoComDisponibilidade' } } },
           },
           404: { description: 'Não encontrado.', content: { 'application/json': { schema: { $ref: '#/components/schemas/Erro' } } } },
@@ -258,6 +272,20 @@ export const openApiDocument = {
         responses: {
           204: { description: 'Excluído.' },
           404: { description: 'Não encontrado.', content: { 'application/json': { schema: { $ref: '#/components/schemas/Erro' } } } },
+        },
+      },
+    },
+    '/lavaRapidos/{id}/horarios': {
+      get: {
+        tags: ['lavaRapidos'],
+        summary: 'Horário de funcionamento semanal (público)',
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+        responses: {
+          200: {
+            description: 'Os 7 dias, na ordem 0 (domingo) a 6 (sábado); dia não cadastrado vem com definido: false.',
+            content: { 'application/json': { schema: { type: 'array', items: { $ref: '#/components/schemas/HorarioDia' } } } },
+          },
+          404: { description: 'Lava-rápido não encontrado.', content: { 'application/json': { schema: { $ref: '#/components/schemas/Erro' } } } },
         },
       },
     },
