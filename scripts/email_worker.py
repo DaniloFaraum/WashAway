@@ -60,7 +60,6 @@ BACKEND_ENV = REPO_ROOT / "backend" / ".env"
 CANAL = "email_pendente"
 CORPO_MASCARADO = "[enviado — conteúdo removido]"
 REMETENTE_PADRAO = "WashAway <nao-responda@washaway.local>"
-TAMANHO_LOTE = 20
 
 
 # --------------------------------------------------------------------------
@@ -235,7 +234,7 @@ _SQL_SELECIONAR = """
                      OR "proximaTentativaEm" <= (now() AT TIME ZONE 'UTC'))))
        {filtro}
      ORDER BY "criadoEm"
-     LIMIT %(lote)s
+     LIMIT 1
        FOR UPDATE SKIP LOCKED
 """
 
@@ -260,51 +259,54 @@ def espera_para(tentativas: int, base_segundos: int) -> int:
     return base_segundos * (2 ** max(tentativas - 1, 0))
 
 
-def processar_lote(
+def processar_um(
     conn: "psycopg.Connection",
     transporte: Transporte,
     config: Config,
     somente_destinatarios: list[str] | None = None,
-) -> tuple[Resultado, int]:
-    """Uma transação: trava até TAMANHO_LOTE eventos, envia e atualiza cada um.
+) -> bool | None:
+    """Uma transação por e-mail: trava UM evento elegível, envia e atualiza.
 
+    Transação curta de propósito: a trava fica só no e-mail sendo enviado, e um
+    erro depois do envio nunca desfaz o status de outros e-mails já enviados.
     `somente_destinatarios` existe para os testes não pegarem eventos de outros
-    testes no mesmo banco. Devolve o resultado e quantos eventos foram pegos.
+    testes no mesmo banco. Devolve True (enviado), False (falhou) ou None (nada
+    elegível agora).
     """
-    resultado = Resultado()
     filtro = "AND destinatario = ANY(%(destinatarios)s)" if somente_destinatarios is not None else ""
     with conn.transaction():
         with conn.cursor() as cur:
             cur.execute(
                 _SQL_SELECIONAR.format(filtro=filtro),
-                {"max": config.max_tentativas, "lote": TAMANHO_LOTE, "destinatarios": somente_destinatarios},
+                {"max": config.max_tentativas, "destinatarios": somente_destinatarios},
             )
-            emails = [Email(*linha) for linha in cur.fetchall()]
+            linha = cur.fetchone()
+            if linha is None:
+                return None
+            email = Email(*linha)
 
-            for email in emails:
-                try:
-                    transporte.enviar(email)
-                except Exception as erro:  # noqa: BLE001 - qualquer falha de envio vira `erro`
-                    tentativas = email.tentativas + 1
-                    definitivo = tentativas >= config.max_tentativas
-                    cur.execute(
-                        _SQL_ERRO,
-                        {
-                            "id": email.id,
-                            "tentativas": tentativas,
-                            # A mensagem da exceção vai para o banco/log; nunca o corpo.
-                            "erro": f"{type(erro).__name__}: {erro}"[:1000],
-                            "espera": None if definitivo else espera_para(tentativas, config.espera_base_segundos),
-                        },
-                    )
-                    resultado.falhas += 1
-                    situacao = "erro definitivo" if definitivo else f"erro (tentativa {tentativas}/{config.max_tentativas})"
-                    log(f"{email.id} {email.tipo} para={email.destinatario} {situacao}: {type(erro).__name__}")
-                else:
-                    cur.execute(_SQL_ENVIADO, {"id": email.id, "mascara": CORPO_MASCARADO})
-                    resultado.enviados += 1
-                    log(f"{email.id} {email.tipo} para={email.destinatario} enviado")
-    return resultado, len(emails)
+            try:
+                transporte.enviar(email)
+            except Exception as erro:  # noqa: BLE001 - qualquer falha de envio vira `erro`
+                tentativas = email.tentativas + 1
+                definitivo = tentativas >= config.max_tentativas
+                cur.execute(
+                    _SQL_ERRO,
+                    {
+                        "id": email.id,
+                        "tentativas": tentativas,
+                        # A mensagem da exceção vai para o banco/log; nunca o corpo.
+                        "erro": f"{type(erro).__name__}: {erro}"[:1000],
+                        "espera": None if definitivo else espera_para(tentativas, config.espera_base_segundos),
+                    },
+                )
+                situacao = "erro definitivo" if definitivo else f"erro (tentativa {tentativas}/{config.max_tentativas})"
+                log(f"{email.id} {email.tipo} para={email.destinatario} {situacao}: {type(erro).__name__}")
+                return False
+
+            cur.execute(_SQL_ENVIADO, {"id": email.id, "mascara": CORPO_MASCARADO})
+            log(f"{email.id} {email.tipo} para={email.destinatario} enviado")
+            return True
 
 
 def processar_pendentes(
@@ -313,15 +315,18 @@ def processar_pendentes(
     config: Config,
     somente_destinatarios: list[str] | None = None,
 ) -> Resultado:
-    """Processa lotes até não sobrar nenhum evento elegível agora."""
+    """Processa e-mails um a um até não sobrar nenhum elegível agora.
+
+    Termina: um e-mail que falha ganha `proximaTentativaEm` no futuro (ou vira
+    erro definitivo) e deixa de ser elegível nesta passada.
+    """
     total = Resultado()
-    while True:
-        resultado, pegos = processar_lote(conn, transporte, config, somente_destinatarios)
-        total.enviados += resultado.enviados
-        total.falhas += resultado.falhas
-        # Lote incompleto = acabou; e se tudo falhou, as falhas só voltam após a espera.
-        if pegos < TAMANHO_LOTE or resultado.enviados == 0:
-            return total
+    while (enviado := processar_um(conn, transporte, config, somente_destinatarios)) is not None:
+        if enviado:
+            total.enviados += 1
+        else:
+            total.falhas += 1
+    return total
 
 
 def esperar_notificacao(conn_listen: "psycopg.Connection", timeout: float) -> bool:

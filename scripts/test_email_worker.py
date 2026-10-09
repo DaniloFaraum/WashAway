@@ -202,6 +202,27 @@ class EmailWorkerTest(unittest.TestCase):
         self.assertEqual([e.id for e in lento.enviados], [evento_id])
         self.assertEqual(self.ler(evento_id)["status"], "enviado")
 
+    def test_cada_email_em_sua_propria_transacao(self):
+        """Enquanto o 2º e-mail é enviado, o 1º já está commitado como `enviado`
+        (uma falha depois não desfaz o status dele, e a trava não fica presa)."""
+        primeiro = self.criar_evento()
+        segundo = self.criar_evento()
+        status_vistos_de_fora: list[str] = []
+        teste = self
+
+        class TransporteQueEspia(TransporteFalso):
+            def enviar(self, email: w.Email) -> None:
+                if self.enviados:  # 2º envio: olha o 1º por outra conexão
+                    status_vistos_de_fora.append(teste.ler(self.enviados[0].id)["status"])
+                super().enviar(email)
+
+        with w.psycopg.connect(TEST_DATABASE_URL, autocommit=True) as conn_worker:
+            resultado = self.processar(TransporteQueEspia(), conn=conn_worker)
+
+        self.assertEqual(resultado.enviados, 2)
+        self.assertEqual(status_vistos_de_fora, ["enviado"])
+        self.assertEqual({self.ler(primeiro)["status"], self.ler(segundo)["status"]}, {"enviado"})
+
     def test_notify_acorda_o_worker(self):
         with w.psycopg.connect(TEST_DATABASE_URL, autocommit=True) as conn_listen:
             conn_listen.execute(f"LISTEN {w.CANAL}")
