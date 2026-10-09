@@ -27,7 +27,7 @@
 - **Fontes**: `@expo-google-fonts/poppins` e `@expo-google-fonts/albert-sans`, carregadas via `useFonts` em `src/app/_layout.tsx`; `@expo-google-fonts/viga` (título da Home), carregada em `(tabs)/index.tsx` (veio do PR #4 / commit `559e72f`).
 - **Ícones**: `lucide-react-native` (telas do produto) e `@expo/vector-icons` (Ionicons, usado em `index.tsx` e no template starter).
 - Scripts: `npm start` (`expo start`), `npm run android`/`ios`/`web`, `npm run lint` (`expo lint`), `npm run reset-project` (script padrão do template Expo, não usado no fluxo normal).
-- **Back-end real** (`WashAway/backend/`, ver `backend.specs.md`) como padrão das features `lava-rapidos`, `servicos` e `intercorrencias` (`BACKEND_API_BASE_URL`, porta 4000); `json-server` continua disponível como fallback manual e é quem roda nos testes (`globalSetup`). `detail.tsx` ainda não migrou e continua com mock local (achado #10 na seção 6, agora só parcial). ⚠️ `json-server@1.0.0-beta.15` (versão instalada) tem um bug confirmado: filtros por query string em campos terminados em `Id` (ex.: `?lavaRapidoId=`) sempre retornam vazio, mesmo com a sintaxe nova (`:eq=`, `_where`) — não afeta o backend real, só o fallback json-server/testes de qualquer endpoint que filtre por `lavaRapidoId` (os testes de `servicos`/`intercorrencias` contornam isso mockando `fetch` em vez de usar o json-server de teste).
+- **Back-end real** (`WashAway/backend/`, ver `backend.specs.md`) como padrão das features `lava-rapidos`, `servicos` e `intercorrencias` (`BACKEND_API_BASE_URL`, porta 4000); `json-server` continua disponível como fallback manual e é quem roda nos testes (`globalSetup`). O detalhe do serviço (`servicos/[servicoId].tsx`) também usa o backend real (achado #10 resolvido no I21 parte 1). ⚠️ `json-server@1.0.0-beta.15` (versão instalada) tem um bug confirmado: filtros por query string em campos terminados em `Id` (ex.: `?lavaRapidoId=`) sempre retornam vazio, mesmo com a sintaxe nova (`:eq=`, `_where`) — não afeta o backend real, só o fallback json-server/testes de qualquer endpoint que filtre por `lavaRapidoId` (os testes de `servicos`/`intercorrencias` contornam isso mockando `fetch` em vez de usar o json-server de teste).
 - **Vitest** como test runner — só para a camada `service/model` (JS/TS puro, sem `react-native`), não para componentes/telas. Ver seção 4.1 e 3.2.
 
 ### 3.1 Como rodar
@@ -42,7 +42,7 @@
 ### 3.2 Como testar
 
 - `python3 scripts/test.py --project app_mobile` (a partir de `WashAway/`) ou `cd app_mobile && npm run test` — roda a suíte Vitest. Sobe e derruba sozinho um `json-server` de teste (porta 3004, separada da de dev) via `globalSetup` — não precisa do passo manual do `mock-server`.
-- Cobertura hoje: `src/test/lavaRapidos.service.test.ts`, `src/test/servicos.service.test.ts`, `src/test/intercorrencias.service.test.ts`, `src/test/useServicos.test.ts` (filtro de `ativo`), `src/test/useIntercorrencias.test.ts` (`diasAte`/`getIntercorrenciaRelevante`), `src/test/carrinho.test.ts` (`calcularCarrinho`, `formatarDuracao`, `price` nullable) e `src/test/filtrarServicos.test.ts` (busca/categoria/preço/duração da tela de serviços). `detail.tsx` e as telas `lavagem-*`/`higienizacao-interna` continuam sem teste.
+- Cobertura hoje: `src/test/lavaRapidos.service.test.ts`, `src/test/servicos.service.test.ts`, `src/test/intercorrencias.service.test.ts`, `src/test/useServicos.test.ts` (filtro de `ativo`), `src/test/useIntercorrencias.test.ts` (`diasAte`/`getIntercorrenciaRelevante`), `src/test/carrinho.test.ts` (`calcularCarrinho`, `formatarDuracao`, `price` nullable) e `src/test/filtrarServicos.test.ts` (busca/categoria/preço/duração da tela de serviços). `src/test/servicosSelecionados.test.ts` cobre o carrinho compartilhado entre a lista e o detalhe do serviço. As telas em si continuam sem teste.
 - `npm run lint` (`expo lint`) continua disponível, mas não substitui teste.
 - `python3 scripts/build.py --project app_mobile` (`expo export -p web`) valida o build estático de produção — não substitui os testes, mas pega erro de import/tipo que a suíte atual (só 1 teste) não cobre.
 
@@ -54,15 +54,14 @@ app_mobile/
 │   └── db.json                   # dados da feature lava-rapidos (uso manual/dev)
 ├── src/
 │   ├── app/                      # ROTAS REAIS (expo-router, convenção "src directory")
-│   │   ├── _layout.tsx           # Stack raiz: (tabs) | onboarding | servicos | disponibilidade | detail | lavagem-completa | higienizacao-interna | lavagem-externa
+│   │   ├── _layout.tsx           # Stack raiz: (tabs) | onboarding | servicos | disponibilidade | servicos/[servicoId]
 │   │   ├── (tabs)/
 │   │   │   ├── _layout.tsx       # renderiza <AppTabs /> (NativeTabs)
 │   │   │   ├── index.tsx         # Home: busca/lista/mapa de lava-rápidos (consome lavaRapidos.service.ts)
 │   │   │   └── explore.tsx       # tab "Explore" — boilerplate do template, não é produto (ver seção 6)
 │   │   ├── servicos.tsx          # serviços do lava-rápido escolhido (backend real — migrado); categorias como filtro; banner de intercorrência
 │   │   ├── disponibilidade.tsx   # lista as intercorrências futuras do lava-rápido (novo)
-│   │   ├── detail.tsx            # detalhe de um serviço (ainda com mock local — não migrou)
-│   │   └── lavagem-completa.tsx, higienizacao-interna.tsx, lavagem-externa.tsx   # páginas de detalhe estáticas (mock) vindas do PR #4
+│   │   └── servicos/[servicoId].tsx   # detalhe real do serviço (combo): itens, preço e duração; "Selecionar" marca no carrinho da lista (I21 parte 1)
 │   ├── features/
 │   │   ├── lava-rapidos/
 │   │   │   └── service/
@@ -71,7 +70,8 @@ app_mobile/
 │   │   │       └── lavaRapidos.service.ts   # getLavaRapidos(), usa routes + model
 │   │   ├── servicos/
 │   │   │   ├── service/{servicos.routes,model,service}.ts   # getServicos(lavaRapidoId)
-│   │   │   └── useServicos.ts               # hook + filtrarServicosAtivos() (só ativo: true)
+│   │   │   ├── useServicos.ts               # hook + filtrarServicosAtivos() (só ativo: true)
+│   │   │   └── servicosSelecionados.ts      # carrinho em memória compartilhado entre servicos.tsx e servicos/[servicoId].tsx (um lava-rápido por vez)
 │   │   └── intercorrencias/
 │   │       ├── service/{intercorrencias.routes,model,service}.ts   # getIntercorrencias(lavaRapidoId)
 │   │       ├── useIntercorrencias.ts        # hook + diasAte()/getIntercorrenciaRelevante()
@@ -89,13 +89,11 @@ app_mobile/
 │   ├── components/
 │   │   ├── app-tabs.tsx / .web.tsx   # definição da tab bar (NativeTabs)
 │   │   ├── CarWashCard.tsx       # card de lava-rápido (usado na Home; `image` agora é URL, não `require()` local — ver seção 4.1)
-│   │   ├── Header.js, VehicleBar.js, FooterCart.js   # usados em detail.tsx (FooterCart não é usado em lugar nenhum — ver seção 6)
-│   │   ├── FilterModal.js        # arquivo vazio, não usado — ver seção 6
-│   │   ├── colors.ts             # ⚠️ CÓPIA MORTA/desatualizada de constants/colors.ts — ver seção 6
+│   │   ├── Header.tsx, VehicleBar.tsx   # migrados de .js no I21 parte 1 (fontes/cores corrigidas); hoje sem uso — guardados para o fluxo do I3/I13 (VehicleBar ainda mostra um carro fixo)
 │   │   ├── themed-text.tsx, themed-view.tsx, ui/collapsible.tsx, external-link.tsx, web-badge.tsx  # componentes do template starter (usados só por explore.tsx)
 │   │   └── animated-icon.tsx / .web.tsx / .module.css   # splash screen animada
 │   ├── constants/
-│   │   ├── colors.ts             # paleta usada pelas telas do produto (Home/Servicos/Detail/CarWashCard/Header/VehicleBar/FooterCart)
+│   │   ├── colors.ts             # paleta usada pelas telas do produto (Home/Servicos/detalhe do serviço/CarWashCard/Header/VehicleBar); `border` adicionada no I21
 │   │   └── theme.ts              # `Colors.light/dark` + `Spacing` — usado só pelo template starter (explore.tsx, themed-*, use-theme) — ver seção 6 (dois sistemas de cor não integrados)
 │   ├── hooks/
 │   │   ├── use-color-scheme.ts / .web.ts
@@ -114,7 +112,7 @@ app_mobile/
 `docs/plan/estrutura-app-mobile/` avaliou trazer a organização do `admin-front` (página dona do seu `service/routes/model`, testado contra `json-server`) para cá. Como o `app_mobile` usa **expo-router** (rotas por arquivo, não configuráveis em código), a convenção foi adaptada:
 
 - Os arquivos em `src/app/*.tsx` continuam existindo e são a rota de verdade (exigência do expo-router) — mas viram consumidores finos de uma `feature` em `src/features/<nome>/`, que é quem tem o `service/` (mesmo padrão do admin-front: `routes.ts`+`model.ts`+`service.ts`).
-- **Piloto**: `src/features/lava-rapidos/`, consumido por `(tabs)/index.tsx` (Home) e pelo onboarding. `src/features/servicos/` e `src/features/intercorrencias/` seguem o mesmo padrão, consumidos por `servicos.tsx`/`disponibilidade.tsx`. `detail.tsx` **ainda não migrou** — continua com mock local (achado #10 da seção 6 segue valendo só pra ela).
+- **Piloto**: `src/features/lava-rapidos/`, consumido por `(tabs)/index.tsx` (Home) e pelo onboarding. `src/features/servicos/` e `src/features/intercorrencias/` seguem o mesmo padrão, consumidos por `servicos.tsx`/`disponibilidade.tsx`. O detalhe do serviço (`servicos/[servicoId].tsx`) reaproveita `useServicos` e acha o serviço pelo id (I21 parte 1); o antigo `detail.tsx` com mock local foi removido.
 - **Back-end real por padrão** (`WashAway/backend/`, ver `backend.specs.md`): `lavaRapidos.service.ts`/`servicos.service.ts`/`intercorrencias.service.ts` usam `BACKEND_API_BASE_URL` (`http://localhost:4000`) como fallback quando `EXPO_PUBLIC_API_BASE_URL` não está definida. `json-server` (`npm run mock-server`, porta 3003) continua disponível como fallback manual (defina a env var pra usá-lo) e é quem roda automaticamente nos testes (`globalSetup`, porta 3004) — os testes não são afetados pela troca de padrão, exceto os de `servicos`/`intercorrencias` (mockam `fetch` por causa do bug do json-server citado na seção 3).
 - Variável de ambiente do service: `process.env.EXPO_PUBLIC_API_BASE_URL` (convenção do Expo/Metro para inlinar env vars no bundle — **não** `import.meta.env`, que é específico do Vite/admin-front).
 - Test runner: **Vitest** (não Jest/`jest-expo`) — só é possível porque `service.ts`/`model.ts`/`routes.ts` são TS puro, sem import de `react-native`/`expo-router`. Testar componentes/telas exigiria Jest + `jest-expo`, decisão maior, fora do escopo desse piloto.
@@ -124,7 +122,7 @@ app_mobile/
 - **Serviços e disponibilidade** (`docs/plan/servicos-disponibilidade-app-mobile/`): `servicos.tsx` migrou do mock local pro backend real (`GET /servicos?lavaRapidoId=`, usando o `id` já recebido via navegação, antes ignorado — achado #9 resolvido pra essa tela). `useServicos()` filtra só `ativo: true`. Card do serviço foi simplificado (`nome`/`categoria`/`preco`; sem `desc`/tempo, que não existem no model real; imagem é um placeholder fixo, não por serviço). A seção "Categorias" deixou de ser decorativa: agora é derivada dos valores distintos de `categoria` dos serviços retornados e funciona como filtro (toca de novo pra limpar). Tela nova `/disponibilidade` lista as intercorrências futuras do lava-rápido (`GET /intercorrencias?lavaRapidoId=`); `servicos.tsx` mostra um banner de aviso (com link pra essa tela) quando há intercorrência pra hoje ou pros próximos 3 dias (`getIntercorrenciaRelevante()` em `useIntercorrencias.ts`).
 - **Endereço do lava-rápido em `servicos.tsx`**: `lavaRapidos.model.ts` ganhou o campo `address` (`string | null`); `lavaRapidos.service.ts` ganhou `getLavaRapido(id)` (`GET /lavaRapidos/:id`) e `useLavaRapido(id)` (novo hook, `src/features/lava-rapidos/useLavaRapido.ts`). `servicos.tsx` usa esse hook e mostra o endereço (com ícone de pin) logo abaixo do nome do lava-rápido no cabeçalho, quando existir — resolve o pedido do consumidor de saber onde fica a empresa antes de agendar. Dados de seed (`backend/prisma/seed.ts`) e o banco de dev foram atualizados com um endereço de exemplo (mesma rua/bairro/cidade, número diferente por lava-rápido) — antes todos tinham `address: null`.
 - **Serviços como combos de itens do catálogo** (`docs/plan/servicos-combos-catalogo/`): `Servico` (`servicos.model.ts`) perdeu `categoria` e ganhou `itens: { id, nome, categoria }[]` + `categorias: string[]` (derivadas dos itens, vindas do backend). O card em `servicos.tsx` mostra "Inclui: …" com os nomes dos itens no lugar da categoria; o filtro "Categorias" junta as `categorias` de todos os serviços e mostra os serviços que **contêm** a categoria escolhida.
-- **Filtros da tela de serviços** (merge do PR #4 `feat/melhorias-ux-servicos` com `feature/fluxo-lava-rapido-onboard`, 2026-10-03): o PR #4 trouxe busca funcional, modal "Filtrar Serviços" (faixa de preço + tempo estimado máximo), `SafeAreaView`/insets e mensagem de lista vazia, mas sobre uma lista **mockada** de 3 serviços (com `routeName` para as páginas `lavagem-*`). No merge ficou a tela com **dados reais** e essas melhorias portadas para eles: `features/servicos/filtrarServicos.ts` filtra por busca (nome do serviço e dos itens, sem acento), categoria, preço e `duracaoMinutos`. Os tetos dos sliders acompanham os dados (`tetoDoFiltro`: mínimo R$ 300 / 2h, sobe se houver serviço mais caro/longo), e o máximo começa "sem limite". Os chips de "tipo de serviço" do PR #4 não foram portados (o filtro de categorias na própria tela já cobre isso), nem a navegação do card para `lavagem-*` (serviço real não tem página de detalhe ainda — as 3 páginas continuam registradas no `Stack`, mas sem entrada a partir de `servicos.tsx`).
+- **Filtros da tela de serviços** (merge do PR #4 `feat/melhorias-ux-servicos` com `feature/fluxo-lava-rapido-onboard`, 2026-10-03): o PR #4 trouxe busca funcional, modal "Filtrar Serviços" (faixa de preço + tempo estimado máximo), `SafeAreaView`/insets e mensagem de lista vazia, mas sobre uma lista **mockada** de 3 serviços (com `routeName` para as páginas `lavagem-*`). No merge ficou a tela com **dados reais** e essas melhorias portadas para eles: `features/servicos/filtrarServicos.ts` filtra por busca (nome do serviço e dos itens, sem acento), categoria, preço e `duracaoMinutos`. Os tetos dos sliders acompanham os dados (`tetoDoFiltro`: mínimo R$ 300 / 2h, sobe se houver serviço mais caro/longo), e o máximo começa "sem limite". Os chips de "tipo de serviço" do PR #4 não foram portados (o filtro de categorias na própria tela já cobre isso), nem a navegação do card para `lavagem-*` (as 3 páginas mockadas foram removidas no I21 parte 1; o card agora abre o detalhe real `servicos/[servicoId]`).
 - **Duração e carrinho** (`docs/plan/tempo-estimado-preco-servicos/`): `Servico` e seus itens têm `duracaoMinutos` (combo = soma dos itens, vem do backend). O card mostra "R$ X · ~40 min" (`utils/formatarDuracao.ts`). A tela abre **sem nenhum serviço pré-selecionado**; o rodapé soma preço e duração só dos selecionados (`features/servicos/calcularCarrinho.ts`, soma por combo nas duas contas).
 - **Preço "a partir de"**: `LavaRapido.price` é `number | null`, calculado no backend (menor preço ativo). O card da Home e o marcador do mapa usam `formatarPrecoAPartirDe` (`features/lava-rapidos/`), que mostra "Sem serviços disponíveis" quando é `null`.
 
@@ -134,7 +132,7 @@ app_mobile/
 - `/(tabs)` → `AppTabs` (NativeTabs) com 2 abas: **Home** (`index.tsx`) e **Explore** (`explore.tsx`, boilerplate — seção 6).
 - `/servicos` — recebe `id`/`nome` via `useLocalSearchParams` (passados pelo `CarWashCard` da Home ou pelo `Marker` do mapa). Busca os serviços reais do lava-rápido (`GET /servicos?lavaRapidoId=<id>`, só `ativo: true`); categorias filtram a lista; mostra banner de intercorrência relevante com link pra `/disponibilidade`.
 - `/disponibilidade` — recebe `id`/`nome`; lista as intercorrências futuras do lava-rápido (`GET /intercorrencias?lavaRapidoId=<id>`), ordenadas por data.
-- `/detail` — **não recebe nenhum parâmetro de navegação** apesar de `servicos.tsx` navegar com `router.push('/detail')`; mostra sempre o mesmo serviço hardcoded ("Lavagem Completa Premium"), independente do que foi selecionado em `servicos.tsx`. Ou seja, a navegação Serviços → Detalhe existe visualmente, mas os dados não fluem entre as duas telas (achado #9, ainda vale só pra `detail.tsx`).
+- `/servicos/[servicoId]` — recebe `servicoId` + `id`/`nome` do lava-rápido; aberto ao tocar no texto do card em `/servicos`. Mostra nome, categorias, itens incluídos (nome, categoria, duração), preço e duração total. "Selecionar" marca o serviço no carrinho compartilhado (`features/servicos/servicosSelecionados.ts`) e volta para a lista (I21 parte 1; resolve o achado #9).
 
 ## 6. Nuances e problemas conhecidos
 
@@ -143,16 +141,16 @@ Achados de leitura direta do código (não são convenções combinadas — são
 | # | Onde | O quê |
 |---|---|---|
 | 1 | ~~`src/components/app/**`~~ | ~~Cópia morta e não usada de toda a árvore `src/app/`~~ — **removida** em `docs/plan/servicos-disponibilidade-app-mobile/`. |
-| 2 | `src/components/colors.ts` | Cópia morta e desatualizada de `src/constants/colors.ts` (faltam `star`/`success`/`danger`/`photoPlaceholder`, aspas duplas em vez de simples). Não é importada em lugar nenhum. Candidato a exclusão. |
-| 3 | `src/components/FilterModal.js` | Arquivo **vazio** (0 bytes), não importado em lugar nenhum. `index.tsx` implementa seu próprio modal de filtro inline em vez de usar este componente. |
-| 4 | `src/components/FooterCart.js` | Componente completo e funcional, mas **não é usado em nenhuma tela** — `servicos.tsx` reimplementa o mesmo rodapé de carrinho inline em vez de reaproveitá-lo. |
+| 2 | ~~`src/components/colors.ts`~~ | ~~Cópia morta e desatualizada de `src/constants/colors.ts`~~ — **removida** no I21 parte 1. |
+| 3 | ~~`src/components/FilterModal.js`~~ | ~~Arquivo vazio, não importado~~ — **removido** no I21 parte 1. |
+| 4 | ~~`src/components/FooterCart.js`~~ | ~~Componente não usado em nenhuma tela~~ — **removido** no I21 parte 1. |
 | 5 | `src/constants/colors.ts` vs. `src/constants/theme.ts` | Dois sistemas de cor paralelos que não se falam: `colors.ts` (paleta simples, usada por Home/Serviços/Detalhe/CarWashCard/Header/VehicleBar/FooterCart — as telas "do produto") e `theme.ts` (`Colors.light`/`Colors.dark` + `Spacing`, usado só pelo template starter do Expo: `explore.tsx`, `themed-text`/`themed-view`, `use-theme`, `app-tabs.tsx`). Não há dark mode nas telas do produto porque elas usam `colors.ts` (fixo), não `theme.ts` (com light/dark). |
-| 6 | `VehicleBar.js`, `FooterCart.js` | Referenciam `colors.textGray`, `colors.textDark`, `colors.border` — **essas chaves não existem** em `src/constants/colors.ts` (que só tem `primary/secondary/background/neutralGray/white/black/star/success/danger/photoPlaceholder`). Resolve pra `undefined` em runtime — texto/borda ficam sem a cor pretendida, silenciosamente. |
-| 7 | `Header.js`, `VehicleBar.js`, `FooterCart.js` | Usam nomes de fonte tipo `'Poppins-Bold'`, `'Poppins-Medium'`, `'AlbertSans-Regular'` (hífen) — mas as fontes são carregadas em `_layout.tsx` com os nomes `Poppins_700Bold`, `Poppins_500Medium`, `AlbertSans_400Regular` (formato do pacote `@expo-google-fonts/*`, com underscore). Os nomes não batem — essas fontes customizadas provavelmente **não estão sendo aplicadas** (cai no fallback do sistema). |
-| 8 | `src/app/(tabs)/explore.tsx` | É o conteúdo padrão do template `create-expo-app` (tutorial sobre file-based routing, imagens, dark mode, animações) — não tem nenhuma relação com o produto WashAway. Nunca foi customizado nem removido. |
-| 9 | Fluxo Serviços → Detalhe | `servicos.tsx` já usa o `id` real (resolvido, ver seção 4.1); `detail.tsx` continua sem receber nenhum parâmetro e mostra sempre o mesmo serviço hardcoded, independente do que foi selecionado em `servicos.tsx`. |
-| 10 | `detail.tsx` | **Resolvido para `lava-rapidos` e `servicos`/`intercorrencias`** (ver seção 4.1). Só `detail.tsx` ainda declara array/objeto mockado local, sem tipo/modelo em comum e sem chamada de rede — migrar é trabalho futuro. |
-| 11 | Tipagem mista | `Header.js`, `VehicleBar.js`, `FooterCart.js`, `FilterModal.js` são `.js` sem tipos; o resto do projeto é `.tsx` com `strict: true` no `tsconfig.json`. |
+| 6 | ~~`VehicleBar.js`, `FooterCart.js`~~ | ~~Chaves de cor inexistentes (`textGray`, `textDark`, `border`)~~ — **corrigido** no I21 parte 1 (`neutralGray`, `black`; `border: '#E5E7EB'` criada em `constants/colors.ts`). |
+| 7 | ~~`Header.js`, `VehicleBar.js`, `FooterCart.js`~~ | ~~Nomes de fonte com hífen (`'Poppins-Bold'` etc.) que não batem com os carregados~~ — **corrigido** no I21 parte 1 (`Poppins_700Bold`, `Poppins_500Medium`, `AlbertSans_400Regular`). |
+| 8 | `src/app/(tabs)/explore.tsx` | É o conteúdo padrão do template `create-expo-app` (tutorial sobre file-based routing, imagens, dark mode, animações) — não tem nenhuma relação com o produto WashAway. Nunca foi customizado nem removido. Pendente para o I18 / I21 parte 2. |
+| 9 | ~~Fluxo Serviços → Detalhe~~ | ~~`detail.tsx` sem parâmetro, serviço hardcoded~~ — **resolvido** no I21 parte 1: `servicos/[servicoId].tsx` recebe o id e usa dados reais. |
+| 10 | ~~`detail.tsx`~~ | ~~Mock local sem chamada de rede~~ — **resolvido**: `detail.tsx` e as páginas `lavagem-*`/`higienizacao-interna` foram removidos no I21 parte 1. |
+| 11 | ~~Tipagem mista~~ | ~~`Header.js`, `VehicleBar.js`, `FooterCart.js`, `FilterModal.js` eram `.js`~~ — `Header`/`VehicleBar` migrados para `.tsx` e os outros dois removidos no I21 parte 1. |
 | 12 | ~~Comentários no código~~ | ~~`servicos.tsx` tinha comentários "*...do seu colega*"/"*...do seu amigo*", evidência de telas feitas em paralelo (PRs `I10-escolha-lavarapido` e `I6-selecao-servicos`, seção 8) e nunca integradas~~ — removidos ao migrar `servicos.tsx` (`docs/plan/servicos-disponibilidade-app-mobile/`). |
 | 13 | `react-native-maps` | Só é `require`'d quando `Platform.OS !== 'web'` (`index.tsx`); no web a aba "Mapa" mostra uma mensagem de indisponibilidade em vez do mapa. Comportamento intencional, não é bug — só registrado aqui porque não é óbvio lendo o import estático. |
 
@@ -165,8 +163,7 @@ Achados de leitura direta do código (não são convenções combinadas — são
 | `/(tabs)` → Explore | `explore.tsx` | Não é produto | Boilerplate do template Expo — achado #8. |
 | `/servicos` | `servicos.tsx` | Funcional (backend real) | Usa o `id` recebido; card mostra itens incluídos, preço e duração; busca + categorias + modal de preço/tempo filtram; carrinho começa vazio e soma preço e duração; banner de intercorrência. |
 | `/disponibilidade` | `disponibilidade.tsx` | Funcional (backend real) | Lista intercorrências futuras do lava-rápido. |
-| `/detail` | `detail.tsx` | Funcional (mock, hardcoded) | Não recebe parâmetros — achado #9. |
-| `/lavagem-completa`, `/higienizacao-interna`, `/lavagem-externa` | `*.tsx` | Mock estático (PR #4) | Registradas no `Stack`, mas sem navegação a partir de `servicos.tsx` desde o merge (ver seção 4.1). |
+| `/servicos/[servicoId]` | `servicos/[servicoId].tsx` | Funcional (backend real) | Detalhe do serviço; "Selecionar" usa o mesmo carrinho da lista (I21 parte 1). `/detail` e `/lavagem-*`/`/higienizacao-interna` foram removidas. |
 
 ## 8. Contexto de origem (branches/PRs mescladas)
 

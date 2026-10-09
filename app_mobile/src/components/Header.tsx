@@ -32,7 +32,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
   },
   logoText: {
-    fontFamily: 'Poppins-Bold',
+    fontFamily: 'Poppins_700Bold',
     fontSize: 24,
     color: colors.white,
   },

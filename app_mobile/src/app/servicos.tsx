@@ -15,7 +15,7 @@ import {
 import { colors } from '@/constants/colors';
 import { useLavaRapido } from '@/features/lava-rapidos/useLavaRapido';
 import { useServicos } from '@/features/servicos/useServicos';
-import type { Servico } from '@/features/servicos/service/servicos.model';
+import { useServicosSelecionados } from '@/features/servicos/servicosSelecionados';
 import { calcularCarrinho } from '@/features/servicos/calcularCarrinho';
 import { filtrarServicos, tetoDoFiltro } from '@/features/servicos/filtrarServicos';
 import { formatarDuracao } from '@/utils/formatarDuracao';
@@ -40,7 +40,8 @@ export default function ServicosScreen() {
   const [filterVisible, setFilterVisible] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [categoriaFiltro, setCategoriaFiltro] = useState<string | null>(null);
-  const [selecionados, setSelecionados] = useState<Set<string>>(new Set());
+  // Carrinho compartilhado com o detalhe do serviço (servicos/[servicoId].tsx)
+  const { selecionados, alternar: toggleService } = useServicosSelecionados(id);
 
   // Filtros do modal. Os tetos acompanham os dados (há serviços bem acima de
   // R$ 300 / 2h); `null` em máximo = sem limite, até o usuário mexer no slider.
@@ -51,18 +52,6 @@ export default function ServicosScreen() {
   const [maxTimeEscolhido, setMaxTime] = useState<number | null>(null);
   const maxPrice = maxPriceEscolhido ?? tetoPreco;
   const maxTime = maxTimeEscolhido ?? tetoDuracao;
-
-  const toggleService = (servicoId: string) => {
-    setSelecionados((prev) => {
-      const next = new Set(prev);
-      if (next.has(servicoId)) {
-        next.delete(servicoId);
-      } else {
-        next.add(servicoId);
-      }
-      return next;
-    });
-  };
 
   const categorias = [...new Set(servicos.flatMap((s) => s.categorias).filter(Boolean))];
 
@@ -196,7 +185,16 @@ export default function ServicosScreen() {
                   </TouchableOpacity>
                 </View>
 
-                <View style={styles.cardContent}>
+                <TouchableOpacity
+                  style={styles.cardContent}
+                  onPress={() =>
+                    router.push({
+                      pathname: '/servicos/[servicoId]',
+                      params: { servicoId: item.id, id, nome },
+                    })
+                  }
+                  accessibilityLabel={`Ver detalhes de ${item.nome}`}
+                >
                   <Text style={styles.cardTitle}>{item.nome}</Text>
                   {item.itens.length > 0 && (
                     <Text style={styles.cardItens}>
@@ -206,7 +204,7 @@ export default function ServicosScreen() {
                   <Text style={styles.priceText}>
                     R$ {item.preco.toFixed(2).replace('.', ',')} · ~{formatarDuracao(item.duracaoMinutos)}
                   </Text>
-                </View>
+                </TouchableOpacity>
               </View>
             );
           })}

@@ -1,7 +1,6 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Car } from 'lucide-react-native';
-//import { colors } from '../styles/colors';
 import { colors } from '@/constants/colors';
 
 export default function VehicleBar() {
@@ -32,13 +31,13 @@ const styles = StyleSheet.create({
   },
   infoContainer: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   textWrapper: { flexDirection: 'column' },
-  label: { fontFamily: 'AlbertSans-Regular', fontSize: 12, color: colors.textGray },
-  carName: { fontFamily: 'Poppins-Bold', fontSize: 14, color: colors.textDark },
+  label: { fontFamily: 'AlbertSans_400Regular', fontSize: 12, color: colors.neutralGray },
+  carName: { fontFamily: 'Poppins_700Bold', fontSize: 14, color: colors.black },
   button: {
     backgroundColor: colors.primary,
     paddingHorizontal: 16,
     paddingVertical: 6,
     borderRadius: 8,
   },
-  buttonText: { fontFamily: 'Poppins-Medium', color: colors.white, fontSize: 13 },
+  buttonText: { fontFamily: 'Poppins_500Medium', color: colors.white, fontSize: 13 },
 });

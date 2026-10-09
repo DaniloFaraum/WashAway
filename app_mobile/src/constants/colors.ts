@@ -9,4 +9,5 @@ export const colors = {
   success: '#22A45D',
   danger: '#E53935',
   photoPlaceholder: '#D7E3EE',
+  border: '#E5E7EB',
 };
