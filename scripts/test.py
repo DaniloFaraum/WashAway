@@ -14,6 +14,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+from python_venv import python_dos_scripts
+
 SCRIPT_DIR = Path(__file__).resolve().parent
 REPO_ROOT = SCRIPT_DIR.parent
 
@@ -27,11 +29,6 @@ PROJECTS = {
 PYTHON_PROJECTS = {
     "email-worker": SCRIPT_DIR / "test_email_worker.py",
 }
-
-
-def python_dos_scripts() -> str:
-    venv = SCRIPT_DIR / ".venv" / "bin" / "python"
-    return str(venv) if venv.exists() else sys.executable
 
 
 def main() -> None:

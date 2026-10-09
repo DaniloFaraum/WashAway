@@ -13,16 +13,14 @@ Uso:
 """
 import argparse
 import subprocess
-import sys
 import time
 from pathlib import Path
+
+from python_venv import python_dos_scripts
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 REPO_ROOT = SCRIPT_DIR.parent
 
-# Worker de e-mail usa o venv de scripts/ (psycopg); sem ele, cai no python3 atual.
-_VENV_PYTHON = SCRIPT_DIR / ".venv" / "bin" / "python"
-PYTHON_WORKER = str(_VENV_PYTHON) if _VENV_PYTHON.exists() else sys.executable
 
 PROJECTS = {
     "backend": {
@@ -39,7 +37,7 @@ PROJECTS = {
         "port": None,
         "pattern": "scripts/email_worker.py",
         "pre": [],
-        "cmd": [PYTHON_WORKER, "scripts/email_worker.py"],
+        "cmd": [python_dos_scripts(), "scripts/email_worker.py"],
         "log": Path("/tmp/washaway-email-worker.log"),
     },
     "admin-front": {
