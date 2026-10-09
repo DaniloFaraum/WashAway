@@ -17,9 +17,26 @@ function segredo(): string {
   return valor
 }
 
-/** Chamado na subida do servidor: falha cedo se faltar o segredo do token. */
+// HS256 com segredo curto pode ser quebrado por força bruta offline a partir
+// de qualquer token emitido (e aí dá pra forjar token de qualquer tipo).
+export const TAMANHO_MINIMO_SEGREDO = 32
+
+/**
+ * Chamado na subida do servidor: falha cedo se o segredo do token faltar ou
+ * for curto demais, ou se `JWT_EXPIRES_IN` não for um valor aceito pelo
+ * jsonwebtoken (senão só estouraria no primeiro login, como 500).
+ */
 export function garantirConfiguracaoDoToken(): void {
-  segredo()
+  if (segredo().length < TAMANHO_MINIMO_SEGREDO) {
+    throw new Error(`JWT_SECRET curto demais — use pelo menos ${TAMANHO_MINIMO_SEGREDO} caracteres aleatórios (ver .env.example)`)
+  }
+  try {
+    assinarToken({ id: 'verificacao-de-configuracao', tipo: 'cliente' })
+  } catch (error) {
+    throw new Error(`JWT_EXPIRES_IN inválido ("${validade()}") — use o formato do jsonwebtoken, ex.: 7d, 12h, 3600`, {
+      cause: error,
+    })
+  }
 }
 
 function validade(): string {
@@ -58,8 +75,10 @@ export function verificarToken(token: string): Autenticacao {
   const payload = jwt.verify(token, segredo(), { algorithms: [ALGORITMO] })
   if (typeof payload === 'string') throw new Error('Payload de token inválido')
 
-  const { sub, tipo, permissoes, escopo } = payload as jwt.JwtPayload & Record<string, unknown>
-  if (typeof sub !== 'string' || sub === '' || !ehTipoUsuario(tipo)) {
+  const { sub, tipo, permissoes, escopo, exp } = payload as jwt.JwtPayload & Record<string, unknown>
+  // `jwt.verify` só confere a validade quando há `exp`; todo token emitido por
+  // `assinarToken` tem, então um token sem `exp` (que seria eterno) é recusado.
+  if (typeof exp !== 'number' || typeof sub !== 'string' || sub === '' || !ehTipoUsuario(tipo)) {
     throw new Error('Payload de token inválido')
   }
   if (permissoes !== undefined && !(Array.isArray(permissoes) && permissoes.every((p) => typeof p === 'string'))) {

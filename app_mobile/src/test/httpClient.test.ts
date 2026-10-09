@@ -62,6 +62,35 @@ describe('httpClient#apiFetch', () => {
     desfazer()
   })
 
+  it('mantém headers passados como Headers ou lista de pares', async () => {
+    const fetchMock = vi.spyOn(global, 'fetch').mockResolvedValue(resposta(200))
+    definirTokenDaSessao('tok-123')
+
+    await apiFetch('/a', { headers: new Headers({ 'X-Teste': 'um' }) })
+    await apiFetch('/b', { headers: [['X-Teste', 'dois']] })
+
+    const [primeiro, segundo] = fetchMock.mock.calls.map(([, init]) => init?.headers as Record<string, string>)
+    expect(primeiro['x-teste']).toBe('um')
+    expect(primeiro.Authorization).toBe('Bearer tok-123')
+    expect(segundo['X-Teste']).toBe('dois')
+  })
+
+  it('401 atrasado de um token antigo não derruba a sessão nova', async () => {
+    let responder: (r: Response) => void = () => {}
+    vi.spyOn(global, 'fetch').mockReturnValue(new Promise<Response>((resolve) => (responder = resolve)))
+    const handler = vi.fn()
+    const desfazer = registrarAoExpirarSessao(handler)
+    definirTokenDaSessao('tok-antigo')
+
+    const pendente = apiFetch('/clientes/me')
+    definirTokenDaSessao('tok-novo') // ex.: o cliente entrou de novo enquanto a resposta não chegava
+    responder(resposta(401))
+    await pendente
+
+    expect(handler).not.toHaveBeenCalled()
+    desfazer()
+  })
+
   it('falha de rede vira ErroRede', async () => {
     vi.spyOn(global, 'fetch').mockRejectedValue(new TypeError('Network request failed'))
 

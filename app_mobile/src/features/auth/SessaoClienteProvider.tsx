@@ -74,7 +74,12 @@ export function SessaoClienteProvider({ children }: { children: ReactNode }) {
 
   const entrar = useCallback(async (email: string, senha: string) => {
     const login = await entrarNaApi(email, senha)
-    await tokenStorage.setToken(login.token)
+    try {
+      await tokenStorage.setToken(login.token)
+    } catch {
+      // Não deu pra gravar no aparelho (ex.: SecureStore indisponível): a API já
+      // aceitou as credenciais, então a sessão segue só em memória até fechar o app.
+    }
     definirTokenDaSessao(login.token)
     setToken(login.token)
     setCliente(login.cliente)

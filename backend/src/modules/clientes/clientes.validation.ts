@@ -2,6 +2,11 @@
 // enviar (app_mobile/src/features/clientes/validarCadastro.ts).
 
 export const SENHA_MINIMA_CLIENTE = 6
+// O bcrypt só considera os 72 primeiros bytes da senha: acima disso, senhas
+// diferentes passariam a valer como iguais.
+export const SENHA_MAXIMA_BYTES_CLIENTE = 72
+export const NOME_MAXIMO_CLIENTE = 100
+export const EMAIL_MAXIMO_CLIENTE = 254
 const FORMATO_EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
 export type CamposCadastroCliente = 'nome' | 'email' | 'senha'
@@ -30,16 +35,20 @@ export function validarCadastroCliente(
 
   if (typeof nome !== 'string' || nome.trim() === '') {
     erros.nome = 'Nome é obrigatório'
+  } else if (nome.trim().length > NOME_MAXIMO_CLIENTE) {
+    erros.nome = `O nome pode ter no máximo ${NOME_MAXIMO_CLIENTE} caracteres`
   }
 
   if (typeof email !== 'string' || email.trim() === '') {
     erros.email = 'E-mail é obrigatório'
-  } else if (!FORMATO_EMAIL.test(email.trim())) {
+  } else if (email.trim().length > EMAIL_MAXIMO_CLIENTE || !FORMATO_EMAIL.test(email.trim())) {
     erros.email = 'E-mail inválido'
   }
 
   if (typeof senha !== 'string' || senha.length < SENHA_MINIMA_CLIENTE) {
     erros.senha = `A senha precisa ter no mínimo ${SENHA_MINIMA_CLIENTE} caracteres`
+  } else if (Buffer.byteLength(senha, 'utf8') > SENHA_MAXIMA_BYTES_CLIENTE) {
+    erros.senha = `A senha pode ter no máximo ${SENHA_MAXIMA_BYTES_CLIENTE} caracteres`
   }
 
   if (Object.keys(erros).length > 0) return { erros }

@@ -13,7 +13,7 @@ export function omitSenhaCliente<T extends { senha: string }>(cliente: T): Omit<
   return resto
 }
 
-/** Cria o cliente com a senha em hash bcrypt. E-mail já deve vir normalizado (ver validação). */
+/** Cria o cliente com a senha em hash bcrypt. Normaliza o e-mail de novo (defesa para quem chama sem passar pela validação). */
 export async function criarCliente({ nome, email, senha }: DadosCadastroCliente) {
   return prisma.cliente.create({
     data: { nome, email: normalizarEmail(email), senha: await bcrypt.hash(senha, CUSTO_BCRYPT) },

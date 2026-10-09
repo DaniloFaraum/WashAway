@@ -34,8 +34,22 @@ export function registrarAoExpirarSessao(handler: () => void): () => void {
   }
 }
 
+/** `HeadersInit` (objeto, lista de pares ou `Headers`) como objeto simples — o spread de um `Headers` daria `{}`. */
+function paraRegistro(headers: HeadersInit | undefined): Record<string, string> {
+  if (!headers) return {}
+  if (Array.isArray(headers)) return Object.fromEntries(headers)
+  if (typeof Headers !== 'undefined' && headers instanceof Headers) {
+    const registro: Record<string, string> = {}
+    headers.forEach((valor, nome) => {
+      registro[nome] = valor
+    })
+    return registro
+  }
+  return { ...(headers as Record<string, string>) }
+}
+
 export async function apiFetch(path: string, init: RequestInit = {}): Promise<Response> {
-  const headers: Record<string, string> = { ...(init.headers as Record<string, string> | undefined) }
+  const headers = paraRegistro(init.headers)
   if (typeof init.body === 'string' && !Object.keys(headers).some((nome) => nome.toLowerCase() === 'content-type')) {
     headers['Content-Type'] = 'application/json'
   }

@@ -30,6 +30,23 @@ describe('validarCadastro', () => {
     })
   })
 
+  it('senha com mais de 72 caracteres (limite do backend)', () => {
+    const longa = 'a'.repeat(73)
+    expect(validarCadastro(form({ senha: longa, confirmacao: longa }))).toEqual({
+      senha: 'A senha pode ter no máximo 72 caracteres',
+    })
+    const limite = 'a'.repeat(72)
+    expect(validarCadastro(form({ senha: limite, confirmacao: limite }))).toEqual({})
+  })
+
+  it('nome com mais de 100 caracteres', () => {
+    expect(validarCadastro(form({ nome: 'a'.repeat(101) }))).toEqual({ nome: 'O nome pode ter no máximo 100 caracteres' })
+  })
+
+  it('e-mail com mais de 254 caracteres', () => {
+    expect(validarCadastro(form({ email: `${'a'.repeat(250)}@b.co` }))).toEqual({ email: 'E-mail inválido' })
+  })
+
   it('senha e confirmação diferentes', () => {
     expect(validarCadastro(form({ confirmacao: '654321' }))).toEqual({ confirmacao: 'As senhas não conferem' })
   })

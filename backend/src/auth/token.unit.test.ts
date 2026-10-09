@@ -3,9 +3,17 @@ import jwt from 'jsonwebtoken'
 import { assinarToken, expiracaoDoToken, garantirConfiguracaoDoToken, verificarToken } from './token.js'
 
 const segredoOriginal = process.env.JWT_SECRET
+const validadeOriginal = process.env.JWT_EXPIRES_IN
+
+// `process.env.X = undefined` gravaria o texto "undefined": restaura apagando.
+function restaurar(nome: string, valor: string | undefined) {
+  if (valor === undefined) delete process.env[nome]
+  else process.env[nome] = valor
+}
 
 afterEach(() => {
-  process.env.JWT_SECRET = segredoOriginal
+  restaurar('JWT_SECRET', segredoOriginal)
+  restaurar('JWT_EXPIRES_IN', validadeOriginal)
 })
 
 describe('assinarToken / verificarToken', () => {
@@ -56,6 +64,21 @@ describe('assinarToken / verificarToken', () => {
     expect(() => verificarToken(semSub)).toThrow()
     expect(() => verificarToken(tipoDesconhecido)).toThrow()
   })
+
+  it('token sem exp (seria eterno) lança erro', () => {
+    const semExp = jwt.sign({ tipo: 'cliente' }, process.env.JWT_SECRET!, { subject: 'c1' })
+
+    expect(() => verificarToken(semExp)).toThrow()
+  })
+
+  it('permissoes que não é lista de textos ou escopo que não é texto lançam erro', () => {
+    const assinar = (extra: Record<string, unknown>) =>
+      jwt.sign({ tipo: 'interno', ...extra }, process.env.JWT_SECRET!, { subject: 'i1', expiresIn: '1h' })
+
+    expect(() => verificarToken(assinar({ permissoes: 'admin' }))).toThrow()
+    expect(() => verificarToken(assinar({ permissoes: [1] }))).toThrow()
+    expect(() => verificarToken(assinar({ escopo: 123 }))).toThrow()
+  })
 })
 
 describe('JWT_SECRET obrigatório', () => {
@@ -64,5 +87,21 @@ describe('JWT_SECRET obrigatório', () => {
 
     expect(() => garantirConfiguracaoDoToken()).toThrow(/JWT_SECRET/)
     expect(() => assinarToken({ id: 'c1', tipo: 'cliente' })).toThrow(/JWT_SECRET/)
+  })
+
+  it('JWT_SECRET curto: garantirConfiguracaoDoToken recusa na subida', () => {
+    process.env.JWT_SECRET = 'curto'
+
+    expect(() => garantirConfiguracaoDoToken()).toThrow(/JWT_SECRET curto/)
+  })
+
+  it('JWT_EXPIRES_IN inválido: garantirConfiguracaoDoToken recusa na subida', () => {
+    process.env.JWT_EXPIRES_IN = '7 dias'
+
+    expect(() => garantirConfiguracaoDoToken()).toThrow(/JWT_EXPIRES_IN/)
+  })
+
+  it('configuração válida: garantirConfiguracaoDoToken não lança', () => {
+    expect(() => garantirConfiguracaoDoToken()).not.toThrow()
   })
 })

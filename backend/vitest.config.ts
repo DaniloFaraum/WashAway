@@ -10,7 +10,7 @@ export default defineConfig({
     exclude: ['**/node_modules/**', '**/dist/**'],
     // Segredo fixo só de teste (o de dev/produção vem do .env): os testes assinam
     // tokens com `assinarToken` e conferem 401 com outro segredo/expirado.
-    env: { JWT_SECRET: 'segredo-fixo-so-para-testes', JWT_EXPIRES_IN: '7d' },
+    env: { JWT_SECRET: 'segredo-fixo-so-para-testes-com-32-caracteres-ou-mais', JWT_EXPIRES_IN: '7d' },
     coverage: {
       provider: 'v8',
       include: ['src/**/*.ts'],

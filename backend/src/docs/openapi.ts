@@ -249,9 +249,9 @@ export const openApiDocument = {
                 type: 'object',
                 required: ['nome', 'email', 'senha'],
                 properties: {
-                  nome: { type: 'string' },
-                  email: { type: 'string', format: 'email', description: 'Único sem diferenciar maiúsculas.' },
-                  senha: { type: 'string', minLength: 6 },
+                  nome: { type: 'string', maxLength: 100 },
+                  email: { type: 'string', format: 'email', maxLength: 254, description: 'Único sem diferenciar maiúsculas.' },
+                  senha: { type: 'string', minLength: 6, maxLength: 72, description: 'No máximo 72 bytes em UTF-8 (limite do bcrypt).' },
                 },
               },
             },
@@ -259,7 +259,7 @@ export const openApiDocument = {
         },
         responses: {
           201: { description: 'Criado (sem a senha).', content: { 'application/json': { schema: { $ref: '#/components/schemas/Cliente' } } } },
-          400: { description: 'Nome vazio, e-mail ausente/inválido ou senha com menos de 6 caracteres.', content: { 'application/json': { schema: { $ref: '#/components/schemas/ErroCadastroCliente' } } } },
+          400: { description: 'Nome vazio ou longo demais, e-mail ausente/inválido ou senha fora de 6 a 72 caracteres.', content: { 'application/json': { schema: { $ref: '#/components/schemas/ErroCadastroCliente' } } } },
           409: { description: 'Este e-mail já está cadastrado.', content: { 'application/json': { schema: { $ref: '#/components/schemas/Erro' } } } },
         },
       },

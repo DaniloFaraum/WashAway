@@ -77,7 +77,8 @@ export default function CadastroScreen() {
       }
     } catch (err) {
       if (err instanceof EmailJaCadastradoError) setFalha({ tipo: 'emailJaCadastrado' });
-      else if (err instanceof ErroValidacao) setErros(err.campos);
+      // 400 sem campos que a tela conheça cai na mensagem genérica (não fica mudo).
+      else if (err instanceof ErroValidacao && Object.keys(err.campos).length > 0) setErros(err.campos);
       else if (err instanceof ErroRede) setFalha({ tipo: 'rede', mensagem: err.message });
       else setFalha({ tipo: 'outra', mensagem: 'Não foi possível criar a conta agora. Tente de novo.' });
     } finally {

@@ -34,6 +34,22 @@ describe('validarCadastroCliente', () => {
     expect(Object.keys(validarCadastroCliente({ nome: 'Ana', email: 'a@b.co', senha: 1234567 }).erros)).toEqual(['senha'])
   })
 
+  it('senha acima de 72 bytes (limite do bcrypt) é inválida, inclusive com acentos', () => {
+    expect(validarCadastroCliente({ nome: 'Ana', email: 'a@b.co', senha: 'a'.repeat(72) }).erros).toEqual({})
+    expect(Object.keys(validarCadastroCliente({ nome: 'Ana', email: 'a@b.co', senha: 'a'.repeat(73) }).erros)).toEqual(['senha'])
+    // 37 caracteres "é" = 74 bytes em UTF-8
+    expect(Object.keys(validarCadastroCliente({ nome: 'Ana', email: 'a@b.co', senha: 'é'.repeat(37) }).erros)).toEqual(['senha'])
+  })
+
+  it('nome acima de 100 caracteres é inválido', () => {
+    expect(Object.keys(validarCadastroCliente({ nome: 'a'.repeat(101), email: 'a@b.co', senha: '123456' }).erros)).toEqual(['nome'])
+  })
+
+  it('e-mail acima de 254 caracteres é inválido', () => {
+    const email = `${'a'.repeat(250)}@b.co`
+    expect(validarCadastroCliente({ nome: 'Ana', email, senha: '123456' }).erros).toEqual({ email: 'E-mail inválido' })
+  })
+
   it('body ausente: erro nos três campos', () => {
     expect(Object.keys(validarCadastroCliente(undefined).erros).sort()).toEqual(['email', 'nome', 'senha'])
   })
