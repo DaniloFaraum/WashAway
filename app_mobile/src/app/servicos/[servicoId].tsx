@@ -8,10 +8,7 @@ import { colors } from '@/constants/colors';
 import { useServicos } from '@/features/servicos/useServicos';
 import { useServicosSelecionados } from '@/features/servicos/servicosSelecionados';
 import { formatarDuracao } from '@/utils/formatarDuracao';
-
-function formatarPreco(valor: number) {
-  return `R$ ${valor.toFixed(2).replace('.', ',')}`;
-}
+import { formatarPreco } from '@/utils/formatarPreco';
 
 /**
  * Detalhe de um serviço (combo) do lava-rápido, com os dados reais de

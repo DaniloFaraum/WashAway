@@ -30,4 +30,14 @@ describe('servicosSelecionados (carrinho compartilhado lista/detalhe)', () => {
     expect(getServicosSelecionados('lr1').size).toBe(0)
     expect(getServicosSelecionados(undefined).size).toBe(0)
   })
+
+  it('leituras sem mudança devolvem a mesma referência (exigência do useSyncExternalStore)', () => {
+    expect(getServicosSelecionados('lr1')).toBe(getServicosSelecionados('lr1'))
+    expect(getServicosSelecionados(undefined)).toBe(getServicosSelecionados('lr2'))
+    selecionarServico('lr1', 's1')
+    const depois = getServicosSelecionados('lr1')
+    expect(getServicosSelecionados('lr1')).toBe(depois)
+    selecionarServico('lr1', 's1') // já selecionado: não emite estado novo
+    expect(getServicosSelecionados('lr1')).toBe(depois)
+  })
 })

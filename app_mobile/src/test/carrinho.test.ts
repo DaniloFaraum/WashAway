@@ -4,6 +4,7 @@ import { normalizeServico, type Servico } from '../features/servicos/service/ser
 import { normalizeLavaRapido } from '../features/lava-rapidos/service/lavaRapidos.model'
 import { formatarPrecoAPartirDe } from '../features/lava-rapidos/formatarPrecoAPartirDe'
 import { formatarDuracao } from '../utils/formatarDuracao'
+import { formatarPreco } from '../utils/formatarPreco'
 
 function servico(overrides: Partial<Servico>): Servico {
   return {
@@ -42,6 +43,16 @@ describe('formatarDuracao', () => {
     [180, '3h'],
   ])('%i minutos → %s', (minutos, esperado) => {
     expect(formatarDuracao(minutos)).toBe(esperado)
+  })
+})
+
+describe('formatarPreco', () => {
+  it.each([
+    [0, 'R$ 0,00'],
+    [40, 'R$ 40,00'],
+    [79.9, 'R$ 79,90'],
+  ])('%d → %s', (valor, esperado) => {
+    expect(formatarPreco(valor)).toBe(esperado)
   })
 })
 

@@ -19,6 +19,7 @@ import { useServicosSelecionados } from '@/features/servicos/servicosSelecionado
 import { calcularCarrinho } from '@/features/servicos/calcularCarrinho';
 import { filtrarServicos, tetoDoFiltro } from '@/features/servicos/filtrarServicos';
 import { formatarDuracao } from '@/utils/formatarDuracao';
+import { formatarPreco } from '@/utils/formatarPreco';
 import { useIntercorrencias, getIntercorrenciaRelevante, diasAte } from '@/features/intercorrencias/useIntercorrencias';
 import { formatarDataBR } from '@/features/intercorrencias/formatarData';
 
@@ -202,7 +203,7 @@ export default function ServicosScreen() {
                     </Text>
                   )}
                   <Text style={styles.priceText}>
-                    R$ {item.preco.toFixed(2).replace('.', ',')} · ~{formatarDuracao(item.duracaoMinutos)}
+                    {formatarPreco(item.preco)} · ~{formatarDuracao(item.duracaoMinutos)}
                   </Text>
                 </TouchableOpacity>
               </View>
@@ -216,7 +217,7 @@ export default function ServicosScreen() {
         <View>
           <Text style={styles.cartItemsText}>{totalItens} {totalItens === 1 ? 'item selecionado' : 'itens selecionados'}</Text>
           <Text style={styles.cartTotalText}>
-            R$ {totalPreco.toFixed(2).replace('.', ',')}
+            {formatarPreco(totalPreco)}
             {totalDuracao > 0 && ` · ~${formatarDuracao(totalDuracao)}`}
           </Text>
         </View>
