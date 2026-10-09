@@ -23,6 +23,14 @@ describe('parseIntercorrenciaInput', () => {
     expect(parseIntercorrenciaInput({ ...base, diaInteiro: false, horaInicio: '08:00' })).toBeNull()
   })
 
+  it('recusa intercorrência parcial sem horaInicio', () => {
+    expect(parseIntercorrenciaInput({ ...base, diaInteiro: false, horaFim: '16:00' })).toBeNull()
+  })
+
+  it('recusa diaInteiro que não é booleano', () => {
+    expect(parseIntercorrenciaInput({ ...base, diaInteiro: 'true' })).toBeNull()
+  })
+
   it('recusa body que não é objeto ou sem campos obrigatórios', () => {
     expect(parseIntercorrenciaInput(null)).toBeNull()
     expect(parseIntercorrenciaInput('texto')).toBeNull()

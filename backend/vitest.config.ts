@@ -30,6 +30,8 @@ export default defineConfig({
         test: {
           name: 'integracao',
           include: ['src/test/**/*.test.ts'],
+          // `*.unit.test.ts` é do projeto unit, mesmo se ficar em src/test/.
+          exclude: ['**/node_modules/**', '**/dist/**', '**/*.unit.test.ts'],
           globalSetup: ['./src/test/globalSetup.ts'],
           setupFiles: ['./src/test/setupBancoDoWorker.ts'],
         },

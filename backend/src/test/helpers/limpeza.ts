@@ -14,18 +14,23 @@ import { prisma } from '../../config/prisma.js'
 //     await prisma.$disconnect()
 //   })
 
-// Ordem de remoção: dependentes antes de quem eles referenciam.
-const ORDEM = [
-  'pedido',
-  'intercorrencia',
-  'servico',
-  'itemServico',
-  'solicitacaoOnboarding',
-  'lavaRapido',
-  'contrato',
-] as const
+type PorIds = { where: { id: { in: string[] } } }
+const porIds = (ids: string[]): PorIds => ({ where: { id: { in: ids } } })
 
-export type ModeloLimpavel = (typeof ORDEM)[number]
+// Como apagar cada modelo, na ordem de remoção (dependentes antes de quem eles
+// referenciam): a ordem das chaves é a ordem do laço em `limparDadosDeTeste`.
+// Modelo novo (ex.: cliente no I1, veiculo no I3) = uma linha aqui.
+const REMOVEDORES = {
+  pedido: (ids: string[]) => prisma.pedido.deleteMany(porIds(ids)),
+  intercorrencia: (ids: string[]) => prisma.intercorrencia.deleteMany(porIds(ids)),
+  servico: (ids: string[]) => prisma.servico.deleteMany(porIds(ids)),
+  itemServico: (ids: string[]) => prisma.itemServico.deleteMany(porIds(ids)),
+  solicitacaoOnboarding: (ids: string[]) => prisma.solicitacaoOnboarding.deleteMany(porIds(ids)),
+  lavaRapido: (ids: string[]) => prisma.lavaRapido.deleteMany(porIds(ids)),
+  contrato: (ids: string[]) => prisma.contrato.deleteMany(porIds(ids)),
+} satisfies Record<string, (ids: string[]) => Promise<unknown>>
+
+export type ModeloLimpavel = keyof typeof REMOVEDORES
 
 const criados = new Map<ModeloLimpavel, Set<string>>()
 
@@ -36,33 +41,10 @@ export function registrarParaLimpeza(modelo: ModeloLimpavel, id: string): void {
 }
 
 export async function limparDadosDeTeste(): Promise<void> {
-  for (const modelo of ORDEM) {
+  for (const modelo of Object.keys(REMOVEDORES) as ModeloLimpavel[]) {
     const ids = [...(criados.get(modelo) ?? [])]
     if (ids.length === 0) continue
-    const where = { where: { id: { in: ids } } }
-    switch (modelo) {
-      case 'pedido':
-        await prisma.pedido.deleteMany(where)
-        break
-      case 'intercorrencia':
-        await prisma.intercorrencia.deleteMany(where)
-        break
-      case 'servico':
-        await prisma.servico.deleteMany(where)
-        break
-      case 'itemServico':
-        await prisma.itemServico.deleteMany(where)
-        break
-      case 'solicitacaoOnboarding':
-        await prisma.solicitacaoOnboarding.deleteMany(where)
-        break
-      case 'lavaRapido':
-        await prisma.lavaRapido.deleteMany(where)
-        break
-      case 'contrato':
-        await prisma.contrato.deleteMany(where)
-        break
-    }
+    await REMOVEDORES[modelo](ids)
     criados.delete(modelo)
   }
 }

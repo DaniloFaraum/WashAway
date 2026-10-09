@@ -18,7 +18,7 @@ let sequencia = 0
 /** Sufixo único dentro do processo e, com alta probabilidade, entre execuções. */
 export function sufixoUnico(): string {
   sequencia += 1
-  return `${process.pid}${sequencia}${randomInt(1000, 9999)}`
+  return `${process.pid}-${sequencia}-${randomInt(1000, 9999)}`
 }
 
 function digitos(tamanho: number): string {
