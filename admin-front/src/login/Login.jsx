@@ -87,7 +87,7 @@ function Login({ onEntrar, onCadastrar }) {
       <Container maxWidth="xs">
         <Paper sx={{ p: 4 }}>
           <Typography variant="h5" align="center" gutterBottom>
-            WashAway
+            Wash Your Way
           </Typography>
 
           <Tabs value={modo} onChange={(_, value) => setModo(value)} variant="fullWidth" sx={{ mb: 3 }}>

@@ -28,7 +28,7 @@ function AppShell({ children, empresaLogada, onSair, onReabrir }) {
       >
         <Toolbar sx={{ flexDirection: 'column', alignItems: 'flex-start', justifyContent: 'center', py: 1 }}>
           <Typography variant="h6" noWrap>
-            WashAway
+            Wash Your Way
           </Typography>
           {empresaLogada && (
             <>
