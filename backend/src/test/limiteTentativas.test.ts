@@ -47,6 +47,19 @@ describe('POST /lavaRapidos/login', () => {
     expect(outro.status).toBe(200)
   })
 
+  it('um `email` extra no body não abre um contador novo (a chave do login do lava-rápido é só o CNPJ)', async () => {
+    const app = novoApp()
+    const lavaRapido = await criarLavaRapidoTeste({ senha: 'senha-certa-123' })
+    const tentar = (i: number) =>
+      supertest(app).post('/lavaRapidos/login').send({ cnpj: lavaRapido.cnpj, senha: 'errada', email: `outro-${i}@teste.dev` })
+
+    for (let i = 0; i < LIMITE; i++) {
+      expect((await tentar(i)).status).toBe(401)
+    }
+
+    expect((await tentar(LIMITE)).status).toBe(429)
+  })
+
   it('logins certos não gastam tentativas', async () => {
     const app = novoApp()
     const lavaRapido = await criarLavaRapidoTeste({ senha: 'senha-certa-123' })
@@ -72,6 +85,26 @@ describe('POST /auth/cliente/login', () => {
 
     expect(bloqueada.status).toBe(429)
     expect(bloqueada.body).toEqual({ error: expect.stringMatching(/Muitas tentativas/) })
+  })
+})
+
+describe('POST /onboarding/solicitacoes', () => {
+  it(`depois de ${LIMITE} tentativas recusadas para o mesmo CNPJ, responde 429`, async () => {
+    const app = novoApp()
+    // CNPJ que já é empresa: cada envio é recusado (409) e conta.
+    const lavaRapido = await criarLavaRapidoTeste()
+    const solicitar = () =>
+      supertest(app)
+        .post('/onboarding/solicitacoes')
+        .send({ name: 'X', cnpj: lavaRapido.cnpj, email: `x-${sufixoUnico()}@teste.dev`, senha: 'senha-123-x' })
+
+    for (let i = 0; i < LIMITE; i++) {
+      expect((await solicitar()).status).toBe(409)
+    }
+    const bloqueado = await solicitar()
+
+    expect(bloqueado.status).toBe(429)
+    expect(bloqueado.body.error).toMatch(/Muitas tentativas/)
   })
 })
 

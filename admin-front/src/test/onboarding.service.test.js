@@ -34,6 +34,14 @@ function startStubBackend() {
         if (typeof payload.senha !== 'string' || payload.senha.length < 8) {
           return send(400, { error: 'A senha precisa ter no mínimo 8 caracteres' })
         }
+        const pendente = [...solicitacoes.values()].find(
+          (item) => item.cnpj === payload.cnpj && item.status === 'aguardando_contrato',
+        )
+        if (pendente && (pendente.email !== payload.email || pendente.senha !== payload.senha)) {
+          return send(409, {
+            error: 'Já existe uma solicitação de cadastro em andamento para esse CNPJ. Para retomá-la, use o mesmo e-mail e a mesma senha.',
+          })
+        }
         const { senha, ...semSenha } = payload
         const solicitacao = { id: `sol-${solicitacoes.size + 1}`, ...semSenha, senha, status: 'aguardando_contrato', contrato: CONTRATO }
         solicitacoes.set(solicitacao.id, solicitacao)
@@ -123,6 +131,14 @@ describe('onboarding.service', () => {
     await expect(
       solicitar({ name: 'Dup', cnpj: '44444444000144', email: EMAIL_JA_CADASTRADO, senha: SENHA }, baseUrl),
     ).rejects.toThrow('Já existe uma empresa cadastrada com esse e-mail.')
+  })
+
+  it('solicitar repassa a mensagem do backend quando já há solicitação em andamento para o CNPJ (409)', async () => {
+    await solicitar({ name: 'Dono', cnpj: '66666666000166', email: 'dono@exemplo.com', senha: SENHA }, baseUrl)
+
+    await expect(
+      solicitar({ name: 'Intruso', cnpj: '66666666000166', email: 'intruso@exemplo.com', senha: SENHA }, baseUrl),
+    ).rejects.toThrow(/solicitação de cadastro em andamento/)
   })
 
   it('solicitar repassa a mensagem do backend para senha curta (400)', async () => {

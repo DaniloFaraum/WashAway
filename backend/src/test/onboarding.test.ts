@@ -96,6 +96,20 @@ describe('/onboarding/solicitacoes', () => {
     expect(response.body.id).toBe(solicitacaoId)
   })
 
+  it('pendente com senha: reenvio com outro e-mail ou outra senha → 409, sem trocar as credenciais nem devolver o id', async () => {
+    const antes = await prisma.solicitacaoOnboarding.findUniqueOrThrow({ where: { id: solicitacaoId } })
+
+    const outroEmail = await solicitar({ name: 'Intruso', cnpj: CNPJ_NOVO, email: `intruso-${sufixoUnico()}@teste.washaway.dev`, senha: SENHA_NOVA })
+    const outraSenha = await solicitar({ name: 'Intruso', cnpj: CNPJ_NOVO, email: EMAIL_NOVO, senha: 'senha-do-intruso' })
+
+    for (const response of [outroEmail, outraSenha]) {
+      expect(response.status).toBe(409)
+      expect(response.body).toEqual({ error: expect.stringMatching(/em andamento/) })
+    }
+    const depois = await prisma.solicitacaoOnboarding.findUniqueOrThrow({ where: { id: solicitacaoId } })
+    expect(depois).toMatchObject({ name: antes.name, email: antes.email, senhaHash: antes.senhaHash })
+  })
+
   it('antes do aceite a empresa não aparece em GET /lavaRapidos nem consegue logar', async () => {
     const lista = await supertest(app).get('/lavaRapidos')
     expect(lista.body.some((item: { cnpj: string }) => item.cnpj === CNPJ_NOVO)).toBe(false)

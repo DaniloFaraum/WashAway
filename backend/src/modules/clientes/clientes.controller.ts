@@ -1,5 +1,5 @@
 import type { Request, Response } from 'express'
-import { Prisma } from '@prisma/client'
+import { isViolacaoDeUnicidade } from '../../utils/prismaErros.js'
 import { assinarToken, expiracaoDoToken } from '../../auth/token.js'
 import {
   autenticarCliente,
@@ -25,7 +25,7 @@ export async function cadastro(req: Request, res: Response) {
     const cliente = await criarCliente(dados)
     res.status(201).json(omitSenhaCliente(cliente))
   } catch (error) {
-    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+    if (isViolacaoDeUnicidade(error)) {
       res.status(409).json({ error: 'Este e-mail já está cadastrado' })
       return
     }

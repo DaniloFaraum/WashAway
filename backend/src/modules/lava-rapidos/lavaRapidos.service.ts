@@ -1,5 +1,5 @@
-import bcrypt from 'bcryptjs'
 import type { Prisma } from '@prisma/client'
+import { conferirSenha } from '../../auth/senha.js'
 import { assinarToken, expiracaoDoToken } from '../../auth/token.js'
 import { prisma } from '../../config/prisma.js'
 import { estaAberto, listarAbertos } from '../horarios/disponibilidade.service.js'
@@ -8,11 +8,6 @@ import { getIntercorrenciaAtiva } from '../intercorrencias/intercorrencias.servi
 
 // I17: não há mais senha fixa "admin" — a empresa define a própria senha no
 // onboarding (`SolicitacaoOnboarding.senhaHash`).
-export const CUSTO_BCRYPT_LAVA_RAPIDO = 10
-
-// Hash qualquer, só pra o login com CNPJ inexistente gastar o mesmo tempo de um
-// `bcrypt.compare` real (não dá pra descobrir quais CNPJs têm conta pelo tempo).
-const HASH_FICTICIO = bcrypt.hashSync('senha-ficticia-para-tempo-constante', CUSTO_BCRYPT_LAVA_RAPIDO)
 
 export function omitSenha<T extends { senha: string }>(lavaRapido: T): Omit<T, 'senha'> {
   const { senha: _senha, ...resto } = lavaRapido
@@ -117,10 +112,10 @@ export async function criarLavaRapido(
   })
 }
 
+/** Empresa dona das credenciais, ou `null` (CNPJ inexistente ou senha errada — no mesmo tempo). */
 export async function autenticarLavaRapido(cnpj: string, senha: string) {
   const lavaRapido = await getLavaRapidoByCnpj(cnpj)
-  const senhaValida = await bcrypt.compare(senha, lavaRapido?.senha ?? HASH_FICTICIO)
-  return lavaRapido && senhaValida ? lavaRapido : null
+  return (await conferirSenha(senha, lavaRapido?.senha)) ? lavaRapido : null
 }
 
 export function getLavaRapidoByEmail(email: string) {

@@ -16,6 +16,18 @@ async function postJson(url, body) {
 }
 
 /**
+ * 409 da solicitação: empresa já cadastrada (CNPJ ou e-mail) ou solicitação em
+ * andamento para o CNPJ com outro e-mail/senha (a mensagem do backend explica).
+ * @param {string} erro
+ * @returns {string}
+ */
+function mensagemDoConflito(erro) {
+  if (/em andamento/i.test(erro)) return erro
+  if (/e-mail/i.test(erro)) return 'Já existe uma empresa cadastrada com esse e-mail.'
+  return 'Já existe uma empresa cadastrada com esse CNPJ.'
+}
+
+/**
  * @param {{ name: string, address?: string, cnpj: string, email: string, senha: string }} dados
  * @param {string} [baseUrl] usado nos testes para apontar a um backend de teste isolado
  * @returns {Promise<import('./onboarding.model.js').SolicitacaoOnboarding>}
@@ -24,11 +36,7 @@ export async function solicitar(dados, baseUrl = BASE_URL) {
   const { response, data } = await postJson(`${baseUrl}${ONBOARDING_ROUTES.solicitacoes}`, dados)
 
   if (response.status === 409) {
-    throw new Error(
-      /e-mail/i.test(data?.error ?? '')
-        ? 'Já existe uma empresa cadastrada com esse e-mail.'
-        : 'Já existe uma empresa cadastrada com esse CNPJ.',
-    )
+    throw new Error(mensagemDoConflito(data?.error ?? ''))
   }
   if (!response.ok) {
     throw new Error(data?.error ?? 'Não foi possível enviar a solicitação de cadastro.')

@@ -1,3 +1,5 @@
+import { EMAIL_MAXIMO, FORMATO_EMAIL, normalizarEmail } from '../../utils/email.js'
+
 // Regras do cadastro de cliente (I1). Mesmas regras que o app valida antes de
 // enviar (app_mobile/src/features/clientes/validarCadastro.ts).
 
@@ -6,8 +8,6 @@ export const SENHA_MINIMA_CLIENTE = 6
 // diferentes passariam a valer como iguais.
 export const SENHA_MAXIMA_BYTES_CLIENTE = 72
 export const NOME_MAXIMO_CLIENTE = 100
-export const EMAIL_MAXIMO_CLIENTE = 254
-const FORMATO_EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
 export type CamposCadastroCliente = 'nome' | 'email' | 'senha'
 export type ErrosCadastroCliente = Partial<Record<CamposCadastroCliente, string>>
@@ -18,10 +18,8 @@ export interface DadosCadastroCliente {
   senha: string
 }
 
-/** E-mail como é gravado e buscado: sem espaços nas pontas e em minúsculas. */
-export function normalizarEmail(email: string): string {
-  return email.trim().toLowerCase()
-}
+// Reexportado: quem já importava daqui continua funcionando.
+export { normalizarEmail }
 
 /**
  * Valida o body do cadastro. Devolve os erros por campo (vazio = válido) e,
@@ -41,7 +39,7 @@ export function validarCadastroCliente(
 
   if (typeof email !== 'string' || email.trim() === '') {
     erros.email = 'E-mail é obrigatório'
-  } else if (email.trim().length > EMAIL_MAXIMO_CLIENTE || !FORMATO_EMAIL.test(email.trim())) {
+  } else if (email.trim().length > EMAIL_MAXIMO || !FORMATO_EMAIL.test(email.trim())) {
     erros.email = 'E-mail inválido'
   }
 

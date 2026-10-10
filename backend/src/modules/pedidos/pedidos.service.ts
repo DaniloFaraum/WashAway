@@ -10,11 +10,6 @@ export function listPedidos(lavaRapidoId: string) {
   })
 }
 
-/** Pedido da empresa, ou `null` se não existir ou for de outra empresa. */
-export function getPedidoDaEmpresa(id: string, lavaRapidoId: string) {
-  return prisma.pedido.findFirst({ where: { id, lavaRapidoId } })
-}
-
 /** Atualiza o status só se o pedido for da empresa; senão devolve `null`. */
 export async function updatePedidoStatus(id: string, lavaRapidoId: string, status: PedidoStatus) {
   const { count } = await prisma.pedido.updateMany({ where: { id, lavaRapidoId }, data: { status } })

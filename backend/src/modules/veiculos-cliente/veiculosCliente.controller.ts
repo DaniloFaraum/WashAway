@@ -1,5 +1,5 @@
 import type { Request, Response } from 'express'
-import { Prisma } from '@prisma/client'
+import { isViolacaoDeUnicidade } from '../../utils/prismaErros.js'
 import {
   atualizarVeiculoDoCliente,
   criarVeiculoDoCliente,
@@ -23,7 +23,7 @@ function dadosValidosOu400(req: Request, res: Response): DadosVeiculo | undefine
 
 /** `P2002` (placa já cadastrada pelo cliente) vira `409`; qualquer outro erro é relançado. */
 function tratarPlacaRepetida(error: unknown, res: Response) {
-  if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+  if (isViolacaoDeUnicidade(error)) {
     res.status(409).json({ error: PLACA_REPETIDA })
     return
   }

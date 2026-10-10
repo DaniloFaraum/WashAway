@@ -1,11 +1,6 @@
-import bcrypt from 'bcryptjs'
+import { conferirSenha, gerarHashSenha } from '../../auth/senha.js'
 import { prisma } from '../../config/prisma.js'
-import {
-  criarLavaRapido,
-  CUSTO_BCRYPT_LAVA_RAPIDO,
-  getLavaRapidoByCnpj,
-  getLavaRapidoByEmail,
-} from '../lava-rapidos/lavaRapidos.service.js'
+import { criarLavaRapido, getLavaRapidoByCnpj, getLavaRapidoByEmail } from '../lava-rapidos/lavaRapidos.service.js'
 import { getContratoVigente } from '../contratos/contratos.service.js'
 
 const INCLUDE_CONTRATO = {
@@ -30,6 +25,7 @@ export type SolicitarResultado =
   | { tipo: 'existente'; solicitacao: Awaited<ReturnType<typeof getSolicitacaoById>> }
   | { tipo: 'cnpj_ja_cadastrado' }
   | { tipo: 'email_ja_cadastrado' }
+  | { tipo: 'solicitacao_em_andamento' }
   | { tipo: 'sem_contrato_vigente' }
 
 export function getSolicitacaoById(id: string) {
@@ -46,19 +42,25 @@ export async function solicitar({ name, address, cnpj, email, senha }: Solicitar
     return { tipo: 'email_ja_cadastrado' }
   }
 
-  const senhaHash = await bcrypt.hash(senha, CUSTO_BCRYPT_LAVA_RAPIDO)
-
-  // Já existe solicitação pendente para o CNPJ: devolve a mesma (sem duplicar),
-  // atualizando com os dados enviados agora — vale o último envio até o aceite
-  // (e é o que conserta solicitações antigas, de antes da senha própria).
+  // Já existe solicitação pendente para o CNPJ: nunca duplica.
+  // - Com e-mail e senha (I17): só o próprio dono retoma (mesmo e-mail e mesma
+  //   senha) — senão `409`. Sobrescrever as credenciais deixaria qualquer um
+  //   que conheça o CNPJ (dado público) trocar a senha da empresa em cadastro.
+  // - Sem senha (anterior ao I17): o reenvio completa a mesma solicitação.
   const pendente = await prisma.solicitacaoOnboarding.findFirst({
     where: { cnpj, status: 'aguardando_contrato' },
-    select: { id: true },
+    select: { id: true, email: true, senhaHash: true },
   })
   if (pendente) {
+    if (pendente.senhaHash) {
+      const senhaConfere = await conferirSenha(senha, pendente.senhaHash)
+      if (!senhaConfere || pendente.email !== email) return { tipo: 'solicitacao_em_andamento' }
+    }
     const solicitacao = await prisma.solicitacaoOnboarding.update({
       where: { id: pendente.id },
-      data: { name, address, email, senhaHash },
+      data: pendente.senhaHash
+        ? { name, address }
+        : { name, address, email, senhaHash: await gerarHashSenha(senha) },
       include: INCLUDE_CONTRATO,
       omit: OMIT_SENHA,
     })
@@ -71,7 +73,7 @@ export async function solicitar({ name, address, cnpj, email, senha }: Solicitar
   }
 
   const solicitacao = await prisma.solicitacaoOnboarding.create({
-    data: { name, address, cnpj, email, senhaHash, contratoId: contrato.id },
+    data: { name, address, cnpj, email, senhaHash: await gerarHashSenha(senha), contratoId: contrato.id },
     include: INCLUDE_CONTRATO,
     omit: OMIT_SENHA,
   })

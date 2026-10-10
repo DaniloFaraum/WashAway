@@ -1,11 +1,11 @@
 import type { Request, Response } from 'express'
-import { Prisma } from '@prisma/client'
 import { sessaoDoLavaRapido } from '../lava-rapidos/lavaRapidos.service.js'
 import { isValidCnpj } from '../lava-rapidos/lavaRapidos.validation.js'
+import { normalizarEmail } from '../../utils/email.js'
+import { isViolacaoDeUnicidade } from '../../utils/prismaErros.js'
 import { aceitarContrato, getSolicitacaoById, solicitar } from './onboarding.service.js'
 import {
   isAceiteValido,
-  normalizarEmailLavaRapido,
   TEXTO_ACEITE,
   validarEmailLavaRapido,
   validarSenhaLavaRapido,
@@ -15,6 +15,8 @@ import {
 
 const EMAIL_JA_CADASTRADO = 'Já existe uma empresa cadastrada com esse e-mail'
 const CNPJ_JA_CADASTRADO = 'Já existe uma empresa cadastrada com esse cnpj'
+const SOLICITACAO_EM_ANDAMENTO =
+  'Já existe uma solicitação de cadastro em andamento para esse CNPJ. Para retomá-la, use o mesmo e-mail e a mesma senha.'
 
 export async function create(req: Request, res: Response) {
   const { name, address, cnpj, email, senha } = req.body ?? {}
@@ -41,7 +43,7 @@ export async function create(req: Request, res: Response) {
     return
   }
 
-  const resultado = await solicitar({ name, address, cnpj, email: normalizarEmailLavaRapido(email), senha })
+  const resultado = await solicitar({ name, address, cnpj, email: normalizarEmail(email), senha })
 
   switch (resultado.tipo) {
     case 'cnpj_ja_cadastrado':
@@ -49,6 +51,9 @@ export async function create(req: Request, res: Response) {
       return
     case 'email_ja_cadastrado':
       res.status(409).json({ error: EMAIL_JA_CADASTRADO })
+      return
+    case 'solicitacao_em_andamento':
+      res.status(409).json({ error: SOLICITACAO_EM_ANDAMENTO })
       return
     case 'sem_contrato_vigente':
       res.status(503).json({ error: 'Nenhum contrato vigente disponível para o onboarding' })
@@ -97,7 +102,7 @@ export async function aceite(req: Request, res: Response) {
     }
   } catch (error) {
     // CNPJ/e-mail cadastrado por outro caminho entre a solicitação e o aceite.
-    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+    if (isViolacaoDeUnicidade(error)) {
       const campos = ([] as string[]).concat((error.meta?.target as string[] | string | undefined) ?? [])
       const ehEmail = campos.some((campo) => campo.includes('email'))
       res.status(409).json({ error: ehEmail ? EMAIL_JA_CADASTRADO : CNPJ_JA_CADASTRADO })

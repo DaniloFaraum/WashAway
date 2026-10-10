@@ -27,13 +27,13 @@ export async function listServicos(lavaRapidoId?: string) {
   return servicos.map(toServicoResponse)
 }
 
-/** Serviço da empresa, ou `null` se não existir ou for de outra empresa. */
-export function getServicoDaEmpresa(id: string, lavaRapidoId: string) {
-  return prisma.servico.findFirst({ where: { id, lavaRapidoId } })
-}
+// Escrita (I17): só no serviço da empresa do token — `where: { id, lavaRapidoId }`;
+// não encontrado (ou de outra empresa) devolve `null` (→ 404).
 
-export async function updateServicoAtivo(id: string, ativo: boolean) {
-  await prisma.servico.update({ where: { id }, data: { ativo } })
+/** Ativa/desativa só se o serviço for da empresa; senão devolve `null`. */
+export async function updateServicoAtivo(id: string, lavaRapidoId: string, ativo: boolean) {
+  const { count } = await prisma.servico.updateMany({ where: { id, lavaRapidoId }, data: { ativo } })
+  if (count === 0) return null
   return toServicoResponse((await findServicoComItens(id))!)
 }
 
@@ -68,8 +68,10 @@ export async function criarServico(lavaRapidoId: string, { nome, preco, itemIds 
   return toServicoResponse(servico)
 }
 
-export async function atualizarServico(id: string, { nome, preco, itemIds }: DadosServico) {
+/** Atualiza só se o serviço for da empresa; senão devolve `null` (sem mexer nos itens). */
+export async function atualizarServico(id: string, lavaRapidoId: string, { nome, preco, itemIds }: DadosServico) {
   const servico = await prisma.$transaction(async (tx) => {
+    if (!(await tx.servico.findFirst({ where: { id, lavaRapidoId }, select: { id: true } }))) return null
     await tx.servicoItem.deleteMany({ where: { servicoId: id } })
     return tx.servico.update({
       where: { id },
@@ -81,5 +83,5 @@ export async function atualizarServico(id: string, { nome, preco, itemIds }: Dad
       include: includeItens,
     })
   })
-  return toServicoResponse(servico)
+  return servico && toServicoResponse(servico)
 }

@@ -1,12 +1,15 @@
 import type { Request } from 'express'
 import { rateLimit, type RateLimitRequestHandler } from 'express-rate-limit'
+import { normalizarEmail } from '../utils/email.js'
 
 // Limite de tentativas (I17, decisão de 2026-10-10) para login do cliente,
-// login do lava-rápido e cadastro do cliente. Estourado o limite → 429
+// login do lava-rápido, cadastro do cliente e solicitação de onboarding. Estourado o limite → 429
 // `{ error }` com mensagem amigável (app e painel mostram a mensagem).
 //
-// - Chave = IP + identificador do login (e-mail ou CNPJ normalizado) quando o
-//   body traz um; sem identificador, só o IP.
+// - Chave = IP + o campo do body que identifica a conta NAQUELA rota (e-mail
+//   normalizado ou CNPJ só com dígitos); sem o campo, só o IP. Só o campo da
+//   rota entra na chave: um campo extra qualquer no body (ex.: `email` no login
+//   por CNPJ) não pode abrir um contador novo a cada tentativa.
 // - Contagem em memória (express-rate-limit): vale só dentro de UMA instância
 //   do backend — com várias instâncias, cada uma conta separado.
 // - Configurável por env: LIMITE_TENTATIVAS (padrão 10) por janela de
@@ -35,15 +38,19 @@ export function configLimiteTentativasDoAmbiente(): ConfigLimiteTentativas {
   }
 }
 
-/** E-mail (trim + minúsculas) ou CNPJ (só dígitos) do body, se houver. */
-function identificadorDoLogin(req: Request): string {
-  const { email, cnpj } = (req.body ?? {}) as Record<string, unknown>
-  if (typeof email === 'string' && email.trim() !== '') return `email:${email.trim().toLowerCase()}`
-  if (typeof cnpj === 'string' && cnpj.trim() !== '') return `cnpj:${cnpj.replace(/\D/g, '')}`
-  return ''
+/** Campo do body que identifica a conta na rota. */
+export type IdentificadorDaConta = 'email' | 'cnpj'
+
+/** E-mail (normalizado) ou CNPJ (só dígitos) do body — só o campo da rota. */
+function identificadorDaConta(req: Request, campo: IdentificadorDaConta): string {
+  const valor = ((req.body ?? {}) as Record<string, unknown>)[campo]
+  if (typeof valor !== 'string' || valor.trim() === '') return ''
+  return campo === 'email' ? `email:${normalizarEmail(valor)}` : `cnpj:${valor.replace(/\D/g, '')}`
 }
 
 export interface OpcoesLimiteTentativas {
+  /** Campo do body que identifica a conta nesta rota (entra na chave junto com o IP). */
+  identificador: IdentificadorDaConta
   /**
    * `true` = só tentativas que falharam (status ≥ 400) contam — usado nos
    * logins, para quem acerta a senha não ser bloqueado. Padrão: tudo conta
@@ -58,7 +65,7 @@ export interface OpcoesLimiteTentativas {
  */
 export function limiteTentativas(
   config: ConfigLimiteTentativas,
-  { soFalhasContam = false }: OpcoesLimiteTentativas = {},
+  { identificador, soFalhasContam = false }: OpcoesLimiteTentativas,
 ): RateLimitRequestHandler {
   const mensagem = `Muitas tentativas. Aguarde ${config.janelaMinutos} minutos e tente de novo.`
 
@@ -68,7 +75,7 @@ export function limiteTentativas(
     standardHeaders: 'draft-7',
     legacyHeaders: false,
     skipSuccessfulRequests: soFalhasContam,
-    keyGenerator: (req) => `${req.ip ?? ''}|${identificadorDoLogin(req)}`,
+    keyGenerator: (req) => `${req.ip ?? ''}|${identificadorDaConta(req, identificador)}`,
     handler: (_req, res) => {
       res.status(429).json({ error: mensagem })
     },

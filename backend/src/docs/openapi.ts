@@ -258,7 +258,7 @@ const loginLavaRapidoSchema = {
 
 const respostaLimiteTentativas = {
   429: {
-    description: 'Limite de tentativas estourado (por IP + e-mail/CNPJ; padrão 10 a cada 15 min, LIMITE_TENTATIVAS / LIMITE_TENTATIVAS_JANELA_MINUTOS). Mensagem amigável em `error`; header Retry-After.',
+    description: 'Limite de tentativas estourado (por IP + o e-mail ou o CNPJ da rota; padrão 10 a cada 15 min, LIMITE_TENTATIVAS / LIMITE_TENTATIVAS_JANELA_MINUTOS). Mensagem amigável em `error`; header Retry-After.',
     content: { 'application/json': { schema: { $ref: '#/components/schemas/Erro' } } },
   },
 }
@@ -714,10 +714,11 @@ export const openApiDocument = {
         },
         responses: {
           201: { description: 'Criada já como aguardando_contrato, com o contrato vigente.', content: { 'application/json': { schema: { $ref: '#/components/schemas/SolicitacaoOnboarding' } } } },
-          200: { description: 'Já havia solicitação pendente com esse cnpj — devolvida para retomar, atualizada com os dados (inclusive e-mail e senha) deste envio.', content: { 'application/json': { schema: { $ref: '#/components/schemas/SolicitacaoOnboarding' } } } },
+          200: { description: 'Já havia solicitação pendente com esse cnpj — devolvida para retomar (com nome/endereço deste envio) quando o e-mail e a senha conferem com os dela. Solicitação anterior ao I17 (sem senha) é completada com o e-mail e a senha deste envio.', content: { 'application/json': { schema: { $ref: '#/components/schemas/SolicitacaoOnboarding' } } } },
           400: { description: 'name ausente, cnpj com formato inválido, e-mail ausente/inválido ou senha com menos de 8 caracteres.', content: { 'application/json': { schema: { $ref: '#/components/schemas/Erro' } } } },
-          409: { description: 'cnpj ou e-mail já cadastrado como lava-rápido.', content: { 'application/json': { schema: { $ref: '#/components/schemas/Erro' } } } },
+          409: { description: 'cnpj ou e-mail já cadastrado como lava-rápido, ou solicitação em andamento para o cnpj com outro e-mail/senha (as credenciais dela não são trocadas).', content: { 'application/json': { schema: { $ref: '#/components/schemas/Erro' } } } },
           503: { description: 'Nenhum contrato vigente cadastrado.', content: { 'application/json': { schema: { $ref: '#/components/schemas/Erro' } } } },
+          ...respostaLimiteTentativas,
         },
       },
     },

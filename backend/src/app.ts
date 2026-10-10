@@ -32,9 +32,11 @@ export function createApp({ limiteTentativas: configLimite = configLimiteTentati
 
   // Limite de tentativas (I17): um contador por rota e por app (em memória).
   // Registrado antes dos routers; passa adiante (next) enquanto não estoura.
-  app.post('/auth/cliente/login', limiteTentativas(configLimite, { soFalhasContam: true }))
-  app.post('/lavaRapidos/login', limiteTentativas(configLimite, { soFalhasContam: true }))
-  app.post('/auth/cliente/cadastro', limiteTentativas(configLimite))
+  app.post('/auth/cliente/login', limiteTentativas(configLimite, { identificador: 'email', soFalhasContam: true }))
+  app.post('/lavaRapidos/login', limiteTentativas(configLimite, { identificador: 'cnpj', soFalhasContam: true }))
+  app.post('/auth/cliente/cadastro', limiteTentativas(configLimite, { identificador: 'email' }))
+  // Retomar uma solicitação pendente confere e-mail + senha: mesmo limite do login.
+  app.post('/onboarding/solicitacoes', limiteTentativas(configLimite, { identificador: 'cnpj', soFalhasContam: true }))
 
   app.get('/api-docs.json', (_req, res) => res.json(openApiDocument))
   app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(openApiDocument))

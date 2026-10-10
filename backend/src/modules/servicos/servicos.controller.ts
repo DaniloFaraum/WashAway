@@ -5,7 +5,6 @@ import {
   atualizarServico,
   criarServico,
   findItemIdsInvalidos,
-  getServicoDaEmpresa,
   listServicos,
   updateServicoAtivo,
 } from './servicos.service.js'
@@ -29,13 +28,11 @@ export async function updateAtivo(req: Request, res: Response) {
     return
   }
 
-  const servicoExistente = await getServicoDaEmpresa(req.params.id, req.auth!.id)
-  if (!servicoExistente) {
+  const servico = await updateServicoAtivo(req.params.id, req.auth!.id, ativo)
+  if (!servico) {
     res.status(404).json({ error: 'Serviço não encontrado' })
     return
   }
-
-  const servico = await updateServicoAtivo(req.params.id, ativo)
   res.json(servico)
 }
 
@@ -75,12 +72,10 @@ export async function create(req: Request, res: Response) {
 export async function update(req: Request, res: Response) {
   if (!(await validarBody(req, res))) return
 
-  const servicoExistente = await getServicoDaEmpresa(req.params.id, req.auth!.id)
-  if (!servicoExistente) {
+  const servico = await atualizarServico(req.params.id, req.auth!.id, toDadosServico(req.body))
+  if (!servico) {
     res.status(404).json({ error: 'Serviço não encontrado' })
     return
   }
-
-  const servico = await atualizarServico(req.params.id, toDadosServico(req.body))
   res.json(servico)
 }

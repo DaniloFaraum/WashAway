@@ -219,7 +219,7 @@ Regra de placa (`modules/veiculos-cliente/placa.ts`): `normalizarPlaca` remove h
 | `/clientes/me/veiculos/:id` | `PUT` | `autenticar('cliente')` (I3). Mesmo body/validação do `POST`. `200` com o veículo; `404` se não existir ou for de outro cliente; `409` se outro veículo do cliente já tiver a placa. |
 | `/clientes/me/veiculos/:id` | `DELETE` | `autenticar('cliente')` (I3). `204`; `404` se não existir ou for de outro cliente. |
 | `/contratos/vigente` | `GET` | Contrato vigente do onboarding (maior `versao` com `vigente: true`); `404` se não houver. |
-| `/onboarding/solicitacoes` | `POST` | Público. Body `{ name, address?, cnpj, email, senha }` (I17). `400` se `name` faltar, `cnpj` não tiver 14 dígitos, `email` faltar/for inválido (mesmo formato do cliente, até 254) ou `senha` tiver menos de 8 caracteres (ou mais de 72 bytes); `409` se o `cnpj` **ou o e-mail** (normalizado) já for de um `LavaRapido`; `200` devolvendo a solicitação existente se já houver uma `aguardando_contrato` com o mesmo `cnpj` (retomar) — **atualizada** com nome/endereço/e-mail/senha deste envio (vale o último envio até o aceite); `503` se não houver contrato vigente; senão `201` com a solicitação (`status: aguardando_contrato`, `email`) + `contrato: { id, versao, titulo, conteudo }`. A senha é gravada **só como hash bcrypt** em `SolicitacaoOnboarding.senhaHash`, que nunca sai na resposta. |
+| `/onboarding/solicitacoes` | `POST` | Público. Body `{ name, address?, cnpj, email, senha }` (I17). `400` se `name` faltar, `cnpj` não tiver 14 dígitos, `email` faltar/for inválido (mesmo formato do cliente, até 254) ou `senha` tiver menos de 8 caracteres (ou mais de 72 bytes); `409` se o `cnpj` **ou o e-mail** (normalizado) já for de um `LavaRapido`; se já houver uma `aguardando_contrato` com o mesmo `cnpj`: com e-mail e senha (I17), `200` devolvendo a mesma solicitação (retomar, com nome/endereço deste envio) **só se o e-mail e a senha conferem** — senão `409` ("solicitação de cadastro em andamento"), sem trocar as credenciais nem devolver o `id` (o CNPJ é público: sobrescrever deixaria qualquer um trocar a senha da empresa em cadastro); sem senha (anterior ao I17), `200` completando-a com o e-mail e a senha deste envio; com **limite de tentativas** (seção 5.3, só as recusas contam); `503` se não houver contrato vigente; senão `201` com a solicitação (`status: aguardando_contrato`, `email`) + `contrato: { id, versao, titulo, conteudo }`. A senha é gravada **só como hash bcrypt** em `SolicitacaoOnboarding.senhaHash`, que nunca sai na resposta. |
 | `/onboarding/solicitacoes/:id` | `GET` | Status + contrato da solicitação; `404` se não existir. |
 | `/onboarding/solicitacoes/:id/aceite` | `POST` | Body `{ aceite: "eu aceito" }` (trim, case-insensitive; senão `400`). Numa transação: cria o `LavaRapido` com o `email` e o `senhaHash` da solicitação e marca a solicitação `concluida` + `aceitoEm` + `lavaRapidoId`. `201 { token, expiraEm, lavaRapido }` (mesma sessão do login — o painel já entra); `404` se não existir; `409` se já concluída, se a solicitação é anterior ao I17 (sem e-mail/senha — reenviar o cadastro completa a mesma solicitação) ou se o CNPJ/e-mail foi cadastrado por outro caminho nesse meio-tempo. |
 
@@ -286,10 +286,11 @@ Planos `docs/plan/i2-login-cliente/` (infra + cliente) e `i17-*` (lava-rápido, 
 
 ## 5.3 Limite de tentativas (login e cadastro)
 
-Decisão de 2026-10-10 (I17). `src/middlewares/limiteTentativas.ts` (`express-rate-limit`), registrado em `app.ts` antes dos routers, um contador por rota: `POST /auth/cliente/login`, `POST /lavaRapidos/login` e `POST /auth/cliente/cadastro`.
+Decisão de 2026-10-10 (I17). `src/middlewares/limiteTentativas.ts` (`express-rate-limit`), registrado em `app.ts` antes dos routers, um contador por rota: `POST /auth/cliente/login`, `POST /lavaRapidos/login`, `POST /auth/cliente/cadastro` e `POST /onboarding/solicitacoes` (retomar uma solicitação pendente confere e-mail + senha).
 
-- **Chave** = IP + identificador do body quando houver (e-mail em minúsculas/sem espaços, ou CNPJ só com dígitos); sem identificador, só o IP. Estourar o limite de um e-mail/CNPJ não bloqueia outro.
-- **Limite**: `LIMITE_TENTATIVAS` (padrão `10`) por janela de `LIMITE_TENTATIVAS_JANELA_MINUTOS` (padrão `15`). Nos **logins só as falhas contam** (`skipSuccessfulRequests`: quem acerta a senha não gasta tentativa); no cadastro, toda tentativa conta.
+- **Chave** = IP + o campo do body que identifica a conta **naquela rota** (`identificador`: `email` — normalizado com `utils/email.ts#normalizarEmail` — nos logins/cadastro do cliente; `cnpj` só com dígitos no login do lava-rápido e no onboarding); sem o campo, só o IP. Só o campo da rota entra na chave: um `email` extra no login por CNPJ não abre um contador novo. Estourar o limite de um e-mail/CNPJ não bloqueia outro.
+- **Logins/onboarding: só as falhas contam** (`soFalhasContam`); no cadastro do cliente, toda tentativa conta.
+- **Limite**: `LIMITE_TENTATIVAS` (padrão `10`) por janela de `LIMITE_TENTATIVAS_JANELA_MINUTOS` (padrão `15`).
 - **Estourou** → `429 { error: 'Muitas tentativas. Aguarde 15 minutos e tente de novo.' }` + header `Retry-After` (cabeçalhos `RateLimit` draft-7). O painel e o app mostram a mensagem do `error`.
 - **Limitações**: contagem **em memória** — vale por instância do backend (várias instâncias = contadores separados; reinício zera). Sem `trust proxy`: atrás de proxy reverso o IP visto seria o do proxy (configurar `app.set('trust proxy', …)` no deploy).
 - **Testes**: `vitest.config.ts` define `LIMITE_TENTATIVAS=10000` pra não interferir nos outros testes; `src/test/limiteTentativas.test.ts` cria o app com `createApp({ limiteTentativas: { limite: 3, janelaMinutos: 15 } })` e estoura o limite.
@@ -311,12 +312,13 @@ backend/
 │   ├── config/
 │   │   └── prisma.ts                # PrismaClient singleton
 │   ├── auth/
+│   │   ├── senha.ts                 # gerarHashSenha / conferirSenha (bcrypt + hash fictício: mesmo tempo sem conta)
 │   │   ├── token.ts                 # assinarToken / verificarToken (JWT HS256) — seção 5.2
 │   │   └── types.ts                 # TipoUsuario, Autenticacao, req.auth
 │   ├── middlewares/
 │   │   ├── asyncHandler.ts
 │   │   ├── autenticar.ts            # autenticar(...tipos) → req.auth; 401/403
-│   │   └── limiteTentativas.ts      # I17: express-rate-limit nos logins/cadastro → 429
+│   │   └── limiteTentativas.ts      # I17: express-rate-limit nos logins/cadastro/onboarding → 429
 │   ├── docs/
 │   │   └── openapi.ts                # documento OpenAPI 3.0 (objeto TS, escrito à mão) servido em /api-docs
 │   ├── modules/
@@ -333,7 +335,9 @@ backend/
 │   │   ├── horarios/{horarios.routes,controller,service}.ts + disponibilidade.service.ts  # I19: horário semanal + estaAberto/listarAbertos
 │   │   └── veiculos/{veiculos.routes,controller,service}.ts   # sem model Prisma próprio — deriva de Pedido
 │   ├── utils/
+│   │   ├── email.ts                 # normalizarEmail, FORMATO_EMAIL, EMAIL_MAXIMO (cliente, lava-rápido, limite de tentativas)
 │   │   ├── fusoHorario.ts           # FUSO_LAVA_RAPIDOS + partesLocais (I19)
+│   │   ├── prismaErros.ts           # isViolacaoDeUnicidade (P2002 → 409 nos controllers)
 │   │   └── queryParam.ts            # getStringQueryParam — normaliza ?lavaRapidoId= (string ou array), usado por todos os módulos acima
 │   └── test/
 │       ├── globalSetup.ts           # docker compose up (fora do CI) + cria/migra washaway_test_1..N (um por worker)
