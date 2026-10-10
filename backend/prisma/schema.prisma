@@ -12,6 +12,9 @@ model LavaRapido {
   name         String
   address      String?
   cnpj         String   @unique
+  // E-mail de acesso (I17): normalizado (trim + minúsculas), único. Opcional só
+  // por causa das empresas criadas antes do I17; o onboarding sempre preenche.
+  email        String?  @unique
   senha        String
   rating       Float    @default(0)
   reviewsCount Int      @default(0)
@@ -160,6 +163,10 @@ model SolicitacaoOnboarding {
   name         String
   address      String?
   cnpj         String
+  // I17: e-mail e senha própria informados na solicitação (senha já com hash
+  // bcrypt). Opcionais só por causa das solicitações anteriores ao I17.
+  email        String?
+  senhaHash    String?
   status       SolicitacaoStatus @default(aguardando_contrato)
   contratoId   String
   contrato     Contrato          @relation(fields: [contratoId], references: [id])
