@@ -86,6 +86,8 @@ function RootNavigator() {
         <Stack.Screen name="login" />
         <Stack.Screen name="cadastro" />
         <Stack.Screen name="meus-dados" />
+        <Stack.Screen name="veiculos/index" />
+        <Stack.Screen name="veiculos/form" />
         <Stack.Screen name="servicos" />
         <Stack.Screen name="disponibilidade" />
         <Stack.Screen name="servicos/[servicoId]" />

@@ -103,7 +103,7 @@ model Intercorrencia {
 
 `Servico` e `Intercorrencia` foram adicionados na task `migrar-servicos-disponibilidade-veiculos-backend` (`docs/plan/migrar-servicos-disponibilidade-veiculos-backend/`) pra tirar essas 3 telas do `json-server` isolado do admin-front.
 
-**Catálogo × combo** (`docs/plan/servicos-combos-catalogo/`): a loja não declara em texto livre o que faz — ela monta seus `Servico`s (combos) escolhendo 1+ `ItemServico` de um catálogo global (lavagem externa, aspiração, secagem, polimento…, 18 itens em 4 categorias no seed). Não existe rota pra criar item; o catálogo só muda via seed/banco. O campo livre `Servico.categoria` foi removido (migration `20261003020000_servicos_combos_catalogo`, que também apaga os `Servico` antigos — só dado de seed); a API devolve `categorias` derivadas dos itens. **Duração** (`docs/plan/tempo-estimado-preco-servicos/`): cada `ItemServico` tem `duracaoMinutos` (migration `20261003030000_duracao_item_servico`, valores no seed); a duração do combo é **derivada** na resposta (soma dos itens), sem coluna própria. `Veiculo` **não ganhou tabela própria** — `GET /veiculos` deriva a lista a partir de `Pedido.veiculo` (ver seção 5).
+**Catálogo × combo** (`docs/plan/servicos-combos-catalogo/`): a loja não declara em texto livre o que faz — ela monta seus `Servico`s (combos) escolhendo 1+ `ItemServico` de um catálogo global (lavagem externa, aspiração, secagem, polimento…, 18 itens em 4 categorias no seed). Não existe rota pra criar item; o catálogo só muda via seed/banco. O campo livre `Servico.categoria` foi removido (migration `20261003020000_servicos_combos_catalogo`, que também apaga os `Servico` antigos — só dado de seed); a API devolve `categorias` derivadas dos itens. **Duração** (`docs/plan/tempo-estimado-preco-servicos/`): cada `ItemServico` tem `duracaoMinutos` (migration `20261003030000_duracao_item_servico`, valores no seed); a duração do combo é **derivada** na resposta (soma dos itens), sem coluna própria. No painel, o veículo **não ganhou tabela própria** — `GET /veiculos` deriva a lista a partir de `Pedido.veiculo` (ver seção 5). O model `Veiculo` que existe desde o I3 é o veículo **do cliente do app** (abaixo) e ainda não está ligado ao pedido (I13).
 
 **Desvio do plano — `Intercorrencia.data` é `String`, não `DateTime`**: o plano original especificava `DateTime`, mas `admin-front/src/pages/disponibilidade/Disponibilidade.jsx` casa esse campo por igualdade exata de string no formato `"YYYY-MM-DD"` (marcação de dias no calendário via `dayjs().format('YYYY-MM-DD')`). Um `DateTime` serializaria como ISO completo (`"2026-10-12T00:00:00.000Z"`) e quebraria silenciosamente esse match — nenhum dia apareceria marcado no calendário. `String` guarda exatamente o formato que o front já espera, sem semântica de data no servidor (não há nenhuma ordenação/cálculo por data feito no backend que justificasse `DateTime`).
 
@@ -170,6 +170,25 @@ model Cliente {
 
 O `email` é gravado e buscado **normalizado** (`normalizarEmail` em `clientes.validation.ts`), então o `@unique` garante unicidade sem diferenciar maiúsculas (`Ana@X.com` × `ana@x.com` → `409`). `clientes.service.ts` expõe `criarCliente`, `getClienteByEmail(email)` (normaliza antes), `getClienteById(id)`, `omitSenhaCliente` e `autenticarCliente(email, senha)`. A senha nunca sai em resposta nem em log: os controllers não logam o body e o middleware de erro de `app.ts` responde `400` a JSON malformado **sem** logar o erro do body-parser (que carrega o body cru).
 
+**Veículo do cliente** (I3, `docs/plan/i3-cadastro-veiculo/`, migration `20261010144438_veiculo_cliente`):
+
+```prisma
+model Veiculo {
+  id        String   @id @default(cuid())
+  clienteId String
+  cliente   Cliente  @relation(fields: [clienteId], references: [id], onDelete: Cascade)
+  marca     String?            // opcional
+  modelo    String
+  cor       String
+  placa     String             // salva normalizada: sem hífen/espaços, maiúsculas
+  criadoEm  DateTime @default(now())
+
+  @@unique([clienteId, placa]) // placa única por cliente; a mesma placa pode existir em clientes diferentes
+}
+```
+
+Regra de placa (`modules/veiculos-cliente/placa.ts`): `normalizarPlaca` remove hífen e espaços e passa para maiúsculas; `isPlacaValida` aceita, **depois de normalizar**, o formato antigo `^[A-Z]{3}[0-9]{4}$` (ABC-1234) ou o Mercosul `^[A-Z]{3}[0-9][A-Z][0-9]{2}$` (ABC1D23). O app usa a mesma regra antes de enviar (`app_mobile/src/features/veiculos/placa.ts`). `veiculosCliente.service.ts` expõe `listarVeiculosDoCliente`, `criarVeiculoDoCliente`, `atualizarVeiculoDoCliente`, `removerVeiculoDoCliente` e **`getVeiculoDoCliente(clienteId, veiculoId)` → `Veiculo | null`** (o I13 usa para validar que o `veiculoId` do pedido é do cliente). Toda busca/alteração filtra por `{ id, clienteId }`: veículo de outro cliente é "não encontrado" (`404`), nunca `403`. **Não confundir** com o `GET /veiculos` do painel (`modules/veiculos`), que continua derivando de `Pedido.veiculo`.
+
 ## 5. Contrato de API implementado
 
 **Documentação interativa** (`docs/plan/swagger-backend/`): `GET /api-docs` serve a UI do Swagger (`swagger-ui-express`) com todas as rotas abaixo; `GET /api-docs.json` devolve o documento OpenAPI 3.0 cru (útil pra importar em Postman/Insomnia). Documento escrito à mão em `backend/src/docs/openapi.ts` (objeto TS, não gerado via `swagger-jsdoc`/comentários) — precisa ser atualizado manualmente quando uma rota muda; não há teste que garanta que o spec bate com o comportamento real além do smoke test de que os endpoints respondem.
@@ -192,10 +211,14 @@ O `email` é gravado e buscado **normalizado** (`normalizarEmail` em `clientes.v
 | `/intercorrencias` | `GET` | Lista intercorrências. Aceita `?lavaRapidoId=` opcional. |
 | `/intercorrencias` | `POST` | Cria uma intercorrência: body `{ lavaRapidoId, data, motivo, diaInteiro, horaInicio?, horaFim? }`; `400` se `horaInicio`/`horaFim` vierem com `diaInteiro: true`, ou faltarem com `diaInteiro: false`. |
 | `/intercorrencias/:id` | `PATCH` | "Reabre" manualmente: body **só** `{ reaberta: true }` (`400` se vier outra coisa); a partir daí essa intercorrência para de contar no cálculo de `isOpen` (ver nota acima). `404` se o id não existir. |
-| `/veiculos` | `GET` | Lista veículos **derivados** dos `Pedido`s (não é uma tabela própria — ver seção 4): extrai `veiculo` (JSON) de cada pedido filtrado por `?lavaRapidoId=` (opcional) e deduplica por `placa` (usada como `id` na resposta). |
+| `/veiculos` | `GET` | Lista veículos **derivados** dos `Pedido`s (não é uma tabela própria — ver seção 4): extrai `veiculo` (JSON) de cada pedido filtrado por `?lavaRapidoId=` (opcional) e deduplica por `placa` (usada como `id` na resposta). É a lista do **painel**; o veículo do cliente do app é `/clientes/me/veiculos` (I3). |
 | `/auth/cliente/cadastro` | `POST` | Público (I1). Body `{ nome, email, senha }`: nome obrigatório (trim, até 100 caracteres), e-mail obrigatório no formato `^[^\s@]+@[^\s@]+\.[^\s@]+$` (até 254 caracteres), senha com no mínimo 6 caracteres e no máximo 72 bytes em UTF-8 (limite do bcrypt). `400 { error, campos: { nome?, email?, senha? } }`; `409 { error: 'Este e-mail já está cadastrado' }` (sem diferenciar maiúsculas); `201` com o `Cliente` sem `senha`. |
 | `/auth/cliente/login` | `POST` | Público (I2). Body `{ email, senha }` (e-mail normalizado). `200 { token, expiraEm, cliente }` (cliente sem `senha`); `401 { error: 'E-mail ou senha incorretos' }` — **mesma** resposta para e-mail inexistente, senha errada ou body incompleto (e o mesmo tempo de resposta: compara com um hash fictício quando o e-mail não existe). |
 | `/clientes/me` | `GET` | `autenticar('cliente')` (I2). `200` com o cliente do token (sem `senha`); `401` sem token, com token inválido/expirado ou se o cliente não existir mais; `403` com token de outro tipo. Recursos do cliente logado ficam em `/clientes/me/...` (I3, I13, I18). |
+| `/clientes/me/veiculos` | `GET` | `autenticar('cliente')` (I3). Veículos do cliente do token, mais antigo primeiro. |
+| `/clientes/me/veiculos` | `POST` | `autenticar('cliente')` (I3). Body `{ marca?, modelo, cor, placa }`: modelo, cor e placa obrigatórios (trim, até 60 caracteres; marca vazia vira `null`), placa no formato antigo ou Mercosul (normalizada antes de salvar). `400 { error, campos: { marca?, modelo?, cor?, placa? } }`; `409` se o cliente já tiver essa placa (`P2002`); `201` com o veículo. |
+| `/clientes/me/veiculos/:id` | `PUT` | `autenticar('cliente')` (I3). Mesmo body/validação do `POST`. `200` com o veículo; `404` se não existir ou for de outro cliente; `409` se outro veículo do cliente já tiver a placa. |
+| `/clientes/me/veiculos/:id` | `DELETE` | `autenticar('cliente')` (I3). `204`; `404` se não existir ou for de outro cliente. |
 | `/contratos/vigente` | `GET` | Contrato vigente do onboarding (maior `versao` com `vigente: true`); `404` se não houver. |
 | `/onboarding/solicitacoes` | `POST` | Body `{ name, address?, cnpj }`. `400` se `name` faltar/`cnpj` não tiver 14 dígitos; `409` se o `cnpj` já for um `LavaRapido`; `200` devolvendo a solicitação existente se já houver uma `aguardando_contrato` com o mesmo `cnpj` (retomar); `503` se não houver contrato vigente; senão `201` com a solicitação (`status: aguardando_contrato`) + `contrato: { id, versao, titulo, conteudo }`. |
 | `/onboarding/solicitacoes/:id` | `GET` | Status + contrato da solicitação; `404` se não existir. |
@@ -287,6 +310,7 @@ backend/
 │   ├── modules/
 │   │   ├── lava-rapidos/{lavaRapidos.routes,controller,service}.ts
 │   │   ├── clientes/{clientes.routes,controller,service,validation}.ts  # I1/I2: /auth/cliente/{cadastro,login}, /clientes/me
+│   │   ├── veiculos-cliente/{veiculosCliente.routes,controller,service,validation}.ts + placa.ts  # I3: /clientes/me/veiculos (aninhado no clientesRouter)
 │   │   ├── contratos/{contratos.routes,controller,service}.ts       # "BackEnd Onboard": contrato vigente
 │   │   ├── onboarding/{onboarding.routes,controller,service,validation}.ts  # solicitação → aceite → cria LavaRapido
 │   │   ├── pedidos/{pedidos.routes,controller,service}.ts
@@ -314,6 +338,7 @@ backend/
 │       ├── onboarding.test.ts
 │       ├── clientes.test.ts         # I1: cadastro
 │       ├── clientesAuth.test.ts     # I2: login, /clientes/me, token expirado/inválido
+│       ├── veiculosCliente.test.ts  # I3: CRUD /clientes/me/veiculos, placa, 409, 404 de outro cliente, 401
 │       ├── autenticar.test.ts       # contrato do middleware (401 × 403, escopo, vários tipos)
 │       └── openApiDocs.test.ts      # smoke test: /api-docs (HTML) e /api-docs.json (OpenAPI cru) respondem
 └── vitest.config.ts                 # projetos `unit` e `integracao`; cobertura v8; exclui dist/ (ver nota)
@@ -336,7 +361,7 @@ Pirâmide do projeto (vale para os três projetos; aqui o detalhe do backend):
 **Banco de teste — um por worker.** O `globalSetup` (projeto `integracao`) sobe o Postgres do docker-compose (pulado quando `CI=true`; no GitHub Actions o Postgres é um `services:` do job), cria `washaway_test_1..N` (N = `maxWorkers` do Vitest) se não existirem e roda `prisma migrate deploy` em cada um (e no `washaway_test` base, usado pelo teste do worker de e-mail). O `setupBancoDoWorker.ts` aponta o `DATABASE_URL` de cada worker para `washaway_test_<VITEST_POOL_ID>`. Nada é apagado no setup — os bancos acumulam o que um teste interrompido deixar, por isso as factories geram valores únicos. Nunca aponta para o banco de dev `washaway`.
 
 **Helpers (`src/test/helpers/`):**
-- `factories.ts` — `criarLavaRapidoTeste(overrides)` (com `senha` em texto puro opcional, gravada com bcrypt), `criarItemServicoTeste`, `criarServicoTeste(lavaRapidoId, { itemIds })`, `criarPedidoTeste(lavaRapidoId, overrides)`, `criarClienteTeste(overrides)` (I1; `senha` em texto puro opcional — padrão `SENHA_CLIENTE_TESTE` —, gravada com bcrypt; e-mail único), mais `cnpjUnico()`, `placaUnica()`, `sufixoUnico()`. Cada factory registra o id criado para limpeza. `criarVeiculoTeste` (I3) entra aqui junto com o model, no mesmo formato.
+- `factories.ts` — `criarLavaRapidoTeste(overrides)` (com `senha` em texto puro opcional, gravada com bcrypt), `criarItemServicoTeste`, `criarServicoTeste(lavaRapidoId, { itemIds })`, `criarPedidoTeste(lavaRapidoId, overrides)`, `criarClienteTeste(overrides)` (I1; `senha` em texto puro opcional — padrão `SENHA_CLIENTE_TESTE` —, gravada com bcrypt; e-mail único), mais `cnpjUnico()`, `placaUnica()`, `sufixoUnico()`. Cada factory registra o id criado para limpeza. `criarVeiculoTeste(clienteId, overrides)` (I3; placa Mercosul única).
 - `limpeza.ts` — `limparDadosDeTeste()` apaga só o que as factories (ou `registrarParaLimpeza(modelo, id)`) registraram neste arquivo, na ordem certa. Nada de `deleteMany` global.
 - `auth.ts` — `comToken(req, token)` (header `Authorization: Bearer`); `tokenDeCliente(cliente)` gera o token direto com `assinarToken` (sem passar pela rota de login); `tokenDeLavaRapido(lavaRapido)` ainda é stub que lança erro até o I17 — quem implementar troca o corpo, mantendo a assinatura.
 - `email.ts` — `emailsEnfileirados(destinatario)` (I17-email, seção 5.1).
@@ -377,7 +402,7 @@ Usuario
   id, nome, email, papel: 'consumidor' | 'dono_lava_rapido'
 ```
 
-`Servico` e `Veiculo` (que apareciam aqui antes) já existem — `Servico` como model Prisma real, `Veiculo` derivado de `Pedido.veiculo` (ver seção 4/5).
+`Servico` e `Veiculo` (que apareciam aqui antes) já existem — `Servico` como model Prisma real; `Veiculo` como model do **cliente do app** (I3), enquanto o painel ainda deriva os veículos de `Pedido.veiculo` (ver seção 4/5) até o I13 ligar o pedido ao veículo.
 
 - **Autenticação**: a infraestrutura de token (JWT) e o login do **cliente** existem (seção 5.2). O login do `admin-front` por `LavaRapido` (CNPJ + senha fixa "admin") ainda não emite token: as rotas de gestão (`GET /pedidos`, `POST /servicos` etc.) continuam sem middleware até o I17 (`autenticar('lavaRapido')`). Sem refresh token, troca/recuperação de senha do cliente.
 - **Upload de fotos do veículo**: `Pedido.fotos` continua array de URLs estáticas — sem endpoint de upload nem storage.

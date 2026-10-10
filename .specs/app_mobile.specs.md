@@ -42,7 +42,7 @@
 ### 3.2 Como testar
 
 - `python3 scripts/test.py --project app_mobile` (a partir de `WashAway/`) ou `cd app_mobile && npm run test` — roda a suíte Vitest. Sobe e derruba sozinho um `json-server` de teste (porta 3004, separada da de dev) via `globalSetup` — não precisa do passo manual do `mock-server`.
-- Cobertura hoje: `src/test/lavaRapidos.service.test.ts`, `src/test/servicos.service.test.ts`, `src/test/intercorrencias.service.test.ts`, `src/test/useServicos.test.ts` (filtro de `ativo`), `src/test/useIntercorrencias.test.ts` (`diasAte`/`getIntercorrenciaRelevante`), `src/test/carrinho.test.ts` (`calcularCarrinho`, `formatarDuracao`, `formatarPreco`, `price` nullable) e `src/test/filtrarServicos.test.ts` (busca/categoria/preço/duração da tela de serviços). `src/test/servicosSelecionados.test.ts` cobre o carrinho compartilhado entre a lista e o detalhe do serviço. Conta do cliente (I1/I2, `fetch` mockado): `validarCadastro.test.ts`, `clientes.service.test.ts`, `auth.service.test.ts`, `httpClient.test.ts` e `tokenStorage.test.ts` (mocka `react-native`/`expo-secure-store` com `vi.mock`). As telas em si continuam sem teste.
+- Cobertura hoje: `src/test/lavaRapidos.service.test.ts`, `src/test/servicos.service.test.ts`, `src/test/intercorrencias.service.test.ts`, `src/test/useServicos.test.ts` (filtro de `ativo`), `src/test/useIntercorrencias.test.ts` (`diasAte`/`getIntercorrenciaRelevante`), `src/test/carrinho.test.ts` (`calcularCarrinho`, `formatarDuracao`, `formatarPreco`, `price` nullable) e `src/test/filtrarServicos.test.ts` (busca/categoria/preço/duração da tela de serviços). `src/test/servicosSelecionados.test.ts` cobre o carrinho compartilhado entre a lista e o detalhe do serviço. Conta do cliente (I1/I2, `fetch` mockado): `validarCadastro.test.ts`, `clientes.service.test.ts`, `auth.service.test.ts`, `httpClient.test.ts` e `tokenStorage.test.ts` (mocka `react-native`/`expo-secure-store` com `vi.mock`). Veículos (I3): `validarVeiculo.test.ts` (placa e campos obrigatórios) e `veiculos.service.test.ts` (`fetch` mockado: lista, 409, 400, 404, rede). As telas em si continuam sem teste.
 - `npm run lint` (`expo lint`) continua disponível, mas não substitui teste.
 - **Lugar na pirâmide do projeto** (estratégia completa em `backend.specs.md`, seção 6.1): o app testa services, hooks e funções puras (contra `json-server` de teste ou `fetch` mockado); regras de negócio e status HTTP são testados no backend. Sem testes de tela nesta sprint.
 - **Cobertura:** `npm run test:coverage` gera relatório em `coverage/` (v8, só relatório, não bloqueia PR).
@@ -58,10 +58,12 @@ app_mobile/
 │   └── db.json                   # dados da feature lava-rapidos (uso manual/dev)
 ├── src/
 │   ├── app/                      # ROTAS REAIS (expo-router, convenção "src directory")
-│   │   ├── _layout.tsx           # SessaoClienteProvider + gate de sessão; Stack raiz: (tabs) | login | cadastro | meus-dados | servicos | disponibilidade | servicos/[servicoId]
+│   │   ├── _layout.tsx           # SessaoClienteProvider + gate de sessão; Stack raiz: (tabs) | login | cadastro | meus-dados | veiculos/index | veiculos/form | servicos | disponibilidade | servicos/[servicoId]
 │   │   ├── login.tsx             # I2: login do cliente (params: email, expirada=1)
 │   │   ├── cadastro.tsx          # I1: cadastro → entra logado
 │   │   ├── meus-dados.tsx        # I2: nome e e-mail (GET /clientes/me), somente leitura
+│   │   ├── veiculos/index.tsx    # I3: "Meus veículos" — lista, adicionar, editar, remover (com confirmação), estado vazio
+│   │   ├── veiculos/form.tsx     # I3: criar/editar veículo (params: id/marca/modelo/cor/placa na edição; voltarPara)
 │   │   ├── (tabs)/
 │   │   │   ├── _layout.tsx       # renderiza <AppTabs /> (NativeTabs)
 │   │   │   ├── index.tsx         # Home: busca/lista/mapa de lava-rápidos (consome lavaRapidos.service.ts)
@@ -77,6 +79,12 @@ app_mobile/
 │   │   │   ├── SessaoClienteProvider.tsx   # contexto + useSessaoCliente()
 │   │   │   ├── tokenStorage.ts   # expo-secure-store (nativo) / localStorage (só Expo web)
 │   │   │   └── authStyles.ts     # estilos compartilhados de login/cadastro
+│   │   ├── veiculos/             # I3
+│   │   │   ├── service/{veiculos.routes,model,service}.ts   # listar/criar/atualizar/removerVeiculo + erros tipados (409, 400, 404)
+│   │   │   ├── useVeiculos.ts    # carrega ao montar; recarregar(); remover(id)
+│   │   │   ├── placa.ts          # normalizarPlaca/isPlacaValida (mesma regra do backend) + formatarPlaca (exibição)
+│   │   │   ├── validarVeiculo.ts # validação do formulário (função pura)
+│   │   │   └── veiculosStyles.ts # estilos compartilhados das duas telas
 │   │   ├── clientes/             # I1
 │   │   │   ├── service/{clientes.routes,model,service}.ts   # cadastrarCliente + erros tipados
 │   │   │   └── validarCadastro.ts   # validação do formulário (função pura)
@@ -105,7 +113,7 @@ app_mobile/
 │   │   └── useIntercorrencias.test.ts
 │   ├── components/
 │   │   ├── app-tabs.tsx / .web.tsx   # definição da tab bar (NativeTabs)
-│   │   ├── MenuConta.tsx         # I2: botão com a inicial do cliente no cabeçalho da Home → Meus dados / Sair
+│   │   ├── MenuConta.tsx         # I2: botão com a inicial do cliente no cabeçalho da Home → Meus dados / Meus veículos (I3) / Sair
 │   │   ├── CampoFormulario.tsx   # campo com rótulo + erro (login/cadastro)
 │   │   ├── CarWashCard.tsx       # card de lava-rápido (usado na Home; `image` agora é URL, não `require()` local — ver seção 4.1)
 │   │   ├── Header.tsx, VehicleBar.tsx   # migrados de .js no I21 parte 1 (fontes/cores corrigidas); hoje sem uso — guardados para o fluxo do I3/I13 (VehicleBar ainda mostra um carro fixo)
@@ -142,7 +150,7 @@ app_mobile/
   - **Sessão** (`features/auth/SessaoClienteProvider.tsx`, `useSessaoCliente()` → `{ cliente, token, carregando, expirada, entrar, sair }`): no boot lê o token salvo e valida com `GET /clientes/me` (401 → limpa; sem rede → mantém o token e `cliente` fica `null` até a próxima chamada). `entrar` grava o token (se a gravação falhar, a sessão segue só em memória até fechar o app); `sair` apaga.
   - **Token guardado** em `features/auth/tokenStorage.ts` (`getToken`/`setToken`/`limparToken`): `expo-secure-store` no celular (Keychain/Keystore, nunca AsyncStorage). **Limitação de desenvolvimento**: no Expo web o SecureStore não existe e o token fica no `localStorage` do navegador.
   - **`src/services/httpClient.ts`** (compartilhado — I3, I13, I18 usam nas rotas autenticadas): `apiFetch(path, init)` devolve o `Response` cru; aceita `init.headers` como objeto, lista de pares ou `Headers`; injeta `Authorization: Bearer <token>` quando há sessão; põe `Content-Type: application/json` quando o body é string; falha de rede vira `ErroRede`; **401 de uma requisição que levou token** (qualquer tela) chama o handler da sessão (`registrarAoExpirarSessao`), que encerra a sessão e o gate leva para o login com "Sua sessão expirou". 401 sem token (ex.: senha errada no login) não dispara isso.
-  - **Menu de conta**: o botão "Trocar lava-rápido" da Home virou `components/MenuConta.tsx` — círculo com a inicial do nome; abre "Meus dados" (`/meus-dados`, somente leitura) e "Sair". "Meus veículos" está pronto no menu, mas oculto (`MOSTRAR_MEUS_VEICULOS`) até a tela do I3.
+  - **Menu de conta**: o botão "Trocar lava-rápido" da Home virou `components/MenuConta.tsx` — círculo com a inicial do nome; abre "Meus dados" (`/meus-dados`, somente leitura) "Meus veículos" (`/veiculos`, I3) e "Sair".
   - **Onboarding de escolha de lava-rápido removido** (decisão do PO no I2): `onboarding.tsx`, `features/lava-rapidos/onboarding/` e a dependência `@react-native-async-storage/async-storage` saíram; a escolha do lava-rápido acontece na própria Home.
 - **Serviços e disponibilidade** (`docs/plan/servicos-disponibilidade-app-mobile/`): `servicos.tsx` migrou do mock local pro backend real (`GET /servicos?lavaRapidoId=`, usando o `id` já recebido via navegação, antes ignorado — achado #9 resolvido pra essa tela). `useServicos()` filtra só `ativo: true`. Card do serviço foi simplificado (`nome`/`categoria`/`preco`; sem `desc`/tempo, que não existem no model real; imagem é um placeholder fixo, não por serviço). A seção "Categorias" deixou de ser decorativa: agora é derivada dos valores distintos de `categoria` dos serviços retornados e funciona como filtro (toca de novo pra limpar). Tela nova `/disponibilidade` lista as intercorrências futuras do lava-rápido (`GET /intercorrencias?lavaRapidoId=`); `servicos.tsx` mostra um banner de aviso (com link pra essa tela) quando há intercorrência pra hoje ou pros próximos 3 dias (`getIntercorrenciaRelevante()` em `useIntercorrencias.ts`).
 - **Endereço do lava-rápido em `servicos.tsx`**: `lavaRapidos.model.ts` ganhou o campo `address` (`string | null`); `lavaRapidos.service.ts` ganhou `getLavaRapido(id)` (`GET /lavaRapidos/:id`) e `useLavaRapido(id)` (novo hook, `src/features/lava-rapidos/useLavaRapido.ts`). `servicos.tsx` usa esse hook e mostra o endereço (com ícone de pin) logo abaixo do nome do lava-rápido no cabeçalho, quando existir — resolve o pedido do consumidor de saber onde fica a empresa antes de agendar. Dados de seed (`backend/prisma/seed.ts`) e o banco de dev foram atualizados com um endereço de exemplo (mesma rua/bairro/cidade, número diferente por lava-rápido) — antes todos tinham `address: null`.
@@ -157,6 +165,8 @@ app_mobile/
 - `/login` — primeira tela sem sessão (ver seção 4.1). Params opcionais: `email` (pré-preenche) e `expirada=1` (mostra "Sua sessão expirou"). "E-mail ou senha incorretos" no 401. Link "Criar conta" → `/cadastro`.
 - `/cadastro` — nome, e-mail, senha e confirmação, com erro abaixo de cada campo; "Este e-mail já está cadastrado" com atalho "Entrar" (→ `/login?email=`); falha de rede mantém os campos e o botão vira "Tentar de novo". Sucesso → entra logado.
 - `/meus-dados` — nome e e-mail do cliente (`GET /clientes/me`), aberta pelo menu de conta.
+- `/veiculos` — "Meus veículos" (I3, `GET /clientes/me/veiculos`), aberta pelo menu de conta: cada item mostra marca + modelo, cor e placa formatada (antiga com hífen, Mercosul como está), com "Editar" e "Remover" (confirmação com `Alert.alert` no celular; `confirm` do navegador no Expo web, onde o `Alert` com botões não funciona). Sem veículo: "Você ainda não cadastrou nenhum veículo" + "Cadastrar meu primeiro veículo". Recarrega ao voltar do formulário (`useFocusEffect`).
+- `/veiculos/form` — criar/editar (com `id` = edição). Valida antes de enviar (`validarVeiculo`); erro abaixo de cada campo; `409` aparece na placa como "Você já cadastrou esse veículo". Param `voltarPara` (só caminho interno, começando com `/`): para onde ir depois de salvar — atalho do I13 "cadastrar e voltar"; sem ele, volta para a tela anterior.
 - `/(tabs)` → `AppTabs` (NativeTabs) com 2 abas: **Home** (`index.tsx`) e **Explore** (`explore.tsx`, boilerplate — seção 6).
 - `/servicos` — recebe `id`/`nome` via `useLocalSearchParams` (passados pelo `CarWashCard` da Home ou pelo `Marker` do mapa). Busca os serviços reais do lava-rápido (`GET /servicos?lavaRapidoId=<id>`, só `ativo: true`); categorias filtram a lista; mostra banner de intercorrência relevante com link pra `/disponibilidade`.
 - `/disponibilidade` — recebe `id`/`nome`; lista as intercorrências futuras do lava-rápido (`GET /intercorrencias?lavaRapidoId=<id>`), ordenadas por data.
@@ -189,7 +199,9 @@ Achados de leitura direta do código (não são convenções combinadas — são
 | `/login` | `login.tsx` | Funcional (backend real) | Login do cliente (I2); primeira tela sem sessão. |
 | `/cadastro` | `cadastro.tsx` | Funcional (backend real) | Cadastro (I1) → entra logado. |
 | `/meus-dados` | `meus-dados.tsx` | Funcional (backend real) | Somente leitura (I2). |
-| `/(tabs)` → Home | `index.tsx` | Funcional (backend real) | Lista de `GET /lavaRapidos` com "a partir de" calculado (ou "Sem serviços disponíveis"); busca por texto, filtros (aberto/avaliação/distância), toggle lista/mapa, localização via GPS ou endereço digitado; menu de conta (Meus dados / Sair). |
+| `/veiculos` | `veiculos/index.tsx` | Funcional (backend real) | "Meus veículos" (I3): lista, adicionar, editar, remover. |
+| `/veiculos/form` | `veiculos/form.tsx` | Funcional (backend real) | Criar/editar veículo (I3). |
+| `/(tabs)` → Home | `index.tsx` | Funcional (backend real) | Lista de `GET /lavaRapidos` com "a partir de" calculado (ou "Sem serviços disponíveis"); busca por texto, filtros (aberto/avaliação/distância), toggle lista/mapa, localização via GPS ou endereço digitado; menu de conta (Meus dados / Meus veículos / Sair). |
 | `/(tabs)` → Explore | `explore.tsx` | Não é produto | Boilerplate do template Expo — achado #8. |
 | `/servicos` | `servicos.tsx` | Funcional (backend real) | Usa o `id` recebido; card mostra itens incluídos, preço e duração; busca + categorias + modal de preço/tempo filtram; carrinho começa vazio e soma preço e duração; banner de intercorrência; horário de funcionamento de hoje no cabeçalho (toque expande a semana). |
 | `/disponibilidade` | `disponibilidade.tsx` | Funcional (backend real) | Lista intercorrências futuras do lava-rápido. |

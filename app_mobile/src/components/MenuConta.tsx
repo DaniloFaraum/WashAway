@@ -9,9 +9,6 @@ import { useSessaoCliente } from '@/features/auth/SessaoClienteProvider';
 // Menu de conta do cabeçalho da Home (I2): botão circular com a inicial do
 // cliente → "Meus dados", "Meus veículos" (I3) e "Sair".
 
-// "Meus veículos" só aparece quando a tela do I3 existir.
-const MOSTRAR_MEUS_VEICULOS = false;
-
 type ItemMenu = {
   rotulo: string;
   icone: keyof typeof Ionicons.glyphMap;
@@ -33,9 +30,7 @@ export function MenuConta() {
 
   const itens: ItemMenu[] = [
     { rotulo: 'Meus dados', icone: 'person-outline', aoTocar: () => router.push('/meus-dados') },
-    ...(MOSTRAR_MEUS_VEICULOS
-      ? [{ rotulo: 'Meus veículos', icone: 'car-outline' as const, aoTocar: () => {} }]
-      : []),
+    { rotulo: 'Meus veículos', icone: 'car-outline', aoTocar: () => router.push('/veiculos') },
     { rotulo: 'Sair', icone: 'log-out-outline', aoTocar: () => void sair(), destrutivo: true },
   ];
 
