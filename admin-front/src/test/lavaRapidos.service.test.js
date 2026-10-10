@@ -81,6 +81,8 @@ describe('lavaRapidos.service', () => {
       address: 'Rua Teste, 123',
       isOpen: false,
       intercorrenciaAtiva: null,
+      foraDoHorario: false,
+      horarios: [],
     })
   })
 
@@ -105,6 +107,8 @@ describe('lavaRapidos.service', () => {
       address: 'Rua X, 1',
       isOpen: false,
       intercorrenciaAtiva: null,
+      foraDoHorario: false,
+      horarios: [],
     })
     expect(empresa.senha).toBeUndefined()
   })

@@ -50,7 +50,7 @@ function App() {
       <Routes>
         <Route path="/" element={<PainelPedidos />} />
         <Route path="/servicos" element={<Servicos />} />
-        <Route path="/disponibilidade" element={<Disponibilidade />} />
+        <Route path="/disponibilidade" element={<Disponibilidade empresaLogada={empresaLogada} />} />
         <Route path="/veiculos" element={<Veiculos />} />
       </Routes>
     </AppShell>

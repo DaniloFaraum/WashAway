@@ -52,6 +52,11 @@ function AppShell({ children, empresaLogada, onSair, onReabrir }) {
                   Motivo: {empresaLogada.intercorrenciaAtiva.motivo}
                 </Typography>
               )}
+              {!empresaLogada.isOpen && !empresaLogada.intercorrenciaAtiva && empresaLogada.foraDoHorario && (
+                <Typography variant="caption" color="text.secondary" noWrap>
+                  Fora do horário de funcionamento
+                </Typography>
+              )}
             </>
           )}
         </Toolbar>

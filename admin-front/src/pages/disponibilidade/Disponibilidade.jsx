@@ -19,6 +19,7 @@ import Snackbar from '@mui/material/Snackbar'
 import CircularProgress from '@mui/material/CircularProgress'
 import { getIntercorrencias, createIntercorrencia } from './service/disponibilidade.service.js'
 import PageHeader from '../../components/layout/PageHeader.jsx'
+import HorarioFuncionamento from './components/HorarioFuncionamento.jsx'
 import { useFetch } from '../../hooks/useFetch.js'
 import { useToast } from '../../hooks/useToast.js'
 
@@ -32,7 +33,10 @@ function DiaComIntercorrencia(props) {
   )
 }
 
-function Disponibilidade() {
+/**
+ * @param {{ empresaLogada: import('../../login/service/lavaRapidos.model.js').LavaRapido }} props
+ */
+function Disponibilidade({ empresaLogada }) {
   const { data: intercorrencias, setData: setIntercorrencias, loading, error } = useFetch(getIntercorrencias)
   const { toast, showToast, closeToast } = useToast()
   const [diaSelecionado, setDiaSelecionado] = useState(null)
@@ -90,13 +94,16 @@ function Disponibilidade() {
   return (
     <>
       <PageHeader title="Disponibilidade" />
-      <LocalizationProvider dateAdapter={AdapterDayjs}>
-        <DateCalendar
-          onChange={handleSelecionarDia}
-          slots={{ day: DiaComIntercorrencia }}
-          slotProps={{ day: { diasComIntercorrencia } }}
-        />
-      </LocalizationProvider>
+      <Stack direction={{ xs: 'column', md: 'row' }} spacing={3} alignItems="flex-start">
+        <HorarioFuncionamento empresa={empresaLogada} />
+        <LocalizationProvider dateAdapter={AdapterDayjs}>
+          <DateCalendar
+            onChange={handleSelecionarDia}
+            slots={{ day: DiaComIntercorrencia }}
+            slotProps={{ day: { diasComIntercorrencia } }}
+          />
+        </LocalizationProvider>
+      </Stack>
 
       <Dialog open={Boolean(diaSelecionado)} onClose={() => setDiaSelecionado(null)} fullWidth maxWidth="xs">
         <DialogTitle>Intercorrência — {diaSelecionado}</DialogTitle>
