@@ -101,6 +101,24 @@ model Cliente {
   email    String   @unique
   senha    String
   criadoEm DateTime @default(now())
+  veiculos Veiculo[]
+}
+
+// Veículo do cliente do app (I3). Placa gravada normalizada (sem hífen/espaços,
+// maiúsculas — src/modules/veiculos-cliente/placa.ts) e única por cliente; a
+// mesma placa pode existir em clientes diferentes. Não confundir com o
+// `GET /veiculos` do painel, que deriva de `Pedido.veiculo` (JSON).
+model Veiculo {
+  id        String   @id @default(cuid())
+  clienteId String
+  cliente   Cliente  @relation(fields: [clienteId], references: [id], onDelete: Cascade)
+  marca     String?
+  modelo    String
+  cor       String
+  placa     String
+  criadoEm  DateTime @default(now())
+
+  @@unique([clienteId, placa])
 }
 
 // Horário semanal (I19): um intervalo por dia, hora local (FUSO_LAVA_RAPIDOS,
