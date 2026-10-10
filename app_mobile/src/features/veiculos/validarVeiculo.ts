@@ -1,12 +1,12 @@
 import { isPlacaValida } from './placa'
-import type { DadosVeiculo } from './service/veiculos.model'
+import type { DadosVeiculo, ErrosVeiculo } from './service/veiculos.model'
 
 // Validação do formulário de veículo (I3), antes de enviar. Mesmas regras do
 // back-end (backend/src/modules/veiculos-cliente/veiculosCliente.validation.ts).
 
 export const TEXTO_MAXIMO_VEICULO = 60
 
-export type ErrosVeiculo = Partial<Record<keyof DadosVeiculo, string>>
+export type { ErrosVeiculo }
 
 /** Mapa campo → mensagem. Vazio = pode enviar. */
 export function validarVeiculo({ marca, modelo, cor, placa }: DadosVeiculo): ErrosVeiculo {

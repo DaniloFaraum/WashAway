@@ -16,6 +16,9 @@ export interface DadosVeiculo {
   placa: string
 }
 
+/** Mensagem por campo inválido (validação local ou `campos` do 400 do back-end). */
+export type ErrosVeiculo = Partial<Record<keyof DadosVeiculo, string>>
+
 export function normalizeVeiculo(data: any): Veiculo {
   return {
     id: String(data.id),

@@ -49,6 +49,12 @@ export default function MeusVeiculosScreen() {
     }, [recarregar]),
   );
 
+  /** Aberta direto (link/refresh no web), sem tela anterior: vai para a Home. */
+  function sair() {
+    if (router.canGoBack()) router.back();
+    else router.replace('/');
+  }
+
   function adicionar() {
     router.push('/veiculos/form');
   }
@@ -74,7 +80,7 @@ export default function MeusVeiculosScreen() {
   return (
     <SafeAreaView style={base.container}>
       <View style={base.topo}>
-        <Pressable accessibilityRole="button" accessibilityLabel="Voltar" onPress={() => router.back()} style={base.voltar}>
+        <Pressable accessibilityRole="button" accessibilityLabel="Voltar" onPress={sair} style={base.voltar}>
           <Ionicons name="arrow-back" size={22} color={colors.primary} />
         </Pressable>
         <Text style={base.titulo}>Meus veículos</Text>

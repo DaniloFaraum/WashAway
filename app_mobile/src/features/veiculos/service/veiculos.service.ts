@@ -1,6 +1,6 @@
 import { apiFetch } from '@/services/httpClient'
 import { VEICULOS_ROUTES } from './veiculos.routes'
-import { normalizeVeiculo, type DadosVeiculo, type Veiculo } from './veiculos.model'
+import { normalizeVeiculo, type DadosVeiculo, type ErrosVeiculo, type Veiculo } from './veiculos.model'
 
 // Veículos do cliente logado (I3), sobre o `apiFetch` (token + Response cru).
 // Falha de rede já chega como `ErroRede`; 401 já derruba a sessão no httpClient.
@@ -14,10 +14,8 @@ export class PlacaJaCadastradaError extends Error {
   }
 }
 
-export type CamposVeiculo = Partial<Record<keyof DadosVeiculo, string>>
-
 export class ErroValidacaoVeiculo extends Error {
-  constructor(readonly campos: CamposVeiculo) {
+  constructor(readonly campos: ErrosVeiculo) {
     super('Confira os campos destacados')
     this.name = 'ErroValidacaoVeiculo'
   }

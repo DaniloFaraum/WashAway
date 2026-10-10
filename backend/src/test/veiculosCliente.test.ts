@@ -3,7 +3,7 @@ import supertest from 'supertest'
 import { createApp } from '../app.js'
 import { prisma } from '../config/prisma.js'
 import { getVeiculoDoCliente } from '../modules/veiculos-cliente/veiculosCliente.service.js'
-import { comToken, tokenDeCliente } from './helpers/auth.js'
+import { comToken, tokenDeCliente, tokenDeLavaRapido } from './helpers/auth.js'
 import { criarClienteTeste, criarVeiculoTeste, placaUnica } from './helpers/factories.js'
 import { limparDadosDeTeste, registrarParaLimpeza } from './helpers/limpeza.js'
 
@@ -183,6 +183,43 @@ describe('Acesso ao veículo de outro cliente: 404 (nunca 403)', () => {
 
     expect(response.status).toBe(404)
     expect(await prisma.veiculo.findUnique({ where: { id: doOutro.id } })).not.toBeNull()
+  })
+})
+
+describe('O dono vem sempre do token (clienteId do body é ignorado)', () => {
+  it('POST com clienteId de outro cliente: o veículo fica com o cliente do token', async () => {
+    const response = await criarViaApi({ modelo: 'Onix', cor: 'Prata', placa: placaUnica(), clienteId: outroCliente.id })
+
+    expect(response.status).toBe(201)
+    expect(response.body.clienteId).toBe(cliente.id)
+  })
+
+  it('PUT com clienteId de outro cliente: o veículo não troca de dono', async () => {
+    const veiculo = await criarVeiculoTeste(cliente.id)
+
+    const response = await comToken(supertest(app).put(`${ROTA}/${veiculo.id}`), token).send({
+      modelo: 'Onix',
+      cor: 'Prata',
+      placa: veiculo.placa,
+      clienteId: outroCliente.id,
+    })
+
+    expect(response.status).toBe(200)
+    expect(response.body.clienteId).toBe(cliente.id)
+    expect(await prisma.veiculo.findUnique({ where: { id: veiculo.id } })).toMatchObject({ clienteId: cliente.id })
+  })
+})
+
+describe('Token de lava-rápido (painel): 403', () => {
+  it.each([
+    ['GET', () => supertest(app).get(ROTA)],
+    ['POST', () => supertest(app).post(ROTA)],
+    ['PUT', () => supertest(app).put(`${ROTA}/qualquer`)],
+    ['DELETE', () => supertest(app).delete(`${ROTA}/qualquer`)],
+  ])('%s', async (_metodo, requisicao) => {
+    const response = await comToken(requisicao(), tokenDeLavaRapido({ id: 'lava-rapido-qualquer' }))
+
+    expect(response.status).toBe(403)
   })
 })
 

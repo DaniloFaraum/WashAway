@@ -57,11 +57,16 @@ export default function FormVeiculoScreen() {
     };
   }
 
+  /** Volta sem salvar; aberto direto (link/refresh no web), cai na lista. */
+  function cancelar() {
+    if (router.canGoBack()) router.back();
+    else router.replace('/veiculos');
+  }
+
   function voltar() {
     // Só caminhos internos do app (nunca uma URL externa vinda de link).
     if (params.voltarPara?.startsWith('/') && !params.voltarPara.startsWith('//')) router.replace(params.voltarPara as Href);
-    else if (router.canGoBack()) router.back();
-    else router.replace('/veiculos');
+    else cancelar();
   }
 
   async function salvar() {
@@ -99,7 +104,7 @@ export default function FormVeiculoScreen() {
   return (
     <SafeAreaView style={base.container}>
       <View style={base.topo}>
-        <Pressable accessibilityRole="button" accessibilityLabel="Voltar" onPress={() => router.back()} style={base.voltar}>
+        <Pressable accessibilityRole="button" accessibilityLabel="Voltar" onPress={cancelar} style={base.voltar}>
           <Ionicons name="arrow-back" size={22} color={colors.primary} />
         </Pressable>
         <Text style={base.titulo}>{editando ? 'Editar veículo' : 'Novo veículo'}</Text>
