@@ -56,3 +56,21 @@ function normalizeHorarioDia(raw) {
     definido: raw.definido !== false,
   }
 }
+
+/**
+ * Sessão do painel: resposta do login e do aceite do contrato (I17).
+ * @typedef {Object} SessaoEmpresa
+ * @property {string} token - token de lava-rápido (Authorization: Bearer)
+ * @property {LavaRapido} empresa
+ */
+
+/**
+ * @param {any} raw - `{ token, expiraEm, lavaRapido }`
+ * @returns {SessaoEmpresa}
+ */
+export function normalizeSessao(raw) {
+  return {
+    token: String(raw.token ?? ''),
+    empresa: normalizeLavaRapido(raw.lavaRapido ?? {}),
+  }
+}

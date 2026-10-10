@@ -3,6 +3,7 @@ import {
   CredenciaisInvalidasError,
   entrar,
   me,
+  MuitasTentativasError,
   NaoAutenticadoError,
 } from '../features/auth/service/auth.service'
 import { definirTokenDaSessao } from '../services/httpClient'
@@ -45,6 +46,15 @@ describe('auth.service', () => {
 
     expect(erro).toBeInstanceOf(CredenciaisInvalidasError)
     expect(erro.message).toBe('E-mail ou senha incorretos')
+  })
+
+  it('entrar com 429 vira MuitasTentativasError com a mensagem do back-end (I17)', async () => {
+    vi.spyOn(global, 'fetch').mockResolvedValue(resposta(429, { error: 'Muitas tentativas. Aguarde 15 minutos e tente de novo.' }))
+
+    const erro = await entrar('ana@exemplo.com', 'errada').catch((e) => e)
+
+    expect(erro).toBeInstanceOf(MuitasTentativasError)
+    expect(erro.message).toBe('Muitas tentativas. Aguarde 15 minutos e tente de novo.')
   })
 
   it('me com token devolve o cliente', async () => {

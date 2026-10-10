@@ -31,7 +31,7 @@ export async function criarServico(dados) {
   const data = await request(SERVICOS_ROUTES.create, {
     method: 'POST',
     headers: JSON_HEADERS,
-    body: JSON.stringify({ lavaRapidoId: getEmpresaLogadaId(), ...dados }),
+    body: JSON.stringify(dados),
   })
   return normalizeServico(data)
 }

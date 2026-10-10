@@ -15,7 +15,7 @@ import { CampoFormulario } from '@/components/CampoFormulario';
 import { colors } from '@/constants/colors';
 import { authStyles } from '@/features/auth/authStyles';
 import { useSessaoCliente } from '@/features/auth/SessaoClienteProvider';
-import { CredenciaisInvalidasError } from '@/features/auth/service/auth.service';
+import { CredenciaisInvalidasError, MuitasTentativasError } from '@/features/auth/service/auth.service';
 import { ErroRede } from '@/services/httpClient';
 
 const styles = authStyles;
@@ -49,7 +49,9 @@ export default function LoginScreen() {
     try {
       await entrar(email.trim(), senha);
     } catch (err) {
-      if (err instanceof CredenciaisInvalidasError || err instanceof ErroRede) setErro(err.message);
+      if (err instanceof CredenciaisInvalidasError || err instanceof MuitasTentativasError || err instanceof ErroRede) {
+        setErro(err.message);
+      }
       else setErro('Não foi possível entrar agora. Tente de novo.');
     } finally {
       enviandoRef.current = false;

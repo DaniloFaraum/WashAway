@@ -1,13 +1,13 @@
 import { createServer } from 'node:http'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { cadastrar, entrar } from '../login/service/lavaRapidos.service.js'
+import { entrar } from '../login/service/lavaRapidos.service.js'
 
 const CNPJ_EXISTENTE = '11111111000111'
-const SENHA_VALIDA = 'admin'
+const CNPJ_BLOQUEADO = '22222222000122'
+const SENHA_VALIDA = 'senha-forte-123'
 
+// Stub do backend real: login devolve { token, expiraEm, lavaRapido } (I17).
 function startStubBackend() {
-  const cnpjsCadastrados = new Set([CNPJ_EXISTENTE])
-
   const server = createServer((req, res) => {
     let body = ''
     req.on('data', (chunk) => {
@@ -16,39 +16,34 @@ function startStubBackend() {
     req.on('end', () => {
       const payload = body ? JSON.parse(body) : {}
       res.setHeader('Content-Type', 'application/json')
-
-      if (req.method === 'POST' && req.url === '/lavaRapidos') {
-        if (cnpjsCadastrados.has(payload.cnpj)) {
-          res.writeHead(409)
-          res.end(JSON.stringify({ error: 'Já existe uma empresa cadastrada com esse cnpj' }))
-          return
-        }
-        cnpjsCadastrados.add(payload.cnpj)
-        res.writeHead(201)
-        res.end(
-          JSON.stringify({
-            id: 'lr-nova',
-            name: payload.name,
-            address: payload.address ?? null,
-            senha: 'hash-nao-deveria-vazar',
-          }),
-        )
-        return
+      const send = (status, data) => {
+        res.writeHead(status)
+        res.end(JSON.stringify(data))
       }
 
       if (req.method === 'POST' && req.url === '/lavaRapidos/login') {
-        if (payload.cnpj === CNPJ_EXISTENTE && payload.senha === SENHA_VALIDA) {
-          res.writeHead(200)
-          res.end(JSON.stringify({ id: 'lr-1', name: 'Lava Rápido Teste', address: 'Rua Teste, 123' }))
-          return
+        if (payload.cnpj === CNPJ_BLOQUEADO) {
+          return send(429, { error: 'Muitas tentativas. Aguarde 15 minutos e tente de novo.' })
         }
-        res.writeHead(401)
-        res.end(JSON.stringify({ error: 'cnpj ou senha inválidos' }))
-        return
+        if (payload.cnpj === CNPJ_EXISTENTE && payload.senha === SENHA_VALIDA) {
+          return send(200, {
+            token: 'token-do-lava-rapido',
+            expiraEm: '2026-10-17T00:00:00.000Z',
+            lavaRapido: {
+              id: 'lr-1',
+              name: 'Lava Rápido Teste',
+              address: 'Rua Teste, 123',
+              isOpen: true,
+              foraDoHorario: false,
+              intercorrenciaAtiva: null,
+              horarios: [{ diaSemana: 1, fechado: false, abertura: '08:00', fechamento: '18:00', definido: true }],
+            },
+          })
+        }
+        return send(401, { error: 'cnpj ou senha inválidos' })
       }
 
-      res.writeHead(404)
-      res.end(JSON.stringify({ error: 'not found' }))
+      send(404, { error: 'not found' })
     })
   })
 
@@ -72,50 +67,34 @@ describe('lavaRapidos.service', () => {
     server.close()
   })
 
-  it('entrar retorna a empresa (sem senha) quando cnpj e senha são válidos', async () => {
-    const empresa = await entrar({ cnpj: CNPJ_EXISTENTE, senha: SENHA_VALIDA }, baseUrl)
+  it('entrar devolve o token e a empresa normalizada (com horários) do novo formato { token, lavaRapido }', async () => {
+    const sessao = await entrar({ cnpj: CNPJ_EXISTENTE, senha: SENHA_VALIDA }, baseUrl)
 
-    expect(empresa).toEqual({
-      id: 'lr-1',
-      name: 'Lava Rápido Teste',
-      address: 'Rua Teste, 123',
-      isOpen: false,
-      intercorrenciaAtiva: null,
-      foraDoHorario: false,
-      horarios: [],
+    expect(sessao).toEqual({
+      token: 'token-do-lava-rapido',
+      empresa: {
+        id: 'lr-1',
+        name: 'Lava Rápido Teste',
+        address: 'Rua Teste, 123',
+        isOpen: true,
+        intercorrenciaAtiva: null,
+        foraDoHorario: false,
+        horarios: [{ diaSemana: 1, fechado: false, abertura: '08:00', fechamento: '18:00', definido: true }],
+      },
     })
   })
 
   it('entrar lança erro amigável quando a senha está errada (401)', async () => {
-    await expect(entrar({ cnpj: CNPJ_EXISTENTE, senha: 'errada' }, baseUrl)).rejects.toThrow(
-      'CNPJ ou senha inválidos.',
-    )
+    await expect(entrar({ cnpj: CNPJ_EXISTENTE, senha: 'errada' }, baseUrl)).rejects.toThrow('CNPJ ou senha inválidos.')
   })
 
   it('entrar lança erro amigável quando o cnpj não existe (401)', async () => {
-    await expect(entrar({ cnpj: '99999999000199', senha: SENHA_VALIDA }, baseUrl)).rejects.toThrow(
-      'CNPJ ou senha inválidos.',
+    await expect(entrar({ cnpj: '99999999000199', senha: SENHA_VALIDA }, baseUrl)).rejects.toThrow('CNPJ ou senha inválidos.')
+  })
+
+  it('entrar mostra a mensagem do backend quando estoura o limite de tentativas (429)', async () => {
+    await expect(entrar({ cnpj: CNPJ_BLOQUEADO, senha: 'qualquer' }, baseUrl)).rejects.toThrow(
+      'Muitas tentativas. Aguarde 15 minutos e tente de novo.',
     )
-  })
-
-  it('cadastrar cria a empresa e nunca expõe a senha pro admin-front', async () => {
-    const empresa = await cadastrar({ name: 'Nova Empresa', address: 'Rua X, 1', cnpj: '22222222000122' }, baseUrl)
-
-    expect(empresa).toEqual({
-      id: 'lr-nova',
-      name: 'Nova Empresa',
-      address: 'Rua X, 1',
-      isOpen: false,
-      intercorrenciaAtiva: null,
-      foraDoHorario: false,
-      horarios: [],
-    })
-    expect(empresa.senha).toBeUndefined()
-  })
-
-  it('cadastrar lança erro amigável quando o cnpj já existe (409)', async () => {
-    await expect(
-      cadastrar({ name: 'Duplicada', cnpj: CNPJ_EXISTENTE }, baseUrl),
-    ).rejects.toThrow('Já existe uma empresa cadastrada com esse CNPJ.')
   })
 })

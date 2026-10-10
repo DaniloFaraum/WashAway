@@ -1,3 +1,4 @@
 export const VEICULOS_ROUTES = {
-  list: (lavaRapidoId) => `/veiculos${lavaRapidoId ? `?lavaRapidoId=${encodeURIComponent(lavaRapidoId)}` : ''}`,
+  // A empresa vem do token (I17), não de ?lavaRapidoId=.
+  list: '/veiculos',
 }

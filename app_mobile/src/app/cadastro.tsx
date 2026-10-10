@@ -15,6 +15,7 @@ import { CampoFormulario } from '@/components/CampoFormulario';
 import { colors } from '@/constants/colors';
 import { authStyles as styles } from '@/features/auth/authStyles';
 import { useSessaoCliente } from '@/features/auth/SessaoClienteProvider';
+import { MuitasTentativasError } from '@/features/auth/service/auth.service';
 import {
   cadastrarCliente,
   EmailJaCadastradoError,
@@ -80,6 +81,7 @@ export default function CadastroScreen() {
       // 400 sem campos que a tela conheça cai na mensagem genérica (não fica mudo).
       else if (err instanceof ErroValidacao && Object.keys(err.campos).length > 0) setErros(err.campos);
       else if (err instanceof ErroRede) setFalha({ tipo: 'rede', mensagem: err.message });
+      else if (err instanceof MuitasTentativasError) setFalha({ tipo: 'outra', mensagem: err.message });
       else setFalha({ tipo: 'outra', mensagem: 'Não foi possível criar a conta agora. Tente de novo.' });
     } finally {
       enviandoRef.current = false;

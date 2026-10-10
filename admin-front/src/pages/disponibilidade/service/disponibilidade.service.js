@@ -22,7 +22,7 @@ export async function createIntercorrencia(novaIntercorrencia) {
   const data = await request(INTERCORRENCIAS_ROUTES.create, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ ...novaIntercorrencia, lavaRapidoId: getEmpresaLogadaId() }),
+    body: JSON.stringify(novaIntercorrencia),
   })
   return normalizeIntercorrencia(data)
 }

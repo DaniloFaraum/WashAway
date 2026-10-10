@@ -14,11 +14,23 @@ import CircularProgress from '@mui/material/CircularProgress'
 import { useToast } from '../hooks/useToast.js'
 import { buscarCep } from './service/cep.service.js'
 
+// Mesmas regras do backend (onboarding, I17).
+const SENHA_MINIMA = 8
+
+/**
+ * @returns {string | null} mensagem de erro, ou null se a senha do cadastro estiver ok
+ */
+function validarSenhaCadastro(senha, confirmarSenha) {
+  if (senha.length < SENHA_MINIMA) return `A senha precisa ter no mínimo ${SENHA_MINIMA} caracteres.`
+  if (senha !== confirmarSenha) return 'As senhas não conferem.'
+  return null
+}
+
 function montarAddress({ logradouro, numero, bairro, cidade, estado, cep }) {
   return `${logradouro}, ${numero} - ${bairro}, ${cidade} - ${estado}, CEP ${cep}`
 }
 
-function Login({ onEntrar, onCadastrar }) {
+function Login({ onEntrar, onCadastrar, aviso = null }) {
   const [modo, setModo] = useState('entrar')
   const [name, setName] = useState('')
   const [cep, setCep] = useState('')
@@ -30,6 +42,8 @@ function Login({ onEntrar, onCadastrar }) {
   const [buscandoCep, setBuscandoCep] = useState(false)
   const [cnpj, setCnpj] = useState('')
   const [senha, setSenha] = useState('')
+  const [email, setEmail] = useState('')
+  const [confirmarSenha, setConfirmarSenha] = useState('')
   const [enviando, setEnviando] = useState(false)
   const { toast, showToast, closeToast } = useToast()
 
@@ -64,8 +78,13 @@ function Login({ onEntrar, onCadastrar }) {
       if (modo === 'entrar') {
         await onEntrar({ cnpj, senha })
       } else {
+        const erroSenha = validarSenhaCadastro(senha, confirmarSenha)
+        if (erroSenha) {
+          showToast(erroSenha, 'error')
+          return
+        }
         const address = montarAddress({ logradouro, numero, bairro, cidade, estado, cep })
-        await onCadastrar({ name, address, cnpj })
+        await onCadastrar({ name, address, cnpj, email: email.trim(), senha })
       }
     } catch (err) {
       showToast(err.message, 'error')
@@ -89,6 +108,12 @@ function Login({ onEntrar, onCadastrar }) {
           <Typography variant="h5" align="center" gutterBottom>
             Wash Your Way
           </Typography>
+
+          {aviso && (
+            <Alert severity="warning" sx={{ mb: 2 }}>
+              {aviso}
+            </Alert>
+          )}
 
           <Tabs value={modo} onChange={(_, value) => setModo(value)} variant="fullWidth" sx={{ mb: 3 }}>
             <Tab label="Entrar" value="entrar" />
@@ -178,14 +203,41 @@ function Login({ onEntrar, onCadastrar }) {
                 helperText="Só números, 14 dígitos"
               />
 
-              {modo === 'entrar' && (
+              {modo === 'cadastrar' && (
                 <TextField
-                  label="Senha"
-                  type="password"
-                  value={senha}
-                  onChange={(event) => setSenha(event.target.value)}
+                  label="E-mail"
+                  type="email"
+                  value={email}
+                  onChange={(event) => setEmail(event.target.value)}
                   required
                   fullWidth
+                  autoComplete="email"
+                  helperText="Usado para avisos e para recuperar o acesso"
+                />
+              )}
+
+              <TextField
+                label="Senha"
+                type="password"
+                value={senha}
+                onChange={(event) => setSenha(event.target.value)}
+                required
+                fullWidth
+                autoComplete={modo === 'entrar' ? 'current-password' : 'new-password'}
+                helperText={modo === 'cadastrar' ? `Mínimo de ${SENHA_MINIMA} caracteres` : undefined}
+              />
+
+              {modo === 'cadastrar' && (
+                <TextField
+                  label="Confirmar senha"
+                  type="password"
+                  value={confirmarSenha}
+                  onChange={(event) => setConfirmarSenha(event.target.value)}
+                  required
+                  fullWidth
+                  autoComplete="new-password"
+                  error={confirmarSenha !== '' && confirmarSenha !== senha}
+                  helperText={confirmarSenha !== '' && confirmarSenha !== senha ? 'As senhas não conferem' : undefined}
                 />
               )}
 

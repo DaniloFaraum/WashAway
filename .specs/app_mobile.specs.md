@@ -162,7 +162,7 @@ app_mobile/
 
 ## 5. Rotas e navegação
 
-- `/login` — primeira tela sem sessão (ver seção 4.1). Params opcionais: `email` (pré-preenche) e `expirada=1` (mostra "Sua sessão expirou"). "E-mail ou senha incorretos" no 401. Link "Criar conta" → `/cadastro`.
+- `/login` — primeira tela sem sessão (ver seção 4.1). Params opcionais: `email` (pré-preenche) e `expirada=1` (mostra "Sua sessão expirou"). "E-mail ou senha incorretos" no 401. No `429` (limite de tentativas do backend, I17) login e cadastro mostram a mensagem do back-end (`MuitasTentativasError`, `auth.service.ts`). Link "Criar conta" → `/cadastro`.
 - `/cadastro` — nome, e-mail, senha e confirmação, com erro abaixo de cada campo; "Este e-mail já está cadastrado" com atalho "Entrar" (→ `/login?email=`); falha de rede mantém os campos e o botão vira "Tentar de novo". Sucesso → entra logado.
 - `/meus-dados` — nome e e-mail do cliente (`GET /clientes/me`), aberta pelo menu de conta.
 - `/veiculos` — "Meus veículos" (I3, `GET /clientes/me/veiculos`), aberta pelo menu de conta: cada item mostra marca + modelo, cor e placa formatada (antiga com hífen, Mercosul como está), com "Editar" e "Remover" (confirmação com `Alert.alert` no celular; `confirm` do navegador no Expo web, onde o `Alert` com botões não funciona). Sem veículo: "Você ainda não cadastrou nenhum veículo" + "Cadastrar meu primeiro veículo". Recarrega ao voltar do formulário (`useFocusEffect`).

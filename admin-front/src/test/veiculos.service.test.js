@@ -14,12 +14,12 @@ describe('veiculos.service', () => {
     expect(veiculos[0]).toMatchObject({ id: '1', modelo: 'Fiat Argo', placa: 'ABC1D23' })
   })
 
-  it('getVeiculos filtra pelo lavaRapidoId da sessão quando há uma empresa logada', async () => {
+  it('getVeiculos não manda ?lavaRapidoId= mesmo com empresa logada (o backend filtra pelo token)', async () => {
     setEmpresaLogadaId('lr-1')
 
     const veiculos = await getVeiculos()
 
-    expect(veiculos).toHaveLength(1)
-    expect(veiculos[0]).toMatchObject({ id: '1' })
+    // json-server não conhece token: sem o filtro na URL, devolve todos.
+    expect(veiculos).toHaveLength(2)
   })
 })

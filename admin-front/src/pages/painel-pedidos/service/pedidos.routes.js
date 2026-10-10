@@ -1,4 +1,5 @@
 export const PEDIDOS_ROUTES = {
-  list: (lavaRapidoId) => `/pedidos${lavaRapidoId ? `?lavaRapidoId=${encodeURIComponent(lavaRapidoId)}` : ''}`,
+  // A empresa vem do token (I17), não de ?lavaRapidoId=.
+  list: '/pedidos',
   detail: (id) => `/pedidos/${id}`,
 }

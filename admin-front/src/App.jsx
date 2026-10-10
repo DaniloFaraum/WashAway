@@ -15,6 +15,7 @@ function App() {
     empresaLogada,
     solicitacaoPendente,
     loading,
+    avisoSessao,
     entrar,
     cadastrar,
     aceitarContrato,
@@ -42,7 +43,7 @@ function App() {
   }
 
   if (!empresaLogada) {
-    return <Login onEntrar={entrar} onCadastrar={cadastrar} />
+    return <Login onEntrar={entrar} onCadastrar={cadastrar} aviso={avisoSessao} />
   }
 
   return (

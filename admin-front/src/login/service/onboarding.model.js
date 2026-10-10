@@ -18,6 +18,7 @@ export const TEXTO_ACEITE = 'eu aceito'
  * @property {string} name
  * @property {string | null} address
  * @property {string} cnpj
+ * @property {string | null} email - e-mail de acesso (I17)
  * @property {SolicitacaoStatus} status
  * @property {ContratoResumo | null} contrato
  */
@@ -40,6 +41,7 @@ export function normalizeSolicitacao(raw) {
     name: raw.name ?? '',
     address: raw.address ?? null,
     cnpj: raw.cnpj ?? '',
+    email: raw.email ?? null,
     status: raw.status ?? 'aguardando_contrato',
     contrato: raw.contrato
       ? {

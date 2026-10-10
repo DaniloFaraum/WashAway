@@ -18,13 +18,13 @@ describe('pedidos.service', () => {
     })
   })
 
-  it('getPedidos filtra pelo lavaRapidoId da sessão quando há uma empresa logada', async () => {
+  it('getPedidos não manda ?lavaRapidoId= mesmo com empresa logada (o backend filtra pelo token)', async () => {
     setEmpresaLogadaId('lr-1')
 
     const pedidos = await getPedidos()
 
-    expect(pedidos).toHaveLength(1)
-    expect(pedidos[0]).toMatchObject({ id: '1' })
+    // json-server não conhece token: sem o filtro na URL, devolve todos.
+    expect(pedidos).toHaveLength(2)
   })
 
   it('updatePedidoStatus atualiza o status do pedido no json-server de teste', async () => {

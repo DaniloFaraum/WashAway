@@ -4,6 +4,7 @@ import {
   createIntercorrencia,
 } from '../pages/disponibilidade/service/disponibilidade.service.js'
 import { limparSessao, setEmpresaLogadaId } from '../login/sessao.storage.js'
+import { TEST_SERVER_URL } from './setup/testServerConfig.js'
 
 describe('disponibilidade.service', () => {
   afterEach(() => {
@@ -30,7 +31,7 @@ describe('disponibilidade.service', () => {
     expect(intercorrencias).toHaveLength(0)
   })
 
-  it('createIntercorrencia cria uma intercorrência com período de horário no json-server de teste, mandando o lavaRapidoId da sessão', async () => {
+  it('createIntercorrencia cria uma intercorrência com período de horário no json-server de teste, sem lavaRapidoId (a empresa vem do token)', async () => {
     setEmpresaLogadaId('lr-1')
 
     const nova = await createIntercorrencia({
@@ -49,9 +50,7 @@ describe('disponibilidade.service', () => {
       horaFim: '16:00',
     })
 
-    // getIntercorrencias já filtra por lavaRapidoId=lr-1 (sessão ainda ativa) — só
-    // aparece aqui se createIntercorrencia tiver mandado lavaRapidoId no POST.
-    const intercorrencias = await getIntercorrencias()
-    expect(intercorrencias).toHaveLength(2)
+    const gravada = await (await fetch(`${TEST_SERVER_URL}/intercorrencias/${nova.id}`)).json()
+    expect(gravada).not.toHaveProperty('lavaRapidoId')
   })
 })

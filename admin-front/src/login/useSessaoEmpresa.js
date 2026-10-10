@@ -2,22 +2,28 @@ import { useEffect, useState } from 'react'
 import {
   getEmpresaLogadaId,
   getSolicitacaoOnboardingId,
+  getToken,
   limparSessao,
   limparSolicitacaoOnboarding,
   setEmpresaLogadaId,
   setSolicitacaoOnboardingId,
+  setToken,
 } from './sessao.storage.js'
 import { entrar, getLavaRapido } from './service/lavaRapidos.service.js'
 import { aceitarContrato, getSolicitacao, solicitar } from './service/onboarding.service.js'
 import { reabrirIntercorrencia } from './service/intercorrencias.service.js'
+import { definirAoExpirarSessao } from '../services/httpClient.js'
+
+export const MENSAGEM_SESSAO_EXPIRADA = 'Sua sessão expirou. Entre de novo.'
 
 /**
  * @returns {{
  *   empresaLogada: import('./service/lavaRapidos.model.js').LavaRapido | null,
  *   solicitacaoPendente: import('./service/onboarding.model.js').SolicitacaoOnboarding | null,
  *   loading: boolean,
+ *   avisoSessao: string | null,
  *   entrar: (credenciais: { cnpj: string, senha: string }) => Promise<void>,
- *   cadastrar: (dados: { name: string, address?: string, cnpj: string }) => Promise<void>,
+ *   cadastrar: (dados: { name: string, address?: string, cnpj: string, email: string, senha: string }) => Promise<void>,
  *   aceitarContrato: () => Promise<void>,
  *   cancelarOnboarding: () => void,
  *   sair: () => void,
@@ -28,16 +34,29 @@ export function useSessaoEmpresa() {
   const [empresaLogada, setEmpresaLogada] = useState(null)
   const [solicitacaoPendente, setSolicitacaoPendente] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [avisoSessao, setAvisoSessao] = useState(null)
+
+  // 401 em qualquer chamada do painel (token ausente/expirado): volta ao Login com aviso.
+  useEffect(() => {
+    definirAoExpirarSessao(() => {
+      limparSessao()
+      setEmpresaLogada(null)
+      setAvisoSessao(MENSAGEM_SESSAO_EXPIRADA)
+    })
+    return () => definirAoExpirarSessao(null)
+  }, [])
 
   useEffect(() => {
     const empresaId = getEmpresaLogadaId()
-    if (empresaId) {
+    // Sessão de antes do I17 (sem token) não vale mais: precisa entrar de novo.
+    if (empresaId && getToken()) {
       getLavaRapido(empresaId)
         .then(setEmpresaLogada)
         .catch(() => limparSessao())
         .finally(() => setLoading(false))
       return
     }
+    if (empresaId) limparSessao()
 
     // Retoma o onboarding de quem fechou a aba antes de assinar o contrato.
     const solicitacaoId = getSolicitacaoOnboardingId()
@@ -58,10 +77,16 @@ export function useSessaoEmpresa() {
     setLoading(false)
   }, [])
 
-  async function handleEntrar(credenciais) {
-    const empresa = await entrar(credenciais)
+  /** @param {import('./service/lavaRapidos.model.js').SessaoEmpresa} sessao */
+  function abrirSessao({ token, empresa }) {
+    setToken(token)
     setEmpresaLogadaId(empresa.id)
+    setAvisoSessao(null)
     setEmpresaLogada(empresa)
+  }
+
+  async function handleEntrar(credenciais) {
+    abrirSessao(await entrar(credenciais))
   }
 
   async function handleCadastrar(dados) {
@@ -72,11 +97,10 @@ export function useSessaoEmpresa() {
 
   async function handleAceitarContrato() {
     if (!solicitacaoPendente) return
-    const empresa = await aceitarContrato(solicitacaoPendente.id)
+    const sessao = await aceitarContrato(solicitacaoPendente.id)
     limparSolicitacaoOnboarding()
     setSolicitacaoPendente(null)
-    setEmpresaLogadaId(empresa.id)
-    setEmpresaLogada(empresa)
+    abrirSessao(sessao)
   }
 
   function cancelarOnboarding() {
@@ -86,6 +110,7 @@ export function useSessaoEmpresa() {
 
   function sair() {
     limparSessao()
+    setAvisoSessao(null)
     setEmpresaLogada(null)
   }
 
@@ -99,6 +124,7 @@ export function useSessaoEmpresa() {
     empresaLogada,
     solicitacaoPendente,
     loading,
+    avisoSessao,
     entrar: handleEntrar,
     cadastrar: handleCadastrar,
     aceitarContrato: handleAceitarContrato,

@@ -7,6 +7,7 @@ import {
   updateServicoAtivo,
 } from '../pages/servicos/service/servicos.service.js'
 import { limparSessao, setEmpresaLogadaId } from '../login/sessao.storage.js'
+import { TEST_SERVER_URL } from './setup/testServerConfig.js'
 
 describe('servicos.service', () => {
   afterEach(() => {
@@ -36,16 +37,15 @@ describe('servicos.service', () => {
     })
   })
 
-  it('criarServico envia nome, preço e itens com a lavaRapidoId da sessão', async () => {
-    // empresa sem serviços na fixture, pra não interferir no filtro por lr-1/lr-2
+  it('criarServico envia só nome, preço e itens — sem lavaRapidoId (a empresa vem do token)', async () => {
     setEmpresaLogadaId('lr-3')
 
     const criado = await criarServico({ nome: 'Combo teste', preco: 55, itemIds: ['i1', 'i3'] })
 
     expect(criado).toMatchObject({ nome: 'Combo teste', preco: 55 })
-    const servicos = await getServicos()
-    expect(servicos).toHaveLength(1)
-    expect(servicos[0]).toMatchObject({ id: criado.id })
+    const gravado = await (await fetch(`${TEST_SERVER_URL}/servicos/${criado.id}`)).json()
+    expect(gravado).toMatchObject({ nome: 'Combo teste', preco: 55, itemIds: ['i1', 'i3'] })
+    expect(gravado).not.toHaveProperty('lavaRapidoId')
   })
 
   it('atualizarServico envia nome, preço e itens do serviço', async () => {

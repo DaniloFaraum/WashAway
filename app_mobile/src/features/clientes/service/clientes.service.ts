@@ -1,4 +1,5 @@
 import { apiFetch } from '@/services/httpClient'
+import { erroDeMuitasTentativas } from '@/features/auth/service/auth.service'
 import { CLIENTES_ROUTES } from './clientes.routes'
 import { normalizeCliente, type Cliente } from './clientes.model'
 
@@ -34,6 +35,7 @@ export async function cadastrarCliente(dados: DadosCadastro): Promise<Cliente> {
 
   if (response.status === 201) return normalizeCliente(await response.json())
   if (response.status === 409) throw new EmailJaCadastradoError()
+  if (response.status === 429) throw await erroDeMuitasTentativas(response)
   if (response.status === 400) {
     const corpo = await response.json().catch(() => ({}))
     throw new ErroValidacao(corpo?.campos ?? {})

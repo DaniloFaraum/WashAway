@@ -76,8 +76,8 @@ function OnboardingContrato({ solicitacao, onAssinar, onVoltar }) {
                   fullWidth
                 />
                 <Typography variant="body2" color="text.secondary">
-                  Depois de assinar, você entra direto no painel. A senha padrão de acesso é{' '}
-                  <strong>admin</strong>.
+                  Depois de assinar, você entra direto no painel. Nos próximos acessos, entre com o CNPJ e a
+                  senha que você escolheu no cadastro.
                 </Typography>
                 <Stack direction="row" spacing={2} sx={{ justifyContent: 'flex-end' }}>
                   <Button onClick={onVoltar} disabled={assinando}>

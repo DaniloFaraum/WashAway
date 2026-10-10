@@ -5,6 +5,7 @@ import {
   ErroRede,
   ErroValidacao,
 } from '../features/clientes/service/clientes.service'
+import { MuitasTentativasError } from '../features/auth/service/auth.service'
 
 const dados = { nome: 'Ana', email: 'ana@exemplo.com', senha: '123456' }
 
@@ -43,6 +44,15 @@ describe('clientes.service#cadastrarCliente', () => {
 
     expect(erro).toBeInstanceOf(ErroValidacao)
     expect(erro.campos).toEqual({ email: 'E-mail inválido' })
+  })
+
+  it('429 vira MuitasTentativasError com a mensagem do back-end (I17)', async () => {
+    vi.spyOn(global, 'fetch').mockResolvedValue(resposta(429, { error: 'Muitas tentativas. Aguarde 15 minutos e tente de novo.' }))
+
+    const erro = await cadastrarCliente(dados).catch((e) => e)
+
+    expect(erro).toBeInstanceOf(MuitasTentativasError)
+    expect(erro.message).toMatch(/Muitas tentativas/)
   })
 
   it('falha de rede vira ErroRede', async () => {
