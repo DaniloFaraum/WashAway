@@ -161,6 +161,44 @@ const veiculoSchema = {
   },
 }
 
+const veiculoClienteSchema = {
+  type: 'object',
+  description: 'Veículo do cliente do app (I3). Não confundir com `Veiculo`, que o painel deriva dos pedidos.',
+  properties: {
+    id: { type: 'string' },
+    clienteId: { type: 'string' },
+    marca: { type: 'string', nullable: true },
+    modelo: { type: 'string' },
+    cor: { type: 'string' },
+    placa: { type: 'string', description: 'Normalizada: sem hífen/espaços e em maiúsculas (ex.: ABC1234 ou ABC1D23).' },
+    criadoEm: { type: 'string', format: 'date-time' },
+  },
+}
+
+const dadosVeiculoClienteSchema = {
+  type: 'object',
+  required: ['modelo', 'cor', 'placa'],
+  properties: {
+    marca: { type: 'string', nullable: true, maxLength: 60, description: 'Opcional; vazia vira null.' },
+    modelo: { type: 'string', maxLength: 60 },
+    cor: { type: 'string', maxLength: 60 },
+    placa: { type: 'string', description: 'Formato antigo (ABC-1234) ou Mercosul (ABC1D23); hífen, espaços e caixa são ignorados.' },
+  },
+}
+
+const erroVeiculoClienteSchema = {
+  type: 'object',
+  properties: {
+    error: { type: 'string' },
+    campos: {
+      type: 'object',
+      description: 'Mensagem por campo inválido.',
+      properties: { marca: { type: 'string' }, modelo: { type: 'string' }, cor: { type: 'string' }, placa: { type: 'string' } },
+    },
+  },
+  required: ['error'],
+}
+
 const lavaRapidoIdParam = {
   name: 'lavaRapidoId',
   in: 'query',
@@ -231,6 +269,8 @@ export const openApiDocument = {
       Cliente: clienteSchema,
       LoginCliente: loginClienteSchema,
       ErroCadastroCliente: erroCadastroClienteSchema,
+      VeiculoCliente: veiculoClienteSchema,
+      ErroVeiculoCliente: erroVeiculoClienteSchema,
     },
     securitySchemes: {
       bearerAuth: { type: 'http', scheme: 'bearer', bearerFormat: 'JWT' },
@@ -293,6 +333,56 @@ export const openApiDocument = {
         security: [{ bearerAuth: [] }],
         responses: {
           200: { description: 'Cliente do token (sem a senha).', content: { 'application/json': { schema: { $ref: '#/components/schemas/Cliente' } } } },
+          ...erroAutenticacao,
+        },
+      },
+    },
+    '/clientes/me/veiculos': {
+      get: {
+        tags: ['clientes'],
+        summary: 'Veículos do cliente logado',
+        security: [{ bearerAuth: [] }],
+        responses: {
+          200: { description: 'Veículos do cliente do token (mais antigo primeiro).', content: { 'application/json': { schema: { type: 'array', items: { $ref: '#/components/schemas/VeiculoCliente' } } } } },
+          ...erroAutenticacao,
+        },
+      },
+      post: {
+        tags: ['clientes'],
+        summary: 'Cadastra um veículo do cliente logado',
+        security: [{ bearerAuth: [] }],
+        requestBody: { required: true, content: { 'application/json': { schema: dadosVeiculoClienteSchema } } },
+        responses: {
+          201: { description: 'Criado (placa normalizada).', content: { 'application/json': { schema: { $ref: '#/components/schemas/VeiculoCliente' } } } },
+          400: { description: 'Modelo/cor/placa faltando, texto longo demais ou placa em formato inválido.', content: { 'application/json': { schema: { $ref: '#/components/schemas/ErroVeiculoCliente' } } } },
+          409: { description: 'O cliente já cadastrou um veículo com essa placa.', content: { 'application/json': { schema: { $ref: '#/components/schemas/Erro' } } } },
+          ...erroAutenticacao,
+        },
+      },
+    },
+    '/clientes/me/veiculos/{id}': {
+      put: {
+        tags: ['clientes'],
+        summary: 'Edita um veículo do cliente logado',
+        security: [{ bearerAuth: [] }],
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+        requestBody: { required: true, content: { 'application/json': { schema: dadosVeiculoClienteSchema } } },
+        responses: {
+          200: { description: 'Atualizado.', content: { 'application/json': { schema: { $ref: '#/components/schemas/VeiculoCliente' } } } },
+          400: { description: 'Dados inválidos (mesmas regras do cadastro).', content: { 'application/json': { schema: { $ref: '#/components/schemas/ErroVeiculoCliente' } } } },
+          404: { description: 'Veículo inexistente ou de outro cliente (nunca 403).', content: { 'application/json': { schema: { $ref: '#/components/schemas/Erro' } } } },
+          409: { description: 'Outro veículo do cliente já tem essa placa.', content: { 'application/json': { schema: { $ref: '#/components/schemas/Erro' } } } },
+          ...erroAutenticacao,
+        },
+      },
+      delete: {
+        tags: ['clientes'],
+        summary: 'Remove um veículo do cliente logado',
+        security: [{ bearerAuth: [] }],
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+        responses: {
+          204: { description: 'Removido.' },
+          404: { description: 'Veículo inexistente ou de outro cliente (nunca 403).', content: { 'application/json': { schema: { $ref: '#/components/schemas/Erro' } } } },
           ...erroAutenticacao,
         },
       },

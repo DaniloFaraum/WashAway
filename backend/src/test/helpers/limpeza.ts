@@ -26,6 +26,7 @@ const REMOVEDORES = {
   servico: (ids: string[]) => prisma.servico.deleteMany(porIds(ids)),
   itemServico: (ids: string[]) => prisma.itemServico.deleteMany(porIds(ids)),
   solicitacaoOnboarding: (ids: string[]) => prisma.solicitacaoOnboarding.deleteMany(porIds(ids)),
+  veiculo: (ids: string[]) => prisma.veiculo.deleteMany(porIds(ids)),
   cliente: (ids: string[]) => prisma.cliente.deleteMany(porIds(ids)),
   lavaRapido: (ids: string[]) => prisma.lavaRapido.deleteMany(porIds(ids)),
   contrato: (ids: string[]) => prisma.contrato.deleteMany(porIds(ids)),

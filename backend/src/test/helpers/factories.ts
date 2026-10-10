@@ -10,7 +10,6 @@ import { registrarParaLimpeza } from './limpeza.js'
 // - aceita `overrides` com qualquer campo do model;
 // - registra o id criado em `limpeza.ts` (basta `limparDadosDeTeste()` no afterAll).
 //
-// `criarVeiculoTeste` (I3) entra aqui junto com o model Veiculo, no mesmo formato.
 
 let sequencia = 0
 
@@ -136,4 +135,23 @@ export async function criarClienteTeste(overrides: ClienteOverrides = {}) {
   })
   registrarParaLimpeza('cliente', cliente.id)
   return cliente
+}
+
+/** Veículo do cliente (I3), com placa Mercosul única. */
+export async function criarVeiculoTeste(
+  clienteId: string,
+  overrides: Partial<Omit<Prisma.VeiculoUncheckedCreateInput, 'clienteId'>> = {},
+) {
+  const veiculo = await prisma.veiculo.create({
+    data: {
+      clienteId,
+      marca: 'Marca de teste',
+      modelo: `Modelo de teste ${sufixoUnico()}`,
+      cor: 'Prata',
+      placa: placaUnica(),
+      ...overrides,
+    },
+  })
+  registrarParaLimpeza('veiculo', veiculo.id)
+  return veiculo
 }

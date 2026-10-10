@@ -210,6 +210,12 @@ const SOLICITACAO_PENDENTE = {
 // Cliente de exemplo do app (I2) — senha conhecida SÓ para desenvolvimento/demo.
 const CLIENTE_DEMO = { nome: 'Mariana Souza', email: 'mariana@exemplo.com', senha: '123456' }
 
+// Veículos da cliente de exemplo (I3). Placa já normalizada (sem hífen, maiúsculas).
+const VEICULOS_CLIENTE_DEMO = [
+  { marca: 'Chevrolet', modelo: 'Onix', cor: 'Prata', placa: 'RIO2A18' },
+  { marca: 'Honda', modelo: 'Fit', cor: 'Preto', placa: 'FGH4521' },
+]
+
 function fotos(placa: string, quantidade = 0) {
   return Array.from({ length: quantidade }, (_, i) => `https://placehold.co/400x300?text=${placa}+foto+${i + 1}`)
 }
@@ -299,12 +305,22 @@ async function main() {
     console.log(`+ Solicitação pendente: ${SOLICITACAO_PENDENTE.name} (CNPJ ${SOLICITACAO_PENDENTE.cnpj})`)
   }
 
-  const clienteExiste = await prisma.cliente.findUnique({ where: { email: CLIENTE_DEMO.email } })
-  if (!clienteExiste) {
-    await prisma.cliente.create({
+  let clienteDemo = await prisma.cliente.findUnique({ where: { email: CLIENTE_DEMO.email } })
+  if (!clienteDemo) {
+    clienteDemo = await prisma.cliente.create({
       data: { nome: CLIENTE_DEMO.nome, email: CLIENTE_DEMO.email, senha: bcrypt.hashSync(CLIENTE_DEMO.senha, 10) },
     })
     console.log(`+ Cliente do app: ${CLIENTE_DEMO.email} / senha "${CLIENTE_DEMO.senha}"`)
+  }
+
+  // Veículos do cliente de exemplo (I3) — por placa, sem duplicar.
+  for (const veiculo of VEICULOS_CLIENTE_DEMO) {
+    const existe = await prisma.veiculo.findUnique({
+      where: { clienteId_placa: { clienteId: clienteDemo.id, placa: veiculo.placa } },
+    })
+    if (existe) continue
+    await prisma.veiculo.create({ data: { ...veiculo, clienteId: clienteDemo.id } })
+    console.log(`+ Veículo de ${CLIENTE_DEMO.email}: ${veiculo.modelo} (${veiculo.placa})`)
   }
 
   console.log(`Demo concluída: ${criadas} empresas novas. Senha de todas: "${SENHA_PADRAO}".`)
