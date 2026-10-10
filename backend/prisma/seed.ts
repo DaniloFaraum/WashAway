@@ -1,13 +1,15 @@
 import 'dotenv/config'
 import { PrismaClient } from '@prisma/client'
 import bcrypt from 'bcryptjs'
-import { SENHA_PADRAO } from '../src/modules/lava-rapidos/lavaRapidos.service.js'
 import { criarHorariosSeNaoTiver, HORARIO_PADRAO, HORARIO_TODOS_OS_DIAS } from './horariosExemplo.js'
 
 const prisma = new PrismaClient()
 
-// Hasheada aqui do mesmo jeito que o cadastro real (POST /lava-rapidos) faz.
-const SENHA_PADRAO_HASH = bcrypt.hashSync(SENHA_PADRAO, 10)
+// SENHA SÓ PARA DESENVOLVIMENTO (I17): todas as empresas do seed entram com
+// a senha "demo1234" e um e-mail de exemplo (empresa101@exemplo.com …).
+// Hasheada do mesmo jeito que o onboarding faz.
+const SENHA_DEMO_LAVA_RAPIDO = 'demo1234'
+const SENHA_PADRAO_HASH = bcrypt.hashSync(SENHA_DEMO_LAVA_RAPIDO, 10)
 
 // Contrato mock do onboarding (docs/plan/onboarding-contrato-empresa) — termos
 // fictícios; o aceite é o texto "eu aceito" digitado pelo dono no admin-front.
@@ -30,6 +32,7 @@ const lavaRapidosData = [
   {
     name: 'Aqua Shine Lava-Rápido',
     cnpj: '00000000000101',
+    email: 'empresa101@exemplo.com',
     senha: SENHA_PADRAO_HASH,
     address: 'Rua Canhemborá, 120 - Vila Gustavo, São Paulo - SP, CEP 02253010',
     rating: 4.8,
@@ -45,6 +48,7 @@ const lavaRapidosData = [
   {
     name: 'Lava Rápido Centro',
     cnpj: '00000000000102',
+    email: 'empresa102@exemplo.com',
     senha: SENHA_PADRAO_HASH,
     address: 'Rua Canhemborá, 245 - Vila Gustavo, São Paulo - SP, CEP 02253010',
     rating: 4.5,
@@ -60,6 +64,7 @@ const lavaRapidosData = [
   {
     name: 'Super Wash Express',
     cnpj: '00000000000103',
+    email: 'empresa103@exemplo.com',
     senha: SENHA_PADRAO_HASH,
     address: 'Rua Canhemborá, 88 - Vila Gustavo, São Paulo - SP, CEP 02253010',
     rating: 4.2,
@@ -75,6 +80,7 @@ const lavaRapidosData = [
   {
     name: 'Brilho Total Premium',
     cnpj: '00000000000104',
+    email: 'empresa104@exemplo.com',
     senha: SENHA_PADRAO_HASH,
     address: 'Rua Canhemborá, 310 - Vila Gustavo, São Paulo - SP, CEP 02253010',
     rating: 5.0,
@@ -90,6 +96,7 @@ const lavaRapidosData = [
   {
     name: 'Crystal Jet Wash',
     cnpj: '00000000000105',
+    email: 'empresa105@exemplo.com',
     senha: SENHA_PADRAO_HASH,
     address: 'Rua Canhemborá, 57 - Vila Gustavo, São Paulo - SP, CEP 02253010',
     rating: 4.6,

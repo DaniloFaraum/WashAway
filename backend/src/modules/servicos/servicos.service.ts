@@ -27,8 +27,9 @@ export async function listServicos(lavaRapidoId?: string) {
   return servicos.map(toServicoResponse)
 }
 
-export function getServicoById(id: string) {
-  return prisma.servico.findUnique({ where: { id } })
+/** Serviço da empresa, ou `null` se não existir ou for de outra empresa. */
+export function getServicoDaEmpresa(id: string, lavaRapidoId: string) {
+  return prisma.servico.findFirst({ where: { id, lavaRapidoId } })
 }
 
 export async function updateServicoAtivo(id: string, ativo: boolean) {

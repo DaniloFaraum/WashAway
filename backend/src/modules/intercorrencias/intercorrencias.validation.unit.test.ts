@@ -4,7 +4,7 @@ import { parseIntercorrenciaInput } from './intercorrencias.validation.js'
 // Exemplo de teste unitário (`*.unit.test.ts`): regra pura, sem banco nem rede.
 // Roda com `npm run test:unit`.
 describe('parseIntercorrenciaInput', () => {
-  const base = { lavaRapidoId: 'lr-1', data: '2026-10-12', motivo: 'Feriado' }
+  const base = { data: '2026-10-12', motivo: 'Feriado' }
 
   it('aceita intercorrência de dia inteiro sem horários', () => {
     expect(parseIntercorrenciaInput({ ...base, diaInteiro: true })).toEqual({ ...base, diaInteiro: true })
@@ -13,6 +13,10 @@ describe('parseIntercorrenciaInput', () => {
   it('aceita intercorrência parcial com horaInicio e horaFim', () => {
     const input = { ...base, diaInteiro: false, horaInicio: '14:00', horaFim: '16:00' }
     expect(parseIntercorrenciaInput(input)).toEqual(input)
+  })
+
+  it('ignora lavaRapidoId no body (a empresa vem do token)', () => {
+    expect(parseIntercorrenciaInput({ ...base, diaInteiro: true, lavaRapidoId: 'outra' })).toEqual({ ...base, diaInteiro: true })
   })
 
   it('recusa horários quando é dia inteiro', () => {

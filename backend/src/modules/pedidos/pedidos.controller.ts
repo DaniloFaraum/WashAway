@@ -1,10 +1,12 @@
 import type { Request, Response } from 'express'
-import { getStringQueryParam } from '../../utils/queryParam.js'
-import { getPedidoById, listPedidos, updatePedidoStatus } from './pedidos.service.js'
+import { listPedidos, updatePedidoStatus } from './pedidos.service.js'
 import { isValidStatus } from './pedidos.validation.js'
 
+// Rotas do painel (autenticar('lavaRapido')): a empresa é `req.auth.id`.
+// `?lavaRapidoId=` é ignorado; pedido de outra empresa = 404.
+
 export async function index(req: Request, res: Response) {
-  const pedidos = await listPedidos(getStringQueryParam(req.query.lavaRapidoId))
+  const pedidos = await listPedidos(req.auth!.id)
   res.json(pedidos)
 }
 
@@ -16,12 +18,10 @@ export async function updateStatus(req: Request, res: Response) {
     return
   }
 
-  const pedidoExistente = await getPedidoById(req.params.id)
-  if (!pedidoExistente) {
+  const pedido = await updatePedidoStatus(req.params.id, req.auth!.id, status)
+  if (!pedido) {
     res.status(404).json({ error: 'Pedido não encontrado' })
     return
   }
-
-  const pedido = await updatePedidoStatus(req.params.id, status)
   res.json(pedido)
 }

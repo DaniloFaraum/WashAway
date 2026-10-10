@@ -10,7 +10,14 @@ export default defineConfig({
     exclude: ['**/node_modules/**', '**/dist/**'],
     // Segredo fixo só de teste (o de dev/produção vem do .env): os testes assinam
     // tokens com `assinarToken` e conferem 401 com outro segredo/expirado.
-    env: { JWT_SECRET: 'segredo-fixo-so-para-testes-com-32-caracteres-ou-mais', JWT_EXPIRES_IN: '7d' },
+    // Limite de tentativas alto nos testes, pra não interferir nos logins/cadastros
+    // de cada arquivo; o teste do limite cria o app com um limite baixo
+    // (`createApp({ limiteTentativas })`, src/test/limiteTentativas.test.ts).
+    env: {
+      JWT_SECRET: 'segredo-fixo-so-para-testes-com-32-caracteres-ou-mais',
+      JWT_EXPIRES_IN: '7d',
+      LIMITE_TENTATIVAS: '10000',
+    },
     coverage: {
       provider: 'v8',
       include: ['src/**/*.ts'],

@@ -1,8 +1,8 @@
 import type { Request, Response } from 'express'
-import { getStringQueryParam } from '../../utils/queryParam.js'
 import { listVeiculos } from './veiculos.service.js'
 
+// Painel (autenticar('lavaRapido')): veículos dos pedidos da empresa do token.
 export async function index(req: Request, res: Response) {
-  const veiculos = await listVeiculos(getStringQueryParam(req.query.lavaRapidoId))
+  const veiculos = await listVeiculos(req.auth!.id)
   res.json(veiculos)
 }

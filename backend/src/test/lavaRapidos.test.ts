@@ -3,6 +3,10 @@ import supertest from 'supertest'
 import { createApp } from '../app.js'
 import { prisma } from '../config/prisma.js'
 import { partesLocais } from '../utils/fusoHorario.js'
+import jwt from 'jsonwebtoken'
+import { comToken, tokenDeLavaRapido } from './helpers/auth.js'
+import { criarLavaRapidoTeste } from './helpers/factories.js'
+import { limparDadosDeTeste } from './helpers/limpeza.js'
 
 const app = createApp()
 
@@ -61,6 +65,17 @@ describe('GET /lavaRapidos', () => {
     expect(response.body.senha).toBeUndefined()
   })
 
+  it('não expõe o e-mail de acesso nas rotas públicas', async () => {
+    await prisma.lavaRapido.update({ where: { id: lavaRapidoId }, data: { email: `acesso-${lavaRapidoId}@exemplo.com` } })
+
+    const lista = await supertest(app).get('/lavaRapidos')
+    const show = await supertest(app).get(`/lavaRapidos/${lavaRapidoId}`)
+
+    const item = lista.body.find((entry: { id: string }) => entry.id === lavaRapidoId)
+    expect(item).not.toHaveProperty('email')
+    expect(show.body).not.toHaveProperty('email')
+  })
+
   it('retorna 404 para um id inexistente', async () => {
     const response = await supertest(app).get('/lavaRapidos/id-que-nao-existe')
 
@@ -68,70 +83,33 @@ describe('GET /lavaRapidos', () => {
   })
 })
 
-describe('POST /lavaRapidos (cadastro)', () => {
-  const cnpjNovo = '33333333000133'
-
+describe('rotas legadas removidas (I17): POST /lavaRapidos e DELETE /lavaRapidos/:id', () => {
   afterAll(async () => {
-    await prisma.lavaRapido.deleteMany({ where: { cnpj: cnpjNovo } })
+    await limparDadosDeTeste()
   })
 
-  it('cadastra uma empresa nova com senha padrão "admin" (hasheada, não em texto puro)', async () => {
-    const response = await supertest(app)
-      .post('/lavaRapidos')
-      .send({ name: 'Empresa de teste', address: 'Rua de teste, 1', cnpj: cnpjNovo })
+  it('POST /lavaRapidos não existe mais (empresa nova só pelo onboarding)', async () => {
+    const cnpj = '33333333000133'
+    const response = await supertest(app).post('/lavaRapidos').send({ name: 'Empresa legado', cnpj })
 
-    expect(response.status).toBe(201)
-    expect(response.body).toMatchObject({ name: 'Empresa de teste', cnpj: cnpjNovo })
-    expect(response.body.senha).toBeUndefined()
-
-    const noBanco = await prisma.lavaRapido.findUnique({ where: { cnpj: cnpjNovo } })
-    expect(noBanco?.senha).not.toBe('admin')
+    expect(response.status).toBe(404)
+    expect(await prisma.lavaRapido.findUnique({ where: { cnpj } })).toBeNull()
   })
 
-  it('rejeita cnpj com formato inválido', async () => {
-    const response = await supertest(app)
-      .post('/lavaRapidos')
-      .send({ name: 'Empresa inválida', cnpj: '123' })
+  it('DELETE /lavaRapidos/:id não existe mais: a empresa continua lá, com ou sem token', async () => {
+    const lavaRapido = await criarLavaRapidoTeste()
 
-    expect(response.status).toBe(400)
-  })
+    const semToken = await supertest(app).delete(`/lavaRapidos/${lavaRapido.id}`)
+    const comTokenDaPropria = await comToken(supertest(app).delete(`/lavaRapidos/${lavaRapido.id}`), tokenDeLavaRapido(lavaRapido))
 
-  it('rejeita cadastro com cnpj duplicado (409)', async () => {
-    const response = await supertest(app)
-      .post('/lavaRapidos')
-      .send({ name: 'Empresa duplicada', cnpj: cnpjNovo })
-
-    expect(response.status).toBe(409)
+    expect(semToken.status).toBe(404)
+    expect(comTokenDaPropria.status).toBe(404)
+    expect(await prisma.lavaRapido.findUnique({ where: { id: lavaRapido.id } })).not.toBeNull()
   })
 })
 
-describe('DELETE /lavaRapidos/:id', () => {
-  it('exclui um lava-rápido sem dependentes e some da listagem', async () => {
-    const lavaRapido = await prisma.lavaRapido.create({
-      data: {
-        name: 'Lava-rápido a excluir',
-        cnpj: '77777777000177',
-        senha: 'hash-fake-nao-usado-nestes-testes',
-        rating: 0,
-        reviewsCount: 0,
-        distance: '',
-        time: '',
-        price: 0,
-        isOpen: true,
-        image: 'https://placehold.co/300x300?text=Excluir',
-        latitude: 0,
-        longitude: 0,
-      },
-    })
-
-    const response = await supertest(app).delete(`/lavaRapidos/${lavaRapido.id}`)
-    expect(response.status).toBe(204)
-
-    const show = await supertest(app).get(`/lavaRapidos/${lavaRapido.id}`)
-    expect(show.status).toBe(404)
-  })
-
-  it('exclui em cascata: apaga pedidos, serviços e intercorrências junto', async () => {
+describe('exclusão de lava-rápido no banco (cascade)', () => {
+  it('apagar a empresa apaga pedidos, serviços e intercorrências junto', async () => {
     const lavaRapido = await prisma.lavaRapido.create({
       data: {
         name: 'Lava-rápido com dependentes',
@@ -164,17 +142,11 @@ describe('DELETE /lavaRapidos/:id', () => {
       data: { lavaRapidoId: lavaRapido.id, data: '2026-12-01', motivo: 'Teste', diaInteiro: true },
     })
 
-    const response = await supertest(app).delete(`/lavaRapidos/${lavaRapido.id}`)
-    expect(response.status).toBe(204)
+    await prisma.lavaRapido.delete({ where: { id: lavaRapido.id } })
 
     expect(await prisma.pedido.findUnique({ where: { id: pedido.id } })).toBeNull()
     expect(await prisma.servico.findUnique({ where: { id: servico.id } })).toBeNull()
     expect(await prisma.intercorrencia.findUnique({ where: { id: intercorrencia.id } })).toBeNull()
-  })
-
-  it('retorna 404 pra id inexistente', async () => {
-    const response = await supertest(app).delete('/lavaRapidos/id-que-nao-existe')
-    expect(response.status).toBe(404)
   })
 })
 
@@ -280,7 +252,9 @@ describe('isOpen calculado a partir de intercorrências', () => {
       data: { lavaRapidoId, data: hoje, motivo: 'Folga cancelada', diaInteiro: true },
     })
 
-    const reabrir = await supertest(app).patch(`/intercorrencias/${intercorrencia.id}`).send({ reaberta: true })
+    const reabrir = await comToken(supertest(app).patch(`/intercorrencias/${intercorrencia.id}`), tokenDeLavaRapido({ id: lavaRapidoId })).send({
+      reaberta: true,
+    })
     expect(reabrir.status).toBe(200)
 
     const show = await supertest(app).get(`/lavaRapidos/${lavaRapidoId}`)
@@ -316,40 +290,49 @@ describe('isOpen calculado a partir de intercorrências', () => {
 })
 
 describe('POST /lavaRapidos/login', () => {
-  const cnpjLogin = '44444444000144'
+  const SENHA = 'senha-forte-123'
+  let lavaRapido: Awaited<ReturnType<typeof criarLavaRapidoTeste>>
 
   beforeAll(async () => {
-    await supertest(app)
-      .post('/lavaRapidos')
-      .send({ name: 'Empresa de login', cnpj: cnpjLogin })
+    lavaRapido = await criarLavaRapidoTeste({ senha: SENHA })
   })
 
   afterAll(async () => {
-    await prisma.lavaRapido.deleteMany({ where: { cnpj: cnpjLogin } })
+    await limparDadosDeTeste()
   })
 
-  it('loga com cnpj + senha padrão "admin"', async () => {
-    const response = await supertest(app)
-      .post('/lavaRapidos/login')
-      .send({ cnpj: cnpjLogin, senha: 'admin' })
+  it('loga com cnpj + senha e devolve { token, expiraEm, lavaRapido } com horários e disponibilidade', async () => {
+    const response = await supertest(app).post('/lavaRapidos/login').send({ cnpj: lavaRapido.cnpj, senha: SENHA })
 
     expect(response.status).toBe(200)
-    expect(response.body).toMatchObject({ cnpj: cnpjLogin })
-    expect(response.body.senha).toBeUndefined()
+    expect(response.body.token).toEqual(expect.any(String))
+    expect(response.body.expiraEm).toEqual(expect.any(String))
+    expect(response.body.lavaRapido).toMatchObject({ id: lavaRapido.id, cnpj: lavaRapido.cnpj, isOpen: true, foraDoHorario: false })
+    expect(response.body.lavaRapido.horarios).toEqual(expect.any(Array))
+    expect(response.body.lavaRapido.senha).toBeUndefined()
+
+    const payload = jwt.decode(response.body.token) as jwt.JwtPayload
+    expect(payload).toMatchObject({ sub: lavaRapido.id, tipo: 'lavaRapido' })
   })
 
-  it('rejeita senha errada (401)', async () => {
-    const response = await supertest(app)
-      .post('/lavaRapidos/login')
-      .send({ cnpj: cnpjLogin, senha: 'errada' })
+  it('o token do login abre as rotas do painel', async () => {
+    const login = await supertest(app).post('/lavaRapidos/login').send({ cnpj: lavaRapido.cnpj, senha: SENHA })
 
-    expect(response.status).toBe(401)
+    const pedidos = await comToken(supertest(app).get('/pedidos'), login.body.token)
+
+    expect(pedidos.status).toBe(200)
+  })
+
+  it('rejeita senha errada (401) — inclusive a antiga senha fixa "admin"', async () => {
+    const errada = await supertest(app).post('/lavaRapidos/login').send({ cnpj: lavaRapido.cnpj, senha: 'errada' })
+    const admin = await supertest(app).post('/lavaRapidos/login').send({ cnpj: lavaRapido.cnpj, senha: 'admin' })
+
+    expect(errada.status).toBe(401)
+    expect(admin.status).toBe(401)
   })
 
   it('rejeita cnpj inexistente (401)', async () => {
-    const response = await supertest(app)
-      .post('/lavaRapidos/login')
-      .send({ cnpj: '99999999000199', senha: 'admin' })
+    const response = await supertest(app).post('/lavaRapidos/login').send({ cnpj: '99999999000199', senha: SENHA })
 
     expect(response.status).toBe(401)
   })

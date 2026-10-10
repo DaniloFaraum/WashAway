@@ -1,14 +1,27 @@
 import bcrypt from 'bcryptjs'
 import type { Prisma } from '@prisma/client'
+import { assinarToken, expiracaoDoToken } from '../../auth/token.js'
 import { prisma } from '../../config/prisma.js'
 import { estaAberto, listarAbertos } from '../horarios/disponibilidade.service.js'
 import { listarHorarios } from '../horarios/horarios.service.js'
 import { getIntercorrenciaAtiva } from '../intercorrencias/intercorrencias.service.js'
 
-export const SENHA_PADRAO = 'admin'
+// I17: não há mais senha fixa "admin" — a empresa define a própria senha no
+// onboarding (`SolicitacaoOnboarding.senhaHash`).
+export const CUSTO_BCRYPT_LAVA_RAPIDO = 10
+
+// Hash qualquer, só pra o login com CNPJ inexistente gastar o mesmo tempo de um
+// `bcrypt.compare` real (não dá pra descobrir quais CNPJs têm conta pelo tempo).
+const HASH_FICTICIO = bcrypt.hashSync('senha-ficticia-para-tempo-constante', CUSTO_BCRYPT_LAVA_RAPIDO)
 
 export function omitSenha<T extends { senha: string }>(lavaRapido: T): Omit<T, 'senha'> {
   const { senha: _senha, ...resto } = lavaRapido
+  return resto
+}
+
+/** Dados das rotas públicas (listagem/busca): sem senha e sem o e-mail de acesso. */
+export function dadosPublicos<T extends { senha: string; email: string | null }>(lavaRapido: T): Omit<T, 'senha' | 'email'> {
+  const { senha: _senha, email: _email, ...resto } = lavaRapido
   return resto
 }
 
@@ -38,10 +51,6 @@ export async function listLavaRapidos() {
     price: precos.get(lavaRapido.id) ?? null,
     isOpen: lavaRapido.isOpen && (disponibilidades.get(lavaRapido.id)?.aberto ?? true),
   }))
-}
-
-export function deleteLavaRapido(id: string) {
-  return prisma.lavaRapido.delete({ where: { id } })
 }
 
 export async function getLavaRapidoById(id: string) {
@@ -76,22 +85,25 @@ export type CriarLavaRapidoInput = {
   name: string
   address?: string
   cnpj: string
+  /** E-mail de acesso, já normalizado. */
+  email: string
+  /** Hash bcrypt da senha escolhida no onboarding. */
+  senhaHash: string
 }
 
 // `client` permite rodar dentro de uma transação (aceite do onboarding cria a
 // empresa e conclui a solicitação de forma atômica).
 export async function criarLavaRapido(
-  { name, address, cnpj }: CriarLavaRapidoInput,
+  { name, address, cnpj, email, senhaHash }: CriarLavaRapidoInput,
   client: Prisma.TransactionClient = prisma,
 ) {
-  const senha = await bcrypt.hash(SENHA_PADRAO, 10)
-
   return client.lavaRapido.create({
     data: {
       name,
       address,
       cnpj,
-      senha,
+      email,
+      senha: senhaHash,
       rating: 0,
       reviewsCount: 0,
       distance: '',
@@ -107,14 +119,27 @@ export async function criarLavaRapido(
 
 export async function autenticarLavaRapido(cnpj: string, senha: string) {
   const lavaRapido = await getLavaRapidoByCnpj(cnpj)
-  if (!lavaRapido) {
-    return null
-  }
+  const senhaValida = await bcrypt.compare(senha, lavaRapido?.senha ?? HASH_FICTICIO)
+  return lavaRapido && senhaValida ? lavaRapido : null
+}
 
-  const senhaValida = await bcrypt.compare(senha, lavaRapido.senha)
-  if (!senhaValida) {
-    return null
-  }
+export function getLavaRapidoByEmail(email: string) {
+  return prisma.lavaRapido.findUnique({ where: { email } })
+}
 
-  return lavaRapido
+/**
+ * Resposta de sessão do painel (login e aceite do contrato): token de
+ * lava-rápido + a empresa como `GET /lavaRapidos/:id` devolve (com horários e
+ * disponibilidade), sem a senha.
+ */
+export async function sessaoDoLavaRapido(id: string) {
+  const lavaRapido = await getLavaRapidoById(id)
+  if (!lavaRapido) throw new Error(`Lava-rápido ${id} não encontrado ao abrir a sessão`)
+  const token = assinarToken({ id, tipo: 'lavaRapido' })
+  return { token, expiraEm: expiracaoDoToken(token), lavaRapido: omitSenha(lavaRapido) }
+}
+
+/** Consulta leve: a empresa ainda existe? (token de empresa já excluída não vale) */
+export async function existeLavaRapido(id: string) {
+  return (await prisma.lavaRapido.count({ where: { id } })) > 0
 }

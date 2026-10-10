@@ -3,11 +3,16 @@ import supertest from 'supertest'
 import { createApp } from '../app.js'
 import { prisma } from '../config/prisma.js'
 import * as veiculosService from '../modules/veiculos/veiculos.service.js'
+import { comToken, tokenDeLavaRapido } from './helpers/auth.js'
+import { criarLavaRapidoTeste, criarPedidoTeste } from './helpers/factories.js'
+import { limparDadosDeTeste } from './helpers/limpeza.js'
 
 const app = createApp()
 
 describe('/veiculos', () => {
   let lavaRapidoId: string
+  let token: string
+  let outroLavaRapidoId: string
   const pedidoIds: string[] = []
 
   beforeAll(async () => {
@@ -28,6 +33,11 @@ describe('/veiculos', () => {
       },
     })
     lavaRapidoId = lavaRapido.id
+    token = tokenDeLavaRapido(lavaRapido)
+
+    const outro = await criarLavaRapidoTeste()
+    outroLavaRapidoId = outro.id
+    await criarPedidoTeste(outroLavaRapidoId, { veiculo: { modelo: 'Carro de outra empresa', placa: 'OUT9R99' } })
 
     // Duas visitas do mesmo carro (mesma placa) — deve deduplicar.
     const pedido1 = await prisma.pedido.create({
@@ -66,11 +76,12 @@ describe('/veiculos', () => {
   afterAll(async () => {
     await prisma.pedido.deleteMany({ where: { id: { in: pedidoIds } } })
     await prisma.lavaRapido.deleteMany({ where: { id: lavaRapidoId } })
+    await limparDadosDeTeste()
     await prisma.$disconnect()
   })
 
-  it('GET /veiculos?lavaRapidoId= deriva veículos distintos dos pedidos, sem duplicar por placa', async () => {
-    const response = await supertest(app).get('/veiculos').query({ lavaRapidoId })
+  it('GET /veiculos deriva veículos distintos dos pedidos da empresa do token, sem duplicar por placa', async () => {
+    const response = await comToken(supertest(app).get('/veiculos'), token)
 
     expect(response.status).toBe(200)
     const placas = response.body.map((v: { placa: string }) => v.placa)
@@ -79,13 +90,13 @@ describe('/veiculos', () => {
     expect(response.body).toContainEqual({ id: 'VEI1T23', modelo: 'Fiat Argo', placa: 'VEI1T23' })
   })
 
-  it('GET /veiculos sem lavaRapidoId lista veículos de todas as empresas, incluindo o de teste', async () => {
-    const response = await supertest(app).get('/veiculos')
+  it('GET /veiculos ignora ?lavaRapidoId= e não traz veículos de outra empresa', async () => {
+    const response = await comToken(supertest(app).get('/veiculos').query({ lavaRapidoId: outroLavaRapidoId }), token)
 
     expect(response.status).toBe(200)
     const placas = response.body.map((v: { placa: string }) => v.placa)
     expect(placas).toContain('VEI1T23')
-    expect(placas).toContain('VEI2T45')
+    expect(placas).not.toContain('OUT9R99')
   })
 
   describe('erro inesperado', () => {
@@ -96,7 +107,7 @@ describe('/veiculos', () => {
     it('GET /veiculos retorna 500 em vez de derrubar o processo quando o acesso a dados falha', async () => {
       vi.spyOn(veiculosService, 'listVeiculos').mockRejectedValueOnce(new Error('falha inesperada no banco'))
 
-      const response = await supertest(app).get('/veiculos')
+      const response = await comToken(supertest(app).get('/veiculos'), token)
 
       expect(response.status).toBe(500)
       expect(response.body).toEqual({ error: 'Erro interno' })

@@ -10,12 +10,15 @@ export function listIntercorrencias(lavaRapidoId?: string) {
   })
 }
 
-export function createIntercorrencia(input: IntercorrenciaInput) {
-  return prisma.intercorrencia.create({ data: input })
+export function createIntercorrencia(lavaRapidoId: string, input: IntercorrenciaInput) {
+  return prisma.intercorrencia.create({ data: { ...input, lavaRapidoId } })
 }
 
-export function reabrirIntercorrencia(id: string) {
-  return prisma.intercorrencia.update({ where: { id }, data: { reaberta: true } })
+/** Reabre só se a intercorrência for da empresa; senão devolve `null`. */
+export async function reabrirIntercorrencia(id: string, lavaRapidoId: string) {
+  const { count } = await prisma.intercorrencia.updateMany({ where: { id, lavaRapidoId }, data: { reaberta: true } })
+  if (count === 0) return null
+  return prisma.intercorrencia.findUnique({ where: { id } })
 }
 
 export async function getIntercorrenciaAtiva(

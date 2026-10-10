@@ -3,12 +3,15 @@ import supertest from 'supertest'
 import { createApp } from '../app.js'
 import { prisma } from '../config/prisma.js'
 import * as servicosService from '../modules/servicos/servicos.service.js'
+import { comToken, tokenDeLavaRapido } from './helpers/auth.js'
 
 const app = createApp()
 
 describe('/servicos', () => {
   let lavaRapidoId: string
+  let token: string
   let outroLavaRapidoId: string
+  let servicoDeOutraEmpresaId: string
   let servicoId: string
   let itemLavagemId: string
   let itemSecagemId: string
@@ -32,6 +35,7 @@ describe('/servicos', () => {
       },
     })
     lavaRapidoId = lavaRapido.id
+    token = tokenDeLavaRapido(lavaRapido)
 
     const outroLavaRapido = await prisma.lavaRapido.create({
       data: {
@@ -68,9 +72,11 @@ describe('/servicos', () => {
     })
     servicoId = servico.id
 
-    await prisma.servico.create({
-      data: { lavaRapidoId: outroLavaRapidoId, nome: 'Serviço de outra empresa', preco: 30, ativo: true },
-    })
+    servicoDeOutraEmpresaId = (
+      await prisma.servico.create({
+        data: { lavaRapidoId: outroLavaRapidoId, nome: 'Serviço de outra empresa', preco: 30, ativo: true },
+      })
+    ).id
   })
 
   afterAll(async () => {
@@ -97,10 +103,9 @@ describe('/servicos', () => {
     expect(servico.categorias).toEqual(['Lavagem teste'])
   })
 
-  it('POST /servicos cria um combo com itens do catálogo', async () => {
-    const response = await supertest(app)
-      .post('/servicos')
-      .send({ lavaRapidoId, nome: '  Combo de teste  ', preco: 55, itemIds: [itemLavagemId, itemSecagemId] })
+  it('POST /servicos cria um combo com itens do catálogo, na empresa do token', async () => {
+    const response = await comToken(supertest(app).post('/servicos'), token)
+      .send({ nome: '  Combo de teste  ', preco: 55, itemIds: [itemLavagemId, itemSecagemId] })
 
     expect(response.status).toBe(201)
     expect(response.body).toMatchObject({ lavaRapidoId, nome: 'Combo de teste', preco: 55, ativo: true })
@@ -115,31 +120,39 @@ describe('/servicos', () => {
     ['nome vazio', { nome: ' ', preco: 10, itemIds: ['qualquer'] }],
     ['itens repetidos', { nome: 'X', preco: 10, itemIds: ['a', 'a'] }],
   ])('POST /servicos rejeita %s com 400', async (_caso, body) => {
-    const response = await supertest(app).post('/servicos').send({ lavaRapidoId, ...body })
+    const response = await comToken(supertest(app).post('/servicos'), token).send(body)
 
     expect(response.status).toBe(400)
   })
 
   it('POST /servicos rejeita item inexistente ou inativo no catálogo, listando os ids inválidos', async () => {
-    const response = await supertest(app)
-      .post('/servicos')
-      .send({ lavaRapidoId, nome: 'Massagem', preco: 10, itemIds: [itemLavagemId, itemInativoId, 'item-que-nao-existe'] })
+    const response = await comToken(supertest(app).post('/servicos'), token)
+      .send({ nome: 'Massagem', preco: 10, itemIds: [itemLavagemId, itemInativoId, 'item-que-nao-existe'] })
 
     expect(response.status).toBe(400)
     expect(response.body.itemIdsInvalidos).toEqual([itemInativoId, 'item-que-nao-existe'])
   })
 
-  it('POST /servicos retorna 404 para um lava-rápido inexistente', async () => {
-    const response = await supertest(app)
-      .post('/servicos')
-      .send({ lavaRapidoId: 'lava-rapido-que-nao-existe', nome: 'X', preco: 10, itemIds: [itemLavagemId] })
+  it('POST /servicos ignora body.lavaRapidoId: cria na empresa do token', async () => {
+    const response = await comToken(supertest(app).post('/servicos'), token)
+      .send({ lavaRapidoId: outroLavaRapidoId, nome: 'Combo com id de outra empresa', preco: 10, itemIds: [itemLavagemId] })
 
-    expect(response.status).toBe(404)
+    expect(response.status).toBe(201)
+    expect(response.body.lavaRapidoId).toBe(lavaRapidoId)
+  })
+
+  it('PUT e PATCH /servicos/:id de outra empresa retornam 404 e não alteram o serviço', async () => {
+    const put = await comToken(supertest(app).put(`/servicos/${servicoDeOutraEmpresaId}`), token)
+      .send({ nome: 'Invadido', preco: 1, itemIds: [itemLavagemId] })
+    const patch = await comToken(supertest(app).patch(`/servicos/${servicoDeOutraEmpresaId}`), token).send({ ativo: false })
+
+    expect(put.status).toBe(404)
+    expect(patch.status).toBe(404)
+    expect(await prisma.servico.findUnique({ where: { id: servicoDeOutraEmpresaId } })).toMatchObject({ nome: 'Serviço de outra empresa', ativo: true })
   })
 
   it('PUT /servicos/:id troca nome, preço e itens do combo', async () => {
-    const response = await supertest(app)
-      .put(`/servicos/${servicoId}`)
+    const response = await comToken(supertest(app).put(`/servicos/${servicoId}`), token)
       .send({ nome: 'Lavagem de teste editada', preco: 45, itemIds: [itemSecagemId] })
 
     expect(response.status).toBe(200)
@@ -149,28 +162,27 @@ describe('/servicos', () => {
   })
 
   it('PUT /servicos/:id retorna 404 para um serviço inexistente', async () => {
-    const response = await supertest(app)
-      .put('/servicos/id-que-nao-existe')
+    const response = await comToken(supertest(app).put('/servicos/id-que-nao-existe'), token)
       .send({ nome: 'X', preco: 10, itemIds: [itemLavagemId] })
 
     expect(response.status).toBe(404)
   })
 
   it('PATCH /servicos/:id atualiza só o ativo', async () => {
-    const response = await supertest(app).patch(`/servicos/${servicoId}`).send({ ativo: false })
+    const response = await comToken(supertest(app).patch(`/servicos/${servicoId}`), token).send({ ativo: false })
 
     expect(response.status).toBe(200)
     expect(response.body).toMatchObject({ id: servicoId, ativo: false, nome: 'Lavagem de teste editada' })
   })
 
   it('PATCH /servicos/:id rejeita body com outros campos além de ativo', async () => {
-    const response = await supertest(app).patch(`/servicos/${servicoId}`).send({ ativo: true, preco: 999 })
+    const response = await comToken(supertest(app).patch(`/servicos/${servicoId}`), token).send({ ativo: true, preco: 999 })
 
     expect(response.status).toBe(400)
   })
 
   it('PATCH /servicos/:id retorna 404 para um serviço inexistente', async () => {
-    const response = await supertest(app).patch('/servicos/id-que-nao-existe').send({ ativo: true })
+    const response = await comToken(supertest(app).patch('/servicos/id-que-nao-existe'), token).send({ ativo: true })
 
     expect(response.status).toBe(404)
   })

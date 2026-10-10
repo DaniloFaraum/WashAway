@@ -56,6 +56,7 @@ const solicitacaoOnboardingSchema = {
     name: { type: 'string' },
     address: { type: 'string', nullable: true },
     cnpj: { type: 'string' },
+    email: { type: 'string', format: 'email', nullable: true, description: 'E-mail de acesso (normalizado). null só em solicitações anteriores ao I17.' },
     status: { type: 'string', enum: ['aguardando_contrato', 'concluida'] },
     contratoId: { type: 'string' },
     aceitoEm: { type: 'string', format: 'date-time', nullable: true },
@@ -240,6 +241,35 @@ const erroCadastroClienteSchema = {
   required: ['error'],
 }
 
+// Sessão do painel (login e aceite do contrato): token de lava-rápido + empresa.
+const loginLavaRapidoSchema = {
+  type: 'object',
+  properties: {
+    token: { type: 'string', description: 'JWT HS256 (tipo lavaRapido) — enviar como `Authorization: Bearer <token>` nas rotas de gestão.' },
+    expiraEm: { type: 'string', format: 'date-time', description: 'Fim da validade do token (JWT_EXPIRES_IN, padrão 7 dias).' },
+    lavaRapido: {
+      allOf: [
+        { $ref: '#/components/schemas/LavaRapidoComDisponibilidade' },
+        { type: 'object', properties: { email: { type: 'string', format: 'email', nullable: true, description: 'E-mail de acesso (null em empresas anteriores ao I17).' } } },
+      ],
+    },
+  },
+}
+
+const respostaLimiteTentativas = {
+  429: {
+    description: 'Limite de tentativas estourado (por IP + e-mail/CNPJ; padrão 10 a cada 15 min, LIMITE_TENTATIVAS / LIMITE_TENTATIVAS_JANELA_MINUTOS). Mensagem amigável em `error`; header Retry-After.',
+    content: { 'application/json': { schema: { $ref: '#/components/schemas/Erro' } } },
+  },
+}
+
+// Rotas de gestão do painel: autenticar('lavaRapido'); a empresa vem do token.
+const segurancaPainel = [{ bearerAuth: [] }]
+const erroAutenticacaoPainel = {
+  401: { description: 'Sem token, ou token inválido/expirado.', content: { 'application/json': { schema: { $ref: '#/components/schemas/Erro' } } } },
+  403: { description: 'Token válido, mas de outro tipo de usuário (ex.: cliente).', content: { 'application/json': { schema: { $ref: '#/components/schemas/Erro' } } } },
+}
+
 const erroAutenticacao = {
   401: { description: 'Sem token, token inválido/expirado ou cliente inexistente.', content: { 'application/json': { schema: { $ref: '#/components/schemas/Erro' } } } },
   403: { description: 'Token válido, mas de outro tipo de usuário (ex.: lava-rápido).', content: { 'application/json': { schema: { $ref: '#/components/schemas/Erro' } } } },
@@ -250,7 +280,7 @@ export const openApiDocument = {
   info: {
     title: 'WashAway — API',
     version: '1.0.0',
-    description: 'Backend do WashAway (admin-front + app_mobile). Rotas do cliente logado usam `Authorization: Bearer <token>` (JWT, `POST /auth/cliente/login`); as demais ainda são públicas — ver WashAway/.specs/backend.specs.md.',
+    description: 'Backend do WashAway (admin-front + app_mobile). Rotas do cliente logado usam `Authorization: Bearer <token>` (JWT, `POST /auth/cliente/login`); rotas de gestão do painel usam o token de lava-rápido (`POST /lavaRapidos/login`), e a empresa vem do token. Leituras do app, login, cadastro e onboarding são públicos — ver WashAway/.specs/backend.specs.md.',
   },
   servers: [{ url: 'http://localhost:4000' }],
   components: {
@@ -269,6 +299,7 @@ export const openApiDocument = {
       Cliente: clienteSchema,
       LoginCliente: loginClienteSchema,
       ErroCadastroCliente: erroCadastroClienteSchema,
+      LoginLavaRapido: loginLavaRapidoSchema,
       VeiculoCliente: veiculoClienteSchema,
       ErroVeiculoCliente: erroVeiculoClienteSchema,
     },
@@ -301,6 +332,7 @@ export const openApiDocument = {
           201: { description: 'Criado (sem a senha).', content: { 'application/json': { schema: { $ref: '#/components/schemas/Cliente' } } } },
           400: { description: 'Nome vazio ou longo demais, e-mail ausente/inválido ou senha fora de 6 a 72 caracteres.', content: { 'application/json': { schema: { $ref: '#/components/schemas/ErroCadastroCliente' } } } },
           409: { description: 'Este e-mail já está cadastrado.', content: { 'application/json': { schema: { $ref: '#/components/schemas/Erro' } } } },
+          ...respostaLimiteTentativas,
         },
       },
     },
@@ -323,6 +355,7 @@ export const openApiDocument = {
         responses: {
           200: { description: 'Credenciais válidas: token de acesso + cliente.', content: { 'application/json': { schema: { $ref: '#/components/schemas/LoginCliente' } } } },
           401: { description: '"E-mail ou senha incorretos" — mesma resposta para e-mail inexistente, senha errada ou body incompleto.', content: { 'application/json': { schema: { $ref: '#/components/schemas/Erro' } } } },
+          ...respostaLimiteTentativas,
         },
       },
     },
@@ -398,36 +431,11 @@ export const openApiDocument = {
           },
         },
       },
-      post: {
-        tags: ['lavaRapidos'],
-        summary: 'Cadastra um lava-rápido direto — legado/interno (seed, testes); o admin-front usa o fluxo /onboarding',
-        requestBody: {
-          required: true,
-          content: {
-            'application/json': {
-              schema: {
-                type: 'object',
-                required: ['name', 'cnpj'],
-                properties: {
-                  name: { type: 'string' },
-                  address: { type: 'string' },
-                  cnpj: { type: 'string', example: '00000000000101', description: '14 dígitos numéricos.' },
-                },
-              },
-            },
-          },
-        },
-        responses: {
-          201: { description: 'Criado.', content: { 'application/json': { schema: { $ref: '#/components/schemas/LavaRapido' } } } },
-          400: { description: 'name ausente ou cnpj com formato inválido.', content: { 'application/json': { schema: { $ref: '#/components/schemas/Erro' } } } },
-          409: { description: 'cnpj já cadastrado.', content: { 'application/json': { schema: { $ref: '#/components/schemas/Erro' } } } },
-        },
-      },
     },
     '/lavaRapidos/login': {
       post: {
         tags: ['lavaRapidos'],
-        summary: 'Login por CNPJ + senha',
+        summary: 'Login do painel por CNPJ + senha (público) — devolve o token de lava-rápido',
         requestBody: {
           required: true,
           content: {
@@ -441,8 +449,9 @@ export const openApiDocument = {
           },
         },
         responses: {
-          200: { description: 'Credenciais válidas.', content: { 'application/json': { schema: { $ref: '#/components/schemas/LavaRapido' } } } },
+          200: { description: 'Credenciais válidas: `{ token, expiraEm, lavaRapido }`.', content: { 'application/json': { schema: { $ref: '#/components/schemas/LoginLavaRapido' } } } },
           401: { description: 'cnpj ou senha inválidos.', content: { 'application/json': { schema: { $ref: '#/components/schemas/Erro' } } } },
+          ...respostaLimiteTentativas,
         },
       },
     },
@@ -456,15 +465,6 @@ export const openApiDocument = {
             description: 'Encontrado (isOpen calculado; inclui intercorrenciaAtiva, foraDoHorario e horarios).',
             content: { 'application/json': { schema: { $ref: '#/components/schemas/LavaRapidoComDisponibilidade' } } },
           },
-          404: { description: 'Não encontrado.', content: { 'application/json': { schema: { $ref: '#/components/schemas/Erro' } } } },
-        },
-      },
-      delete: {
-        tags: ['lavaRapidos'],
-        summary: 'Exclui um lava-rápido (em cascata: apaga junto seus pedidos, serviços e intercorrências)',
-        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
-        responses: {
-          204: { description: 'Excluído.' },
           404: { description: 'Não encontrado.', content: { 'application/json': { schema: { $ref: '#/components/schemas/Erro' } } } },
         },
       },
@@ -486,17 +486,20 @@ export const openApiDocument = {
     '/pedidos': {
       get: {
         tags: ['pedidos'],
-        summary: 'Lista pedidos, mais recentes primeiro',
-        parameters: [lavaRapidoIdParam],
+        summary: 'Lista os pedidos da empresa do token, mais recentes primeiro (painel)',
+        description: 'A empresa vem do token; `?lavaRapidoId=` é ignorado.',
+        security: segurancaPainel,
         responses: {
           200: { description: 'Lista de pedidos.', content: { 'application/json': { schema: { type: 'array', items: { $ref: '#/components/schemas/Pedido' } } } } },
+          ...erroAutenticacaoPainel,
         },
       },
     },
     '/pedidos/{id}': {
       patch: {
         tags: ['pedidos'],
-        summary: 'Atualiza só o status do pedido',
+        summary: 'Atualiza só o status do pedido (painel)',
+        security: segurancaPainel,
         parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
         requestBody: {
           required: true,
@@ -513,14 +516,15 @@ export const openApiDocument = {
         responses: {
           200: { description: 'Atualizado.', content: { 'application/json': { schema: { $ref: '#/components/schemas/Pedido' } } } },
           400: { description: 'status inválido.', content: { 'application/json': { schema: { $ref: '#/components/schemas/Erro' } } } },
-          404: { description: 'Pedido não encontrado.', content: { 'application/json': { schema: { $ref: '#/components/schemas/Erro' } } } },
+          404: { description: 'Pedido não encontrado ou de outra empresa.', content: { 'application/json': { schema: { $ref: '#/components/schemas/Erro' } } } },
+          ...erroAutenticacaoPainel,
         },
       },
     },
     '/servicos': {
       get: {
         tags: ['servicos'],
-        summary: 'Lista serviços',
+        summary: 'Lista serviços (público — app do cliente e painel)',
         parameters: [lavaRapidoIdParam],
         responses: {
           200: { description: 'Lista de serviços (combos) com seus itens.', content: { 'application/json': { schema: { type: 'array', items: { $ref: '#/components/schemas/Servico' } } } } },
@@ -528,15 +532,17 @@ export const openApiDocument = {
       },
       post: {
         tags: ['servicos'],
-        summary: 'Cria um serviço (combo de itens do catálogo) para um lava-rápido',
+        summary: 'Cria um serviço (combo de itens do catálogo) na empresa do token (painel)',
+        description: '`lavaRapidoId` no body é ignorado: a empresa vem do token.',
+        security: segurancaPainel,
         requestBody: {
           required: true,
           content: {
             'application/json': {
               schema: {
                 type: 'object',
-                required: ['lavaRapidoId', 'nome', 'preco', 'itemIds'],
-                properties: { lavaRapidoId: { type: 'string' }, ...dadosServicoProperties },
+                required: ['nome', 'preco', 'itemIds'],
+                properties: dadosServicoProperties,
               },
             },
           },
@@ -544,14 +550,15 @@ export const openApiDocument = {
         responses: {
           201: { description: 'Criado.', content: { 'application/json': { schema: { $ref: '#/components/schemas/Servico' } } } },
           400: { description: 'Body inválido ou itens inexistentes/inativos no catálogo (`itemIdsInvalidos`).', content: { 'application/json': { schema: { $ref: '#/components/schemas/Erro' } } } },
-          404: { description: 'Lava-rápido não encontrado.', content: { 'application/json': { schema: { $ref: '#/components/schemas/Erro' } } } },
+          ...erroAutenticacaoPainel,
         },
       },
     },
     '/servicos/{id}': {
       put: {
         tags: ['servicos'],
-        summary: 'Edita nome, preço e itens de um serviço (substitui os itens)',
+        summary: 'Edita nome, preço e itens de um serviço (substitui os itens) (painel)',
+        security: segurancaPainel,
         parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
         requestBody: {
           required: true,
@@ -564,12 +571,14 @@ export const openApiDocument = {
         responses: {
           200: { description: 'Atualizado.', content: { 'application/json': { schema: { $ref: '#/components/schemas/Servico' } } } },
           400: { description: 'Body inválido ou itens inexistentes/inativos no catálogo (`itemIdsInvalidos`).', content: { 'application/json': { schema: { $ref: '#/components/schemas/Erro' } } } },
-          404: { description: 'Serviço não encontrado.', content: { 'application/json': { schema: { $ref: '#/components/schemas/Erro' } } } },
+          404: { description: 'Serviço não encontrado ou de outra empresa.', content: { 'application/json': { schema: { $ref: '#/components/schemas/Erro' } } } },
+          ...erroAutenticacaoPainel,
         },
       },
       patch: {
         tags: ['servicos'],
-        summary: 'Atualiza só o campo ativo',
+        summary: 'Atualiza só o campo ativo (painel)',
+        security: segurancaPainel,
         parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
         requestBody: {
           required: true,
@@ -582,7 +591,8 @@ export const openApiDocument = {
         responses: {
           200: { description: 'Atualizado.', content: { 'application/json': { schema: { $ref: '#/components/schemas/Servico' } } } },
           400: { description: 'body deve conter só { ativo: boolean }.', content: { 'application/json': { schema: { $ref: '#/components/schemas/Erro' } } } },
-          404: { description: 'Serviço não encontrado.', content: { 'application/json': { schema: { $ref: '#/components/schemas/Erro' } } } },
+          404: { description: 'Serviço não encontrado ou de outra empresa.', content: { 'application/json': { schema: { $ref: '#/components/schemas/Erro' } } } },
+          ...erroAutenticacaoPainel,
         },
       },
     },
@@ -598,7 +608,7 @@ export const openApiDocument = {
     '/intercorrencias': {
       get: {
         tags: ['intercorrencias'],
-        summary: 'Lista intercorrências',
+        summary: 'Lista intercorrências (público — app do cliente e painel)',
         parameters: [lavaRapidoIdParam],
         responses: {
           200: { description: 'Lista de intercorrências.', content: { 'application/json': { schema: { type: 'array', items: { $ref: '#/components/schemas/Intercorrencia' } } } } },
@@ -606,16 +616,17 @@ export const openApiDocument = {
       },
       post: {
         tags: ['intercorrencias'],
-        summary: 'Cria uma intercorrência',
+        summary: 'Cria uma intercorrência na empresa do token (painel)',
+        description: '`lavaRapidoId` no body é ignorado: a empresa vem do token.',
+        security: segurancaPainel,
         requestBody: {
           required: true,
           content: {
             'application/json': {
               schema: {
                 type: 'object',
-                required: ['lavaRapidoId', 'data', 'motivo', 'diaInteiro'],
+                required: ['data', 'motivo', 'diaInteiro'],
                 properties: {
-                  lavaRapidoId: { type: 'string' },
                   data: { type: 'string', example: '2026-10-12' },
                   motivo: { type: 'string' },
                   diaInteiro: { type: 'boolean' },
@@ -629,16 +640,18 @@ export const openApiDocument = {
         responses: {
           201: { description: 'Criada.', content: { 'application/json': { schema: { $ref: '#/components/schemas/Intercorrencia' } } } },
           400: {
-            description: 'body inválido, ou horaInicio/horaFim inconsistentes com diaInteiro, ou lavaRapidoId inexistente.',
+            description: 'body inválido, ou horaInicio/horaFim inconsistentes com diaInteiro.',
             content: { 'application/json': { schema: { $ref: '#/components/schemas/Erro' } } },
           },
+          ...erroAutenticacaoPainel,
         },
       },
     },
     '/intercorrencias/{id}': {
       patch: {
         tags: ['intercorrencias'],
-        summary: 'Reabre manualmente (reverte o fechamento automático do isOpen)',
+        summary: 'Reabre manualmente (reverte o fechamento automático do isOpen) (painel)',
+        security: segurancaPainel,
         parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
         requestBody: {
           required: true,
@@ -651,17 +664,19 @@ export const openApiDocument = {
         responses: {
           200: { description: 'Reaberta.', content: { 'application/json': { schema: { $ref: '#/components/schemas/Intercorrencia' } } } },
           400: { description: 'body inválido — só aceita { reaberta: true }.', content: { 'application/json': { schema: { $ref: '#/components/schemas/Erro' } } } },
-          404: { description: 'Intercorrência não encontrada.', content: { 'application/json': { schema: { $ref: '#/components/schemas/Erro' } } } },
+          404: { description: 'Intercorrência não encontrada ou de outra empresa.', content: { 'application/json': { schema: { $ref: '#/components/schemas/Erro' } } } },
+          ...erroAutenticacaoPainel,
         },
       },
     },
     '/veiculos': {
       get: {
         tags: ['veiculos'],
-        summary: 'Lista veículos distintos, derivados de Pedido.veiculo',
-        parameters: [lavaRapidoIdParam],
+        summary: 'Lista veículos distintos, derivados dos pedidos da empresa do token (painel)',
+        security: segurancaPainel,
         responses: {
           200: { description: 'Lista de veículos (deduplicados por placa).', content: { 'application/json': { schema: { type: 'array', items: { $ref: '#/components/schemas/Veiculo' } } } } },
+          ...erroAutenticacaoPainel,
         },
       },
     },
@@ -678,18 +693,20 @@ export const openApiDocument = {
     '/onboarding/solicitacoes': {
       post: {
         tags: ['onboarding'],
-        summary: 'Solicita o cadastro de uma empresa (validação: só duplicidade de cnpj; aprovação automática)',
+        summary: 'Solicita o cadastro de uma empresa, com e-mail e senha própria (validação: duplicidade de cnpj/e-mail; aprovação automática)',
         requestBody: {
           required: true,
           content: {
             'application/json': {
               schema: {
                 type: 'object',
-                required: ['name', 'cnpj'],
+                required: ['name', 'cnpj', 'email', 'senha'],
                 properties: {
                   name: { type: 'string' },
                   address: { type: 'string' },
                   cnpj: { type: 'string', example: '00000000000101', description: '14 dígitos numéricos.' },
+                  email: { type: 'string', format: 'email', maxLength: 254, description: 'Único entre os lava-rápidos (sem diferenciar maiúsculas).' },
+                  senha: { type: 'string', minLength: 8, maxLength: 72, description: 'Senha de acesso ao painel; guardada só com hash bcrypt (no máximo 72 bytes em UTF-8).' },
                 },
               },
             },
@@ -697,9 +714,9 @@ export const openApiDocument = {
         },
         responses: {
           201: { description: 'Criada já como aguardando_contrato, com o contrato vigente.', content: { 'application/json': { schema: { $ref: '#/components/schemas/SolicitacaoOnboarding' } } } },
-          200: { description: 'Já havia solicitação pendente com esse cnpj — devolvida para retomar.', content: { 'application/json': { schema: { $ref: '#/components/schemas/SolicitacaoOnboarding' } } } },
-          400: { description: 'name ausente ou cnpj com formato inválido.', content: { 'application/json': { schema: { $ref: '#/components/schemas/Erro' } } } },
-          409: { description: 'cnpj já cadastrado como lava-rápido.', content: { 'application/json': { schema: { $ref: '#/components/schemas/Erro' } } } },
+          200: { description: 'Já havia solicitação pendente com esse cnpj — devolvida para retomar, atualizada com os dados (inclusive e-mail e senha) deste envio.', content: { 'application/json': { schema: { $ref: '#/components/schemas/SolicitacaoOnboarding' } } } },
+          400: { description: 'name ausente, cnpj com formato inválido, e-mail ausente/inválido ou senha com menos de 8 caracteres.', content: { 'application/json': { schema: { $ref: '#/components/schemas/Erro' } } } },
+          409: { description: 'cnpj ou e-mail já cadastrado como lava-rápido.', content: { 'application/json': { schema: { $ref: '#/components/schemas/Erro' } } } },
           503: { description: 'Nenhum contrato vigente cadastrado.', content: { 'application/json': { schema: { $ref: '#/components/schemas/Erro' } } } },
         },
       },
@@ -729,10 +746,10 @@ export const openApiDocument = {
           },
         },
         responses: {
-          201: { description: 'Contrato aceito; lava-rápido criado (senha padrão "admin").', content: { 'application/json': { schema: { $ref: '#/components/schemas/LavaRapido' } } } },
+          201: { description: 'Contrato aceito; lava-rápido criado com o e-mail e a senha da solicitação. Devolve a sessão do painel `{ token, expiraEm, lavaRapido }`.', content: { 'application/json': { schema: { $ref: '#/components/schemas/LoginLavaRapido' } } } },
           400: { description: 'aceite diferente de "eu aceito".', content: { 'application/json': { schema: { $ref: '#/components/schemas/Erro' } } } },
           404: { description: 'Solicitação não encontrada.', content: { 'application/json': { schema: { $ref: '#/components/schemas/Erro' } } } },
-          409: { description: 'Solicitação já concluída, ou cnpj cadastrado por outro caminho.', content: { 'application/json': { schema: { $ref: '#/components/schemas/Erro' } } } },
+          409: { description: 'Solicitação já concluída, solicitação antiga sem e-mail/senha (reenviar o cadastro), ou cnpj/e-mail cadastrado por outro caminho.', content: { 'application/json': { schema: { $ref: '#/components/schemas/Erro' } } } },
         },
       },
     },

@@ -1,16 +1,32 @@
 import 'dotenv/config'
 import { PrismaClient, type PedidoStatus } from '@prisma/client'
 import bcrypt from 'bcryptjs'
-import { SENHA_PADRAO } from '../src/modules/lava-rapidos/lavaRapidos.service.js'
 import { criarHorariosSeNaoTiver, HORARIO_ESTENDIDO, HORARIO_PADRAO, HORARIO_TODOS_OS_DIAS, type DiaExemplo } from './horariosExemplo.js'
 
 // Dados de demonstração para apresentação. Diferente do seed.ts, este script
 // NUNCA apaga nada: só insere, e pula toda empresa cujo CNPJ já existe — pode
 // rodar quantas vezes quiser sem perder dados cadastrados pela UI.
 // Pré-requisito: catálogo de itens e contrato vigente já no banco (seed.ts).
+//
+// SENHAS SÓ PARA DESENVOLVIMENTO/DEMO (I17): empresas criadas por este script
+// entram com CNPJ (ou e-mail gerado do nome) e a senha "demo1234". Empresas que
+// já existiam no banco antes do I17 continuam com a senha antiga ("admin") até o
+// script de troca em massa do i17-senha-gerada.
 
 const prisma = new PrismaClient()
-const SENHA_PADRAO_HASH = bcrypt.hashSync(SENHA_PADRAO, 10)
+const SENHA_DEMO_LAVA_RAPIDO = 'demo1234'
+const SENHA_DEMO_HASH = bcrypt.hashSync(SENHA_DEMO_LAVA_RAPIDO, 10)
+
+/** E-mail de exemplo a partir do nome (ex.: "lava-jato-vila-madalena@exemplo.com"). */
+function emailDemo(nome: string) {
+  const slug = nome
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '')
+  return `${slug}@exemplo.com`
+}
 
 type Combo = { nome: string; preco: number; ativo?: boolean; itens: string[] }
 type PedidoDemo = { modelo: string; placa: string; servico: string; horario: string; status: PedidoStatus; fotos?: number }
@@ -239,7 +255,8 @@ async function main() {
       data: {
         name: empresa.name,
         cnpj: empresa.cnpj,
-        senha: SENHA_PADRAO_HASH,
+        email: emailDemo(empresa.name),
+        senha: SENHA_DEMO_HASH,
         address: empresa.address,
         rating: empresa.rating,
         reviewsCount: empresa.reviewsCount,
@@ -301,7 +318,14 @@ async function main() {
   const contrato = await prisma.contrato.findFirst({ where: { vigente: true } })
   const solicitacaoExiste = await prisma.solicitacaoOnboarding.findFirst({ where: { cnpj: SOLICITACAO_PENDENTE.cnpj } })
   if (contrato && !solicitacaoExiste) {
-    await prisma.solicitacaoOnboarding.create({ data: { ...SOLICITACAO_PENDENTE, contratoId: contrato.id } })
+    await prisma.solicitacaoOnboarding.create({
+      data: {
+        ...SOLICITACAO_PENDENTE,
+        email: emailDemo(SOLICITACAO_PENDENTE.name),
+        senhaHash: SENHA_DEMO_HASH,
+        contratoId: contrato.id,
+      },
+    })
     console.log(`+ Solicitação pendente: ${SOLICITACAO_PENDENTE.name} (CNPJ ${SOLICITACAO_PENDENTE.cnpj})`)
   }
 
@@ -323,7 +347,10 @@ async function main() {
     console.log(`+ Veículo de ${CLIENTE_DEMO.email}: ${veiculo.modelo} (${veiculo.placa})`)
   }
 
-  console.log(`Demo concluída: ${criadas} empresas novas. Senha de todas: "${SENHA_PADRAO}".`)
+  console.log(
+    `Demo concluída: ${criadas} empresas novas. Senha das empresas criadas agora: "${SENHA_DEMO_LAVA_RAPIDO}" ` +
+      '(as que já existiam antes do I17 continuam com "admin").',
+  )
 }
 
 main()

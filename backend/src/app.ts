@@ -3,6 +3,11 @@ import type { NextFunction, Request, Response } from 'express'
 import express from 'express'
 import swaggerUi from 'swagger-ui-express'
 import { openApiDocument } from './docs/openapi.js'
+import {
+  configLimiteTentativasDoAmbiente,
+  limiteTentativas,
+  type ConfigLimiteTentativas,
+} from './middlewares/limiteTentativas.js'
 import { authClienteRouter, clientesRouter } from './modules/clientes/clientes.routes.js'
 import { contratosRouter } from './modules/contratos/contratos.routes.js'
 import { horariosRouter } from './modules/horarios/horarios.routes.js'
@@ -14,11 +19,22 @@ import { pedidosRouter } from './modules/pedidos/pedidos.routes.js'
 import { servicosRouter } from './modules/servicos/servicos.routes.js'
 import { veiculosRouter } from './modules/veiculos/veiculos.routes.js'
 
-export function createApp() {
+export interface OpcoesApp {
+  /** Limite de tentativas de login/cadastro; padrão: env (LIMITE_TENTATIVAS…). */
+  limiteTentativas?: ConfigLimiteTentativas
+}
+
+export function createApp({ limiteTentativas: configLimite = configLimiteTentativasDoAmbiente() }: OpcoesApp = {}) {
   const app = express()
 
   app.use(cors())
   app.use(express.json())
+
+  // Limite de tentativas (I17): um contador por rota e por app (em memória).
+  // Registrado antes dos routers; passa adiante (next) enquanto não estoura.
+  app.post('/auth/cliente/login', limiteTentativas(configLimite, { soFalhasContam: true }))
+  app.post('/lavaRapidos/login', limiteTentativas(configLimite, { soFalhasContam: true }))
+  app.post('/auth/cliente/cadastro', limiteTentativas(configLimite))
 
   app.get('/api-docs.json', (_req, res) => res.json(openApiDocument))
   app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(openApiDocument))

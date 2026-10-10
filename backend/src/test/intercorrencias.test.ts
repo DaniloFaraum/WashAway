@@ -3,11 +3,15 @@ import supertest from 'supertest'
 import { createApp } from '../app.js'
 import { prisma } from '../config/prisma.js'
 import * as intercorrenciasService from '../modules/intercorrencias/intercorrencias.service.js'
+import { comToken, tokenDeLavaRapido } from './helpers/auth.js'
+import { criarLavaRapidoTeste } from './helpers/factories.js'
+import { limparDadosDeTeste } from './helpers/limpeza.js'
 
 const app = createApp()
 
 describe('/intercorrencias', () => {
   let lavaRapidoId: string
+  let token: string
   let intercorrenciaId: string
 
   beforeAll(async () => {
@@ -28,6 +32,7 @@ describe('/intercorrencias', () => {
       },
     })
     lavaRapidoId = lavaRapido.id
+    token = tokenDeLavaRapido(lavaRapido)
 
     const intercorrencia = await prisma.intercorrencia.create({
       data: { lavaRapidoId, data: '2026-10-12', motivo: 'Feriado', diaInteiro: true },
@@ -38,6 +43,7 @@ describe('/intercorrencias', () => {
   afterAll(async () => {
     await prisma.intercorrencia.deleteMany({ where: { lavaRapidoId } })
     await prisma.lavaRapido.deleteMany({ where: { id: lavaRapidoId } })
+    await limparDadosDeTeste()
     await prisma.$disconnect()
   })
 
@@ -50,17 +56,15 @@ describe('/intercorrencias', () => {
   })
 
   it('POST /intercorrencias cria uma intercorrência de dia inteiro', async () => {
-    const response = await supertest(app)
-      .post('/intercorrencias')
-      .send({ lavaRapidoId, data: '2026-11-01', motivo: 'Manutenção', diaInteiro: true })
+    const response = await comToken(supertest(app).post('/intercorrencias'), token)
+      .send({ data: '2026-11-01', motivo: 'Manutenção', diaInteiro: true })
 
     expect(response.status).toBe(201)
     expect(response.body).toMatchObject({ data: '2026-11-01', motivo: 'Manutenção', diaInteiro: true })
   })
 
   it('POST /intercorrencias cria uma intercorrência parcial com horaInicio/horaFim', async () => {
-    const response = await supertest(app).post('/intercorrencias').send({
-      lavaRapidoId,
+    const response = await comToken(supertest(app).post('/intercorrencias'), token).send({
       data: '2026-09-25',
       motivo: 'Falta de energia',
       diaInteiro: false,
@@ -73,8 +77,7 @@ describe('/intercorrencias', () => {
   })
 
   it('POST /intercorrencias rejeita horaInicio/horaFim quando diaInteiro é true', async () => {
-    const response = await supertest(app).post('/intercorrencias').send({
-      lavaRapidoId,
+    const response = await comToken(supertest(app).post('/intercorrencias'), token).send({
       data: '2026-12-25',
       motivo: 'Natal',
       diaInteiro: true,
@@ -84,20 +87,32 @@ describe('/intercorrencias', () => {
     expect(response.status).toBe(400)
   })
 
-  it('POST /intercorrencias retorna 400 (não 500) quando lavaRapidoId não corresponde a nenhuma empresa', async () => {
-    const response = await supertest(app).post('/intercorrencias').send({
-      lavaRapidoId: 'id-que-nao-existe',
+  it('POST /intercorrencias cria na empresa do token, ignorando body.lavaRapidoId', async () => {
+    const outra = await criarLavaRapidoTeste()
+
+    const response = await comToken(supertest(app).post('/intercorrencias'), token).send({
+      lavaRapidoId: outra.id,
+      data: '2026-12-24',
+      motivo: 'Véspera',
+      diaInteiro: true,
+    })
+
+    expect(response.status).toBe(201)
+    expect(response.body.lavaRapidoId).toBe(lavaRapidoId)
+  })
+
+  it('POST /intercorrencias com token de empresa que não existe mais retorna 401 (não 500)', async () => {
+    const response = await comToken(supertest(app).post('/intercorrencias'), tokenDeLavaRapido({ id: 'id-que-nao-existe' })).send({
       data: '2026-12-25',
       motivo: 'Natal',
       diaInteiro: true,
     })
 
-    expect(response.status).toBe(400)
+    expect(response.status).toBe(401)
   })
 
   it('POST /intercorrencias rejeita quando diaInteiro é false sem horaInicio/horaFim', async () => {
-    const response = await supertest(app).post('/intercorrencias').send({
-      lavaRapidoId,
+    const response = await comToken(supertest(app).post('/intercorrencias'), token).send({
       data: '2026-12-26',
       motivo: 'Sem horário',
       diaInteiro: false,
@@ -112,7 +127,7 @@ describe('/intercorrencias', () => {
         data: { lavaRapidoId, data: '2027-01-01', motivo: 'Pra reabrir', diaInteiro: true },
       })
 
-      const response = await supertest(app).patch(`/intercorrencias/${criada.id}`).send({ reaberta: true })
+      const response = await comToken(supertest(app).patch(`/intercorrencias/${criada.id}`), token).send({ reaberta: true })
 
       expect(response.status).toBe(200)
       expect(response.body).toMatchObject({ id: criada.id, reaberta: true })
@@ -121,13 +136,25 @@ describe('/intercorrencias', () => {
     })
 
     it('rejeita body sem { reaberta: true }', async () => {
-      const response = await supertest(app).patch(`/intercorrencias/${intercorrenciaId}`).send({ reaberta: false })
+      const response = await comToken(supertest(app).patch(`/intercorrencias/${intercorrenciaId}`), token).send({ reaberta: false })
 
       expect(response.status).toBe(400)
     })
 
+    it('retorna 404 pra intercorrência de outra empresa, sem reabrir', async () => {
+      const outra = await criarLavaRapidoTeste()
+      const deOutra = await prisma.intercorrencia.create({
+        data: { lavaRapidoId: outra.id, data: '2027-01-02', motivo: 'De outra empresa', diaInteiro: true },
+      })
+
+      const response = await comToken(supertest(app).patch(`/intercorrencias/${deOutra.id}`), token).send({ reaberta: true })
+
+      expect(response.status).toBe(404)
+      expect(await prisma.intercorrencia.findUnique({ where: { id: deOutra.id } })).toMatchObject({ reaberta: false })
+    })
+
     it('retorna 404 pra id inexistente', async () => {
-      const response = await supertest(app).patch('/intercorrencias/id-que-nao-existe').send({ reaberta: true })
+      const response = await comToken(supertest(app).patch('/intercorrencias/id-que-nao-existe'), token).send({ reaberta: true })
 
       expect(response.status).toBe(404)
     })

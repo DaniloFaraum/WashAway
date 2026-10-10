@@ -5,9 +5,9 @@ interface VeiculoJson {
   placa?: string
 }
 
-export async function listVeiculos(lavaRapidoId?: string) {
+export async function listVeiculos(lavaRapidoId: string) {
   const pedidos = await prisma.pedido.findMany({
-    where: lavaRapidoId ? { lavaRapidoId } : undefined,
+    where: { lavaRapidoId },
     select: { veiculo: true },
   })
 

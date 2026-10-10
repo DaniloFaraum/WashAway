@@ -1,18 +1,20 @@
 import type { Request, Response } from 'express'
-import { Prisma } from '@prisma/client'
 import {
   autenticarLavaRapido,
-  criarLavaRapido,
-  deleteLavaRapido,
+  dadosPublicos,
   getLavaRapidoById,
   listLavaRapidos,
-  omitSenha,
+  sessaoDoLavaRapido,
 } from './lavaRapidos.service.js'
 import { isValidCnpj } from './lavaRapidos.validation.js'
 
+// I17: `POST /lavaRapidos` (cadastro legado com senha "admin") e
+// `DELETE /lavaRapidos/:id` foram removidos — empresa nova só pelo onboarding;
+// a exclusão passa a ser por solicitação (i17-interno-exclusao).
+
 export async function index(_req: Request, res: Response) {
   const lavaRapidos = await listLavaRapidos()
-  res.json(lavaRapidos.map(omitSenha))
+  res.json(lavaRapidos.map(dadosPublicos))
 }
 
 export async function show(req: Request, res: Response) {
@@ -21,47 +23,10 @@ export async function show(req: Request, res: Response) {
     res.status(404).json({ error: 'Lava-rápido não encontrado' })
     return
   }
-  res.json(omitSenha(lavaRapido))
+  res.json(dadosPublicos(lavaRapido))
 }
 
-export async function create(req: Request, res: Response) {
-  const { name, address, cnpj } = req.body ?? {}
-
-  if (typeof name !== 'string' || name.trim() === '') {
-    res.status(400).json({ error: 'name é obrigatório' })
-    return
-  }
-
-  if (!isValidCnpj(cnpj)) {
-    res.status(400).json({ error: 'cnpj inválido — precisa ter 14 dígitos numéricos' })
-    return
-  }
-
-  try {
-    const lavaRapido = await criarLavaRapido({ name, address, cnpj })
-    res.status(201).json(omitSenha(lavaRapido))
-  } catch (error) {
-    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
-      res.status(409).json({ error: 'Já existe uma empresa cadastrada com esse cnpj' })
-      return
-    }
-    throw error
-  }
-}
-
-export async function destroy(req: Request, res: Response) {
-  try {
-    await deleteLavaRapido(req.params.id)
-    res.status(204).end()
-  } catch (error) {
-    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') {
-      res.status(404).json({ error: 'Lava-rápido não encontrado' })
-      return
-    }
-    throw error
-  }
-}
-
+/** POST /lavaRapidos/login → `{ token, expiraEm, lavaRapido }` (nunca logar o body: tem a senha). */
 export async function login(req: Request, res: Response) {
   const { cnpj, senha } = req.body ?? {}
 
@@ -76,5 +41,5 @@ export async function login(req: Request, res: Response) {
     return
   }
 
-  res.json(omitSenha(lavaRapido))
+  res.json(await sessaoDoLavaRapido(lavaRapido.id))
 }
