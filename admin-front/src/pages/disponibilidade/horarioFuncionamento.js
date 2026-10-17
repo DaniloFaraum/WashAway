@@ -1,5 +1,5 @@
-// Formatação do horário de funcionamento (I19) no painel — mesma regra do app
-// (app_mobile/src/features/lava-rapidos/formatarHorario.ts).
+// Helpers puros do horário de funcionamento (I19) no painel: nomes/ordem dos dias,
+// "hoje" no fuso dos lava-rápidos e conversão entre o formulário e o body do PUT.
 
 export const NOMES_DIAS = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado']
 // A semana é mostrada começando na segunda.
@@ -22,17 +22,6 @@ export function diaSemanaNoFuso(instante) {
   } catch {
     return instante.getDay()
   }
-}
-
-/**
- * "08:00–18:00", "Fechado" ou, para dia sem horário cadastrado, "Não informado".
- * @param {import('../../login/service/lavaRapidos.model.js').HorarioDia | undefined} horario
- * @returns {string}
- */
-export function formatarHorarioDoDia(horario) {
-  if (!horario || !horario.definido) return 'Não informado'
-  if (horario.fechado || !horario.abertura || !horario.fechamento) return 'Fechado'
-  return `${horario.abertura}–${horario.fechamento}`
 }
 
 /**

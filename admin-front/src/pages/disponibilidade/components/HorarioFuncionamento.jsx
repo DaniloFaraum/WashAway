@@ -43,13 +43,21 @@ function HorarioFuncionamento({ empresa, onSalvo, mostrarAviso }) {
   async function handleSalvar() {
     setSalvando(true)
     try {
-      // O formulário passa a mostrar o que o backend gravou; `onSalvo` recarrega a
-      // empresa (status do topo e `empresa.horarios`).
-      setEdicao(horariosParaEdicao(await salvarHorarios(edicaoParaDias(edicao))))
+      try {
+        // O formulário passa a mostrar o que o backend gravou.
+        setEdicao(horariosParaEdicao(await salvarHorarios(edicaoParaDias(edicao))))
+      } catch (err) {
+        mostrarAviso(`Erro ao salvar o horário: ${err.message}`, 'error')
+        return
+      }
       mostrarAviso('Horário de funcionamento salvo.')
-      await onSalvo?.()
-    } catch (err) {
-      mostrarAviso(`Erro ao salvar o horário: ${err.message}`, 'error')
+      // `onSalvo` recarrega a empresa (status do topo e `empresa.horarios`); se falhar,
+      // o horário já está salvo — o aviso não pode dizer que não salvou.
+      try {
+        await onSalvo?.()
+      } catch (err) {
+        mostrarAviso(`Horário salvo, mas não foi possível atualizar o status: ${err.message}`, 'error')
+      }
     } finally {
       setSalvando(false)
     }

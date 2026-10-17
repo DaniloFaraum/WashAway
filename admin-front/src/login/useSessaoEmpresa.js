@@ -118,7 +118,7 @@ export function useSessaoEmpresa() {
   async function reabrir() {
     if (!empresaLogada?.intercorrenciaAtiva) return
     await reabrirIntercorrencia(empresaLogada.intercorrenciaAtiva.id)
-    setEmpresaLogada(await getLavaRapido(empresaLogada.id))
+    await recarregarEmpresa()
   }
 
   /** Busca a empresa de novo (ex.: depois de salvar o horário: isOpen/foraDoHorario/horarios mudam). */

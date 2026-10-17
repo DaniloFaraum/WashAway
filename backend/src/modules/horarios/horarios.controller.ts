@@ -1,4 +1,5 @@
 import type { Request, Response } from 'express'
+import { Prisma } from '@prisma/client'
 import { prisma } from '../../config/prisma.js'
 import { listarHorarios, substituirHorarios } from './horarios.service.js'
 import { parseHorariosInput } from './horarios.validation.js'
@@ -31,12 +32,14 @@ export async function update(req: Request, res: Response) {
     return
   }
 
-  // Token válido de uma empresa que não existe mais: a sessão não vale.
-  const existe = await prisma.lavaRapido.findUnique({ where: { id: lavaRapidoId }, select: { id: true } })
-  if (!existe) {
-    res.status(401).json({ error: 'Sessão inválida' })
-    return
+  try {
+    res.json(await substituirHorarios(lavaRapidoId, resultado.dias))
+  } catch (error) {
+    // Token válido de uma empresa que não existe mais (FK do createMany): a sessão não vale.
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2003') {
+      res.status(401).json({ error: 'Sessão inválida' })
+      return
+    }
+    throw error
   }
-
-  res.json(await substituirHorarios(lavaRapidoId, resultado.dias))
 }
