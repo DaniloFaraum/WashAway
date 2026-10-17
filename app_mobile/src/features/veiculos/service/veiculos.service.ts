@@ -28,6 +28,13 @@ export class VeiculoNaoEncontradoError extends Error {
   }
 }
 
+export class VeiculoComPedidosError extends Error {
+  constructor() {
+    super('Este veículo já tem pedidos e não pode ser removido.')
+    this.name = 'VeiculoComPedidosError'
+  }
+}
+
 async function erroDaResposta(response: Response, padrao: string): Promise<Error> {
   if (response.status === 409) return new PlacaJaCadastradaError()
   if (response.status === 404) return new VeiculoNaoEncontradoError()
@@ -60,5 +67,7 @@ export async function atualizarVeiculo(id: string, dados: DadosVeiculo): Promise
 export async function removerVeiculo(id: string): Promise<void> {
   const response = await apiFetch(VEICULOS_ROUTES.byId(id), { method: 'DELETE' })
   if (response.status === 204) return
+  // I13: veículo com pedidos não pode ser removido (o pedido referencia o veículo).
+  if (response.status === 409) throw new VeiculoComPedidosError()
   throw await erroDaResposta(response, 'Não foi possível remover o veículo agora. Tente de novo.')
 }

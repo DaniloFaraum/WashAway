@@ -20,6 +20,7 @@ import {
 import { useServicos } from '@/features/servicos/useServicos';
 import { useServicosSelecionados } from '@/features/servicos/servicosSelecionados';
 import { calcularCarrinho } from '@/features/servicos/calcularCarrinho';
+import { iniciarNovoPedido } from '@/features/pedidos/useNovoPedido';
 import { filtrarServicos, tetoDoFiltro } from '@/features/servicos/filtrarServicos';
 import { formatarDuracao } from '@/utils/formatarDuracao';
 import { formatarPreco } from '@/utils/formatarPreco';
@@ -74,9 +75,23 @@ export default function ServicosScreen() {
   });
 
   // Cálculos do Carrinho
-  const { totalItens, totalPreco, totalDuracao } = calcularCarrinho(
-    servicos.filter((s) => selecionados.has(s.id)),
-  );
+  const servicosSelecionados = servicos.filter((s) => selecionados.has(s.id));
+  const { totalItens, totalPreco, totalDuracao } = calcularCarrinho(servicosSelecionados);
+
+  // "Avançar" (I13): leva a seleção para o fluxo do pedido (Veículo → Data e hora → Resumo).
+  const avancar = () => {
+    if (!id || servicosSelecionados.length === 0) return;
+    iniciarNovoPedido(
+      { id, nome: lavaRapido?.name ?? nome ?? '', endereco: lavaRapido?.address ?? null },
+      servicosSelecionados.map(({ id: servicoId, nome: nomeServico, preco, duracaoMinutos }) => ({
+        id: servicoId,
+        nome: nomeServico,
+        preco,
+        duracaoMinutos,
+      })),
+    );
+    router.push('/pedido/veiculo');
+  };
 
   const visibleCategories = showAllCategories ? categorias : categorias.slice(0, 4);
 
@@ -251,7 +266,13 @@ export default function ServicosScreen() {
             {totalDuracao > 0 && ` · ~${formatarDuracao(totalDuracao)}`}
           </Text>
         </View>
-        <TouchableOpacity style={styles.cartButton}>
+        <TouchableOpacity
+          style={[styles.cartButton, totalItens === 0 && styles.cartButtonDisabled]}
+          disabled={totalItens === 0}
+          onPress={avancar}
+          accessibilityRole="button"
+          accessibilityState={{ disabled: totalItens === 0 }}
+        >
           <Text style={styles.cartButtonText}>Avançar</Text>
         </TouchableOpacity>
       </View>
@@ -466,6 +487,7 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     borderRadius: 12,
   },
+  cartButtonDisabled: { opacity: 0.5 },
   cartButtonText: { color: colors.white, fontWeight: '700', fontSize: 14 },
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', flexDirection: 'row' },
   modalContent: {

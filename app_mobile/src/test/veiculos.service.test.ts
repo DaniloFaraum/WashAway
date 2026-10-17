@@ -7,6 +7,7 @@ import {
   listarVeiculos,
   PlacaJaCadastradaError,
   removerVeiculo,
+  VeiculoComPedidosError,
   VeiculoNaoEncontradoError,
 } from '../features/veiculos/service/veiculos.service'
 
@@ -83,6 +84,12 @@ describe('veiculos.service', () => {
     await expect(removerVeiculo('v1')).resolves.toBeUndefined()
     expect(fetchMock.mock.calls[0][1]).toMatchObject({ method: 'DELETE' })
     await expect(removerVeiculo('v1')).rejects.toBeInstanceOf(VeiculoNaoEncontradoError)
+  })
+
+  it('removerVeiculo: 409 (veículo com pedidos, I13) vira VeiculoComPedidosError', async () => {
+    vi.spyOn(global, 'fetch').mockResolvedValueOnce(resposta(409, { error: 'x' }))
+
+    await expect(removerVeiculo('v1')).rejects.toBeInstanceOf(VeiculoComPedidosError)
   })
 
   it('falha de rede vira ErroRede', async () => {
