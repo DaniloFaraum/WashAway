@@ -2,18 +2,9 @@ import { ONBOARDING_ROUTES } from './onboarding.routes.js'
 import { normalizeSolicitacao, TEXTO_ACEITE } from './onboarding.model.js'
 import { normalizeSessao } from './lavaRapidos.model.js'
 import { BACKEND_API_BASE_URL } from '../../config/api.js'
+import { postJson } from './postJson.js'
 
 const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? BACKEND_API_BASE_URL
-
-async function postJson(url, body) {
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  })
-  const data = await response.json().catch(() => null)
-  return { response, data }
-}
 
 /**
  * 409 da solicitação: empresa já cadastrada (CNPJ ou e-mail) ou solicitação em

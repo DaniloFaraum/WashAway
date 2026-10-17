@@ -165,6 +165,39 @@ describe('POST /auth/lava-rapido/trocar-senha', () => {
     expect(response.status).toBe(401)
   })
 
+  it('duas trocas simultâneas com o mesmo token de troca: uma 200 e outra 401', async () => {
+    const { lavaRapido, senhaGerada } = await empresaComSenhaGerada()
+    const { token } = (await login(lavaRapido.cnpj, senhaGerada)).body
+
+    const respostas = await Promise.all([trocar(token, { novaSenha: NOVA_SENHA }), trocar(token, { novaSenha: 'outra-senha-789' })])
+
+    expect(respostas.map((r) => r.status).sort()).toEqual([200, 401])
+  })
+
+  it('token de troca expirado → 401', async () => {
+    const { lavaRapido } = await empresaComSenhaGerada()
+    const expirado = jwt.sign({ sub: lavaRapido.id, tipo: 'lavaRapido', escopo: 'trocar-senha' }, process.env.JWT_SECRET!, {
+      algorithm: 'HS256',
+      expiresIn: -10,
+    })
+
+    expect((await trocar(expirado, { novaSenha: NOVA_SENHA })).status).toBe(401)
+  })
+
+  it('falhas repetidas → 429 (limite de tentativas)', async () => {
+    const aplicacao = createApp({ limiteTentativas: { limite: 2, janelaMinutos: 15 } })
+    const lavaRapido = await criarLavaRapidoTeste({ senha: SENHA_PROPRIA })
+    const tentar = () =>
+      comToken(supertest(aplicacao).post('/auth/lava-rapido/trocar-senha'), tokenDeLavaRapido(lavaRapido)).send({
+        senhaAtual: 'errada',
+        novaSenha: NOVA_SENHA,
+      })
+
+    expect((await tentar()).status).toBe(403)
+    expect((await tentar()).status).toBe(403)
+    expect((await tentar()).status).toBe(429)
+  })
+
   it('recusa nova senha curta ou igual à temporária (400)', async () => {
     const { lavaRapido, senhaGerada } = await empresaComSenhaGerada()
     const { token } = (await login(lavaRapido.cnpj, senhaGerada)).body

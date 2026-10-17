@@ -139,12 +139,19 @@ export async function autenticarLavaRapido(cnpj: string, senha: string) {
 
   if (await conferirSenha(senha, lavaRapido?.senha)) {
     if (lavaRapido!.senhaGerada) {
-      await prisma.lavaRapido.update({ where: { id: lavaRapido!.id }, data: { senhaGerada: null } })
+      // Condicional ao hash lido: um "esqueci" concorrente que acabou de gerar
+      // uma senha nova (e mandou por e-mail) não é apagado.
+      await prisma.lavaRapido.updateMany({
+        where: { id: lavaRapido!.id, senhaGerada: lavaRapido!.senhaGerada },
+        data: { senhaGerada: null },
+      })
     }
     return { lavaRapido: lavaRapido!, modo: 'normal' as const }
   }
-  if (lavaRapido?.senhaGerada && (await conferirSenha(senha, lavaRapido.senhaGerada))) {
-    return { lavaRapido, modo: 'trocarSenha' as const }
+  // Sempre a segunda conferência (hash fictício sem senha gerada): toda falha
+  // custa o mesmo, e o tempo não revela quem tem senha gerada pendente.
+  if (await conferirSenha(senha, lavaRapido?.senhaGerada)) {
+    return { lavaRapido: lavaRapido!, modo: 'trocarSenha' as const }
   }
   return null
 }

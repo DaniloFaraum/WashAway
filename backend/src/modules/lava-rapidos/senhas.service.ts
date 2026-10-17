@@ -3,6 +3,7 @@ import type { Prisma, TipoEventoEmail } from '@prisma/client'
 import { conferirSenha, gerarHashSenha } from '../../auth/senha.js'
 import { prisma } from '../../config/prisma.js'
 import { enfileirarEmail } from '../email/email.service.js'
+import { validarSenhaLavaRapido } from '../onboarding/onboarding.validation.js'
 
 // Senha gerada (i17-senha-gerada): senha temporária enviada por e-mail, gravada
 // como hash em `LavaRapido.senhaGerada`. Entrar com ela dá um token de escopo
@@ -35,14 +36,15 @@ const EMAIL_POR_MOTIVO: Record<MotivoSenhaGerada, { tipo: TipoEventoEmail; assun
     assunto: 'Wash Your Way — seu acesso ao painel',
     introducao:
       'Seu cadastro no Wash Your Way foi concluído. Você já pode entrar no painel com a senha que escolheu no cadastro. ' +
-      'Se preferir, use a senha temporária abaixo: ao entrar com ela, o painel pede para você definir uma senha nova.',
+      'Se preferir, use a senha temporária abaixo: ao entrar com ela, o painel pede para você definir uma senha nova. ' +
+      'A senha temporária deixa de valer assim que você entrar com a senha que escolheu.',
   },
   esqueci_senha: {
     tipo: 'esqueci_senha',
     assunto: 'Wash Your Way — senha temporária',
     introducao:
       'Recebemos um pedido de recuperação de senha do painel. Entre com a senha temporária abaixo e defina uma senha nova. ' +
-      'Se não foi você, ignore este e-mail: a sua senha atual continua valendo.',
+      'Se não foi você, ignore este e-mail: a sua senha atual continua valendo, e esta senha temporária deixa de valer assim que você entrar com a sua senha atual.',
   },
   troca_em_massa: {
     tipo: 'senha_gerada',
@@ -106,17 +108,47 @@ export async function definirSenhaGerada(
   })
 }
 
-/** Hashes de senha da empresa (só para conferência no servidor; nunca sai da API). */
-export function getSenhasDoLavaRapido(id: string) {
-  return prisma.lavaRapido.findUnique({ where: { id }, select: { id: true, senha: true, senhaGerada: true } })
-}
+export type TrocarSenhaResultado =
+  | { tipo: 'sessao_invalida' }
+  | { tipo: 'senha_atual_incorreta' }
+  | { tipo: 'senha_invalida'; erro: string }
+  | { tipo: 'igual_temporaria' }
+  | { tipo: 'ok' }
 
-/** Grava a senha nova (hash) e zera a senha gerada. */
-export async function trocarSenha(lavaRapidoId: string, novaSenha: string): Promise<void> {
-  await prisma.lavaRapido.update({
+/**
+ * Troca de senha do painel (`POST /auth/lava-rapido/trocar-senha`):
+ * - `modoTroca` (token de escopo `trocar-senha`): só vale enquanto houver senha
+ *   gerada; a nova não pode ser igual à temporária;
+ * - token normal: exige a `senhaAtual` (senha própria).
+ * A gravação é condicional aos hashes lidos (`updateMany`): duas trocas com o
+ * mesmo token, ou uma troca concorrente com um login/esqueci, não passam as
+ * duas — a segunda vira `sessao_invalida`.
+ */
+export async function trocarSenhaDoPainel(
+  lavaRapidoId: string,
+  modoTroca: boolean,
+  { novaSenha, senhaAtual }: { novaSenha: unknown; senhaAtual: unknown },
+): Promise<TrocarSenhaResultado> {
+  const lavaRapido = await prisma.lavaRapido.findUnique({
     where: { id: lavaRapidoId },
-    data: { senha: await gerarHashSenha(novaSenha), senhaGerada: null },
+    select: { senha: true, senhaGerada: true },
   })
+  if (!lavaRapido || (modoTroca && !lavaRapido.senhaGerada)) return { tipo: 'sessao_invalida' }
+
+  if (!modoTroca && (typeof senhaAtual !== 'string' || !(await conferirSenha(senhaAtual, lavaRapido.senha)))) {
+    return { tipo: 'senha_atual_incorreta' }
+  }
+
+  const erro = validarSenhaLavaRapido(novaSenha)
+  if (erro) return { tipo: 'senha_invalida', erro }
+  const senha = novaSenha as string
+  if (modoTroca && (await conferirSenha(senha, lavaRapido.senhaGerada))) return { tipo: 'igual_temporaria' }
+
+  const { count } = await prisma.lavaRapido.updateMany({
+    where: modoTroca ? { id: lavaRapidoId, senhaGerada: lavaRapido.senhaGerada } : { id: lavaRapidoId, senha: lavaRapido.senha },
+    data: { senha: await gerarHashSenha(senha), senhaGerada: null },
+  })
+  return count === 0 ? { tipo: 'sessao_invalida' } : { tipo: 'ok' }
 }
 
 /**

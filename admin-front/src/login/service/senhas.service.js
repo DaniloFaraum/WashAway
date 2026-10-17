@@ -1,6 +1,7 @@
 import { SENHAS_ROUTES } from './senhas.routes.js'
 import { normalizeSessao } from './lavaRapidos.model.js'
 import { BACKEND_API_BASE_URL } from '../../config/api.js'
+import { postJson } from './postJson.js'
 
 // Senha do painel (i17-senha-gerada): "esqueci minha senha" (público) e troca
 // obrigatória. A troca usa o token de escopo `trocar-senha` do login com a
@@ -26,12 +27,7 @@ export class TrocaDeSenhaExpiradaError extends Error {
  * @returns {Promise<string>} mensagem genérica de confirmação (não revela se o e-mail existe)
  */
 export async function esqueciSenha(email, baseUrl = BASE_URL) {
-  const response = await fetch(`${baseUrl}${SENHAS_ROUTES.esqueciSenha}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email }),
-  })
-  const data = await response.json().catch(() => null)
+  const { response, data } = await postJson(`${baseUrl}${SENHAS_ROUTES.esqueciSenha}`, { email })
 
   if (!response.ok) {
     // 400 (e-mail inválido) e 429 (limite) já vêm com a mensagem do backend.
@@ -47,12 +43,7 @@ export async function esqueciSenha(email, baseUrl = BASE_URL) {
  * @returns {Promise<import('./lavaRapidos.model.js').SessaoEmpresa>}
  */
 export async function trocarSenha({ novaSenha, token }, baseUrl = BASE_URL) {
-  const response = await fetch(`${baseUrl}${SENHAS_ROUTES.trocarSenha}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-    body: JSON.stringify({ novaSenha }),
-  })
-  const data = await response.json().catch(() => null)
+  const { response, data } = await postJson(`${baseUrl}${SENHAS_ROUTES.trocarSenha}`, { novaSenha }, { token })
 
   if (response.status === 401) throw new TrocaDeSenhaExpiradaError()
   if (!response.ok) {
