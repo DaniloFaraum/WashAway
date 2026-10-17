@@ -8,8 +8,9 @@ import { CabecalhoDoPasso, PedidoSemServicos } from '@/features/pedidos/Cabecalh
 import { formatarDataHora } from '@/features/pedidos/dataHora';
 import { pedidoStyles as base } from '@/features/pedidos/pedidoStyles';
 import { montarPayloadPedido } from '@/features/pedidos/service/pedidos.model';
+import { isRecusaDeHorario } from '@/features/pedidos/horarioDoDia';
 import { criarPedido, PedidoRecusadoError } from '@/features/pedidos/service/pedidos.service';
-import { limparNovoPedido, totaisDoPedido, useNovoPedido } from '@/features/pedidos/useNovoPedido';
+import { limparNovoPedido, marcarHorarioRecusado, totaisDoPedido, useNovoPedido } from '@/features/pedidos/useNovoPedido';
 import { limparServicosSelecionados } from '@/features/servicos/servicosSelecionados';
 import { formatarPlaca } from '@/features/veiculos/placa';
 import { formatarDuracao } from '@/utils/formatarDuracao';
@@ -68,6 +69,14 @@ export default function PedidoResumoScreen() {
       limparServicosSelecionados();
       limparNovoPedido();
     } catch (err) {
+      // I20: fora do horário de funcionamento ou num fechamento — volta ao passo
+      // "Data e hora" com o horário mantido e a mensagem do backend; serviços e
+      // veículo continuam no estado do fluxo.
+      if (isRecusaDeHorario(err)) {
+        marcarHorarioRecusado(err.message);
+        alterarHorario();
+        return;
+      }
       setErro({
         mensagem: err instanceof Error ? err.message : 'Não foi possível enviar o pedido agora. Tente de novo.',
         codigo: err instanceof PedidoRecusadoError ? err.codigo : null,

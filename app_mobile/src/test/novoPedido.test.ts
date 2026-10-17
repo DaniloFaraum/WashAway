@@ -23,7 +23,7 @@ describe('estado do fluxo do pedido (useNovoPedido)', () => {
     escolherVeiculo(VEICULO)
     escolherHorario('2026-10-22T10:00:00-03:00')
 
-    expect(getNovoPedido()).toEqual({ lavaRapido: LAVA, servicos: SERVICOS, veiculo: VEICULO, horario: '2026-10-22T10:00:00-03:00' })
+    expect(getNovoPedido()).toEqual({ lavaRapido: LAVA, servicos: SERVICOS, veiculo: VEICULO, horario: '2026-10-22T10:00:00-03:00', erroHorario: null })
   })
 
   it('voltar para trocar serviços no mesmo lava-rápido mantém veículo e horário', () => {

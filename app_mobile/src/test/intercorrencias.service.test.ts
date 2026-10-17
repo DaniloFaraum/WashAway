@@ -36,6 +36,7 @@ describe('intercorrencias.service', () => {
         diaInteiro: true,
         horaInicio: null,
         horaFim: null,
+        reaberta: false,
       },
     ])
   })

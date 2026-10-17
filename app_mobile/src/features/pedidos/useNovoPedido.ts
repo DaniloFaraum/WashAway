@@ -30,9 +30,15 @@ export interface EstadoNovoPedido {
   veiculo: Veiculo | null
   /** ISO com offset do negócio (ex.: "2026-10-20T10:00:00-03:00"). */
   horario: string | null
+  /**
+   * Mensagem do backend quando ele recusou `horario` (I20, `HORARIO_INDISPONIVEL`):
+   * o passo "Data e hora" mostra o horário ainda escolhido, destacado com ela.
+   * Some quando o cliente confirma um horário de novo nesse passo.
+   */
+  erroHorario: string | null
 }
 
-const VAZIO: EstadoNovoPedido = { lavaRapido: null, servicos: [], veiculo: null, horario: null }
+const VAZIO: EstadoNovoPedido = { lavaRapido: null, servicos: [], veiculo: null, horario: null, erroHorario: null }
 
 let estado: EstadoNovoPedido = VAZIO
 const ouvintes = new Set<() => void>()
@@ -66,6 +72,7 @@ export function iniciarNovoPedido(lavaRapido: LavaRapidoDoPedido, servicos: Serv
     servicos,
     veiculo: mesmo ? estado.veiculo : null,
     horario: (mesmo ? estado.horario : null) ?? horario ?? null,
+    erroHorario: mesmo ? estado.erroHorario : null,
   })
 }
 
@@ -74,7 +81,12 @@ export function escolherVeiculo(veiculo: Veiculo) {
 }
 
 export function escolherHorario(horario: string | null) {
-  emitir({ ...estado, horario })
+  emitir({ ...estado, horario, erroHorario: null })
+}
+
+/** O backend recusou o horário escolhido (I20): mantém o horário e guarda a mensagem para o passo "Data e hora". */
+export function marcarHorarioRecusado(mensagem: string) {
+  emitir({ ...estado, erroHorario: mensagem })
 }
 
 export function limparNovoPedido() {

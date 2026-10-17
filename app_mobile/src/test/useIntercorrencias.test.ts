@@ -13,6 +13,7 @@ function intercorrencia(overrides: Partial<Intercorrencia>): Intercorrencia {
     diaInteiro: true,
     horaInicio: null,
     horaFim: null,
+    reaberta: false,
     ...overrides,
   }
 }
