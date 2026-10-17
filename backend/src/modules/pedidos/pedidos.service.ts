@@ -43,7 +43,8 @@ export type ResultadoCriacaoPedido =
  * - preço total e duração calculados AQUI a partir dos serviços (o que o app
  *   mandar de preço é ignorado), nome/preço/duração de cada serviço congelados
  *   em `PedidoServico`;
- * - `validarHorarioPedido` (I20 completa) antes de gravar;
+ * - `validarHorarioPedido` antes de gravar: passado e horário de funcionamento/
+ *   intercorrências do dia (I20, `HORARIO_INDISPONIVEL`);
  * - status `pendente`.
  */
 export async function criarPedido(

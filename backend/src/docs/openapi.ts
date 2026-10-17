@@ -162,7 +162,7 @@ const erroPedidoSchema = {
     error: { type: 'string' },
     codigo: {
       type: 'string',
-      enum: ['DADOS_INVALIDOS', 'HORARIO_PASSADO', 'SERVICO_INVALIDO', 'LAVA_RAPIDO_NAO_ENCONTRADO', 'VEICULO_NAO_ENCONTRADO'],
+      enum: ['DADOS_INVALIDOS', 'HORARIO_PASSADO', 'HORARIO_INDISPONIVEL', 'SERVICO_INVALIDO', 'LAVA_RAPIDO_NAO_ENCONTRADO', 'VEICULO_NAO_ENCONTRADO'],
     },
     servicoIdsInvalidos: { type: 'array', items: { type: 'string' }, description: 'Só em SERVICO_INVALIDO.' },
   },
@@ -803,7 +803,8 @@ export const openApiDocument = {
         responses: {
           201: { description: 'Pedido criado.', content: { 'application/json': { schema: { $ref: '#/components/schemas/Pedido' } } } },
           400: {
-            description: 'DADOS_INVALIDOS (campos/lista de serviços/horário mal formados), HORARIO_PASSADO ou SERVICO_INVALIDO (inexistente, inativo ou de outro lava-rápido).',
+            description:
+              'DADOS_INVALIDOS (campos/lista de serviços/horário mal formados), HORARIO_PASSADO, SERVICO_INVALIDO (inexistente, inativo ou de outro lava-rápido) ou HORARIO_INDISPONIVEL (I20: o período de `horario` até `horario` + duração dos serviços não cabe no horário de funcionamento do dia ou cai num fechamento não reaberto; `error` traz a mensagem do caso em hora de São Paulo, ex.: "Nesse dia o lava-rápido fecha às 18:00. O atendimento escolhido termina às 18:30.").',
             content: { 'application/json': { schema: { $ref: '#/components/schemas/ErroPedido' } } },
           },
           401: { description: 'Sem token, ou token inválido/expirado.', content: { 'application/json': { schema: { $ref: '#/components/schemas/Erro' } } } },

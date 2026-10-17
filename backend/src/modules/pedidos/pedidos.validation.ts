@@ -1,4 +1,6 @@
 import { PedidoStatus } from '@prisma/client'
+import { estaAberto, type MotivoFechado } from '../horarios/disponibilidade.service.js'
+import { partesLocais } from '../../utils/fusoHorario.js'
 
 export function isValidStatus(status: unknown): status is PedidoStatus {
   return typeof status === 'string' && (Object.values(PedidoStatus) as string[]).includes(status)
@@ -10,11 +12,12 @@ export function isValidStatus(status: unknown): status is PedidoStatus {
 
 /**
  * Códigos estáveis das recusas do `POST /pedidos` (corpo `{ error, codigo }`).
- * O I20 acrescenta 'HORARIO_INDISPONIVEL'.
+ * 'HORARIO_INDISPONIVEL' (I20): fora do horário de funcionamento ou num fechamento.
  */
 export type CodigoErroPedido =
   | 'DADOS_INVALIDOS'
   | 'HORARIO_PASSADO'
+  | 'HORARIO_INDISPONIVEL'
   | 'SERVICO_INVALIDO'
   | 'LAVA_RAPIDO_NAO_ENCONTRADO'
   | 'VEICULO_NAO_ENCONTRADO'
@@ -101,21 +104,57 @@ export function validarCriacaoPedido(body: unknown): { erro: ErroPedido } | { da
 }
 
 /**
+ * Mensagem da recusa por horário (I20), em hora local (FUSO_LAVA_RAPIDOS), a
+ * partir do motivo devolvido pelo `estaAberto` do I19. Lógica pura.
+ */
+export function mensagemHorarioIndisponivel(motivo: MotivoFechado, inicio: Date, fim: Date): string {
+  const localInicio = partesLocais(inicio)
+  const localFim = partesLocais(fim)
+
+  if (motivo.tipo === 'intercorrencia') {
+    const { diaInteiro, horaInicio, horaFim, motivo: texto } = motivo.intercorrencia
+    if (diaInteiro || !horaInicio || !horaFim) return `O lava-rápido estará fechado nesse dia: ${texto}.`
+    return `O lava-rápido estará fechado das ${horaInicio} às ${horaFim} nesse dia: ${texto}.`
+  }
+
+  // O I19 trata o atendimento que atravessa a meia-noite como fechado.
+  if (localFim.data !== localInicio.data) {
+    return `O atendimento escolhido termina só no dia seguinte, às ${localFim.hora}. Escolha um horário mais cedo.`
+  }
+  if (!motivo.horario) return 'O lava-rápido não abre nesse dia.'
+  if (localInicio.hora < motivo.horario.abertura) return `Nesse dia o lava-rápido abre às ${motivo.horario.abertura}.`
+  return `Nesse dia o lava-rápido fecha às ${motivo.horario.fechamento}. O atendimento escolhido termina às ${localFim.hora}.`
+}
+
+/**
  * Validação do horário do pedido, chamada pelo `criarPedido` depois das demais
- * validações e antes de gravar. Hoje só recusa horário no passado.
- *
- * PONTO DE EXTENSÃO DO I20: completar aqui com o horário de funcionamento e as
- * intercorrências (`estaAberto(lavaRapidoId, inicio, fim)` do I19, com
- * `fim = inicio + duracaoMinutos`), devolvendo `codigo: 'HORARIO_INDISPONIVEL'`.
+ * validações e antes de gravar:
+ * - no passado (ou agora) → `HORARIO_PASSADO`;
+ * - período [inicio, inicio + duracaoMinutos) fora do horário de funcionamento
+ *   do dia ou num fechamento não reaberto (`estaAberto` do I19) →
+ *   `HORARIO_INDISPONIVEL` (I20), com mensagem específica do caso. Lava-rápido
+ *   sem horário cadastrado = sem restrição de horário (regra do I19).
  */
 export async function validarHorarioPedido(
-  _lavaRapidoId: string,
+  lavaRapidoId: string,
   inicio: Date,
-  _duracaoMinutos: number,
+  duracaoMinutos: number,
   agora: Date = new Date(),
 ): Promise<ErroPedido | null> {
   if (inicio.getTime() <= agora.getTime()) {
     return { status: 400, error: 'Escolha uma data e hora no futuro', codigo: 'HORARIO_PASSADO' }
+  }
+
+  // Duração 0 (combo sem itens): o intervalo vazio [inicio, inicio) seria
+  // "fora do horário" no I19, então avalia só o instante de início.
+  const fim = duracaoMinutos > 0 ? new Date(inicio.getTime() + duracaoMinutos * 60 * 1000) : undefined
+  const disponibilidade = await estaAberto(lavaRapidoId, inicio, fim)
+  if (!disponibilidade.aberto) {
+    return {
+      status: 400,
+      error: mensagemHorarioIndisponivel(disponibilidade.motivo, inicio, fim ?? inicio),
+      codigo: 'HORARIO_INDISPONIVEL',
+    }
   }
   return null
 }
