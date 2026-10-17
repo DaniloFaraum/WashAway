@@ -11,7 +11,8 @@ import InputLabel from '@mui/material/InputLabel'
 import Select from '@mui/material/Select'
 import MenuItem from '@mui/material/MenuItem'
 import { FEATURE_FLAGS } from '../../../config/featureFlags.js'
-import { PEDIDO_STATUS, formatarHorario } from '../service/pedidos.model.js'
+import { PEDIDO_STATUS, descreverVeiculo, formatarHorario, formatarPreco } from '../service/pedidos.model.js'
+import { formatarDuracao } from '../../servicos/formatarDuracao.js'
 
 function PedidoDetalhe({ pedido, open, onClose, onStatusChange }) {
   const [salvando, setSalvando] = useState(false)
@@ -30,13 +31,31 @@ function PedidoDetalhe({ pedido, open, onClose, onStatusChange }) {
     <Dialog open={open} onClose={onClose} fullWidth maxWidth="sm">
       {pedido && (
         <>
-          <DialogTitle>{pedido.veiculo.modelo} — {pedido.veiculo.placa}</DialogTitle>
+          <DialogTitle>Pedido de {pedido.cliente?.nome ?? '—'}</DialogTitle>
           <DialogContent>
             <Stack spacing={2} sx={{ mt: 1 }}>
-              <Typography variant="body1">Serviço: {pedido.servico}</Typography>
+              <Typography variant="body1">
+                Veículo: {descreverVeiculo(pedido.veiculo)}
+                {pedido.veiculo.cor ? ` (${pedido.veiculo.cor})` : ''}
+              </Typography>
               <Typography variant="body2" color="text.secondary">
                 Horário: {formatarHorario(pedido.horario)}
+                {pedido.duracaoMinutos ? ` · ~${formatarDuracao(pedido.duracaoMinutos)}` : ''}
               </Typography>
+
+              <Stack spacing={0.5}>
+                <Typography variant="subtitle2">Serviços</Typography>
+                {pedido.servicos.map((servico, indice) => (
+                  <Stack key={`${indice}-${servico.nome}`} direction="row" sx={{ justifyContent: 'space-between' }}>
+                    <Typography variant="body2">{servico.nome}</Typography>
+                    <Typography variant="body2">{formatarPreco(servico.preco)}</Typography>
+                  </Stack>
+                ))}
+                <Stack direction="row" sx={{ justifyContent: 'space-between' }}>
+                  <Typography variant="subtitle2">Total</Typography>
+                  <Typography variant="subtitle2">{formatarPreco(pedido.precoTotal)}</Typography>
+                </Stack>
+              </Stack>
 
               <FormControl fullWidth disabled={salvando}>
                 <InputLabel id="pedido-status-label">Status</InputLabel>

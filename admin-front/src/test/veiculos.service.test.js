@@ -11,7 +11,8 @@ describe('veiculos.service', () => {
     const veiculos = await getVeiculos()
 
     expect(veiculos).toHaveLength(2)
-    expect(veiculos[0]).toMatchObject({ id: '1', modelo: 'Fiat Argo', placa: 'ABC1D23' })
+    expect(veiculos[0]).toMatchObject({ id: '1', marca: 'Fiat', modelo: 'Argo', cor: 'Branco', placa: 'ABC1D23' })
+    expect(veiculos[1]).toMatchObject({ marca: null, modelo: 'VW Gol', cor: '' })
   })
 
   it('getVeiculos não manda ?lavaRapidoId= mesmo com empresa logada (o backend filtra pelo token)', async () => {

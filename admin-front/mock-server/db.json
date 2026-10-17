@@ -2,8 +2,16 @@
   "pedidos": [
     {
       "id": "1",
-      "veiculo": { "modelo": "Fiat Argo", "placa": "ABC1D23" },
-      "servico": "Lavagem completa",
+      "clienteId": "c1",
+      "veiculoId": "v1",
+      "cliente": { "id": "c1", "nome": "Ana Ribeiro" },
+      "veiculo": { "id": "v1", "marca": "Fiat", "modelo": "Argo", "cor": "Branco", "placa": "ABC1D23" },
+      "servicos": [
+        { "id": "ps1", "servicoId": "1", "nome": "Lavagem completa", "preco": 70, "duracaoMinutos": 75 },
+        { "id": "ps2", "servicoId": "2", "nome": "Polimento", "preco": 120, "duracaoMinutos": 150 }
+      ],
+      "precoTotal": 190,
+      "duracaoMinutos": 225,
       "horario": "2026-09-16T09:00:00.000Z",
       "status": "pendente",
       "fotos": [
@@ -23,8 +31,15 @@
     },
     {
       "id": "3",
-      "veiculo": { "modelo": "Chevrolet Onix", "placa": "JKL4F56" },
-      "servico": "Lavagem completa + polimento",
+      "clienteId": "c2",
+      "veiculoId": "v3",
+      "cliente": { "id": "c2", "nome": "Bruno Carvalho" },
+      "veiculo": { "id": "v3", "marca": "Chevrolet", "modelo": "Onix", "cor": "Vermelho", "placa": "JKL4F56" },
+      "servicos": [
+        { "id": "ps3", "servicoId": "1", "nome": "Lavagem simples", "preco": 40, "duracaoMinutos": 30 }
+      ],
+      "precoTotal": 40,
+      "duracaoMinutos": 30,
       "horario": "2026-09-15T15:00:00.000Z",
       "status": "concluido",
       "fotos": [
@@ -90,7 +105,7 @@
     { "id": "2", "data": "2026-09-25", "motivo": "Falta de energia", "diaInteiro": false, "horaInicio": "14:00", "horaFim": "16:00" }
   ],
   "veiculos": [
-    { "id": "1", "modelo": "Fiat Argo", "placa": "ABC1D23" },
+    { "id": "1", "marca": "Fiat", "modelo": "Argo", "cor": "Branco", "placa": "ABC1D23" },
     { "id": "2", "modelo": "VW Gol", "placa": "XYZ9E88" },
     { "id": "3", "modelo": "Chevrolet Onix", "placa": "JKL4F56" }
   ]

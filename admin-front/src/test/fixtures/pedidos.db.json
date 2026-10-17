@@ -2,8 +2,16 @@
   "pedidos": [
     {
       "id": "1",
-      "veiculo": { "modelo": "Fiat Argo", "placa": "ABC1D23" },
-      "servico": "Lavagem completa",
+      "clienteId": "c1",
+      "veiculoId": "v1",
+      "cliente": { "id": "c1", "nome": "Ana Ribeiro" },
+      "veiculo": { "id": "v1", "marca": "Fiat", "modelo": "Argo", "cor": "Branco", "placa": "ABC1D23" },
+      "servicos": [
+        { "id": "ps1", "servicoId": "1", "nome": "Lavagem completa", "preco": 70, "duracaoMinutos": 75 },
+        { "id": "ps2", "servicoId": "2", "nome": "Polimento", "preco": 120, "duracaoMinutos": 150 }
+      ],
+      "precoTotal": 190,
+      "duracaoMinutos": 225,
       "horario": "2026-09-16T09:00:00.000Z",
       "status": "pendente",
       "fotos": ["https://placehold.co/400x300?text=Antes+1"],
@@ -61,7 +69,7 @@
     { "id": "1", "data": "2026-10-12", "motivo": "Feriado", "diaInteiro": true, "lavaRapidoId": "lr-1" }
   ],
   "veiculos": [
-    { "id": "1", "modelo": "Fiat Argo", "placa": "ABC1D23", "lavaRapidoId": "lr-1" },
+    { "id": "1", "marca": "Fiat", "modelo": "Argo", "cor": "Branco", "placa": "ABC1D23", "lavaRapidoId": "lr-1" },
     { "id": "2", "modelo": "VW Gol", "placa": "XYZ9E88", "lavaRapidoId": "lr-2" }
   ]
 }

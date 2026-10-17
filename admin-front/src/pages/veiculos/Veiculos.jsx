@@ -26,9 +26,9 @@ function Veiculos() {
         {veiculos.map((veiculo) => (
           <Card key={veiculo.id}>
             <CardContent>
-              <Typography variant="subtitle1">{veiculo.modelo}</Typography>
+              <Typography variant="subtitle1">{[veiculo.marca, veiculo.modelo].filter(Boolean).join(' ')}</Typography>
               <Typography variant="body2" color="text.secondary">
-                {veiculo.placa}
+                {[veiculo.cor, veiculo.placa].filter(Boolean).join(' · ')}
               </Typography>
             </CardContent>
           </Card>

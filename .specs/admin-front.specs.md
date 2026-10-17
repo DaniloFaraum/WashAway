@@ -158,14 +158,17 @@ Forma normalizada pelo admin-front (`src/login/service/lavaRapidos.model.js`) �
 ```
 Pedido {
   id: string
-  veiculo: { modelo: string, placa: string }
-  servico: string
+  cliente: { nome: string } | null          # null só em pedido no formato antigo
+  veiculo: { marca: string | null, modelo: string, cor: string, placa: string }
+  servicos: { nome: string, preco: number | null }[]   # nome/preço da compra (I13)
+  precoTotal: number | null                 # calculado no backend
+  duracaoMinutos: number | null
   horario: string (ISO datetime)
   status: 'pendente' | 'em_andamento' | 'concluido'
   fotos: string[] (URLs)
 }
 ```
-Fonte de verdade da forma desse dado: `src/pages/painel-pedidos/service/pedidos.model.js`.
+Fonte de verdade da forma desse dado: `src/pages/painel-pedidos/service/pedidos.model.js`. Desde o I13 (`docs/plan/i13-confirmacao-agendamento/`) o pedido vem do app do cliente (`POST /pedidos`) com cliente, veículo, vários serviços e total; a lista mostra **nome do cliente, total, veículo, serviços e horário**, e o detalhe (`PedidoDetalhe.jsx`) mostra veículo com cor, horário + duração estimada, um serviço por linha com preço e o total. `normalizePedido` também aceita o formato antigo (`veiculo` só com modelo/placa e `servico` em texto → um serviço sem preço, cliente "—"), usado no fixture/mock para garantir que nada quebra; o backend já migrou todos os pedidos para o formato novo. Helpers `formatarPreco` (`null` → "—") e `descreverVeiculo`.
 
 ### Serviço (página `servicos`)
 ```
@@ -204,11 +207,13 @@ Representa uma exceção pontual à agenda regular (ex.: feriado, falta de energ
 ```
 Veiculo {
   id: string
+  marca: string | null
   modelo: string
+  cor: string
   placa: string
 }
 ```
-Mesma forma já usada em `Pedido.veiculo`. A página `veiculos` só exibe (read-only) — o cadastro é feito pelo consumidor (ainda não implementado em nenhum front). Sem conceito de funcionário responsável nem categorização por tipo de veículo (ex.: "utilitário") — fora de escopo.
+Desde o I13, é o veículo cadastrado pelo cliente no app (I3) que aparece em algum pedido da empresa (relação `Pedido → Veiculo` no backend); a página mostra marca + modelo e cor · placa. A página `veiculos` só exibe (read-only) — o cadastro é feito pelo consumidor (ainda não implementado em nenhum front). Sem conceito de funcionário responsável nem categorização por tipo de veículo (ex.: "utilitário") — fora de escopo.
 
 ## 7. Feature flags
 
@@ -228,7 +233,7 @@ Regra para novas flags: mesma convenção (chave em `FEATURE_FLAGS`, consumida v
 | Painel de pedidos | `/` | `src/pages/painel-pedidos/` | Implementada (task `painel-de-pedidos`, plano em `docs/plan/painel-de-pedidos/painel-de-pedidos-v2.md`); backend real desde `backend-mvp` |
 | Serviços | `/servicos` | `src/pages/servicos/` | Implementada (task `telas-servicos-disponibilidade-veiculos`); backend real desde `migrar-servicos-disponibilidade-veiculos-backend`; desde `servicos-combos-catalogo` cria/edita combos de itens do catálogo + ativa/desativa, sem excluir (ver seção 6) |
 | Disponibilidade | `/disponibilidade` | `src/pages/disponibilidade/` | Implementada (task `telas-servicos-disponibilidade-veiculos`) — calendário de intercorrências pontuais; backend real desde `migrar-servicos-disponibilidade-veiculos-backend`. Desde o I19 mostra também o **horário de funcionamento semanal** (`components/HorarioFuncionamento.jsx`, dados iniciais de `empresaLogada.horarios`, "hoje" no fuso America/Sao_Paulo). Desde o I19 parte 2 é **editável**: por dia, `Switch` "Fechado" ou abertura/fechamento (`TextField type="time"`), botão "Salvar horário" → `salvarHorarios(dias)` (`PUT /lavaRapidos/:id/horarios`, com token, id da sessão; usa `fetchComToken` para mostrar no toast a mensagem de validação do backend). A validação fica no backend; os helpers puros `horariosParaEdicao`/`edicaoParaDias` (`horarioFuncionamento.js`) montam o formulário e o body. Depois de salvar, `recarregarEmpresa()` (`useSessaoEmpresa`, passado pelo `App.jsx` como `onHorarioSalvo`) busca a empresa de novo para o status do topo (Aberto/Fechado/Fora do horário) refletir o novo horário |
-| Veículos | `/veiculos` | `src/pages/veiculos/` | Implementada (task `telas-servicos-disponibilidade-veiculos`) — listagem read-only; backend real (derivado de `Pedido`, sem tabela própria) desde `migrar-servicos-disponibilidade-veiculos-backend` |
+| Veículos | `/veiculos` | `src/pages/veiculos/` | Implementada (task `telas-servicos-disponibilidade-veiculos`) — listagem read-only; backend real desde `migrar-servicos-disponibilidade-veiculos-backend`; desde o I13 lista os veículos (do cadastro do cliente) dos pedidos da empresa |
 | Minha empresa | `/minha-empresa` | `src/pages/minha-empresa/` | Implementada (`i17-interno-exclusao`) — dados da empresa logada (nome, endereço) e **exclusão por solicitação**: botão "Solicitar exclusão da empresa" abre `components/SolicitarExclusaoDialog.jsx` (confirmação + motivo opcional, até 500); com a solicitação pendente mostra a data/motivo e "Cancelar solicitação"; recusada/cancelada mostra um aviso (com a observação da equipe) e permite solicitar de novo. `service/minhaEmpresa.service.js` (`getSolicitacaoExclusao` → `null` no `404`, `solicitarExclusao(motivo)`, `cancelarSolicitacaoExclusao`) usa `fetchComToken` em `/lavaRapidos/me/solicitacao-exclusao`. A aprovação é da equipe WashAway (sem tela; ver `backend.specs.md` seção 5.4) — depois de aprovada a empresa não existe mais e o próximo request dá `401`, que volta ao Login. Item "Minha empresa" na `Sidebar` |
 
 ## 9. Testes
@@ -270,7 +275,7 @@ Decisões arquiteturais tomadas ao longo das tasks, na ordem em que foram confir
 9. **Shell com sidebar fixa + `PageHeader`, só na estrutura** (`docs/plan/shell-sidebar-navegacao`, confirmado com o usuário) — inspirado numa referência externa (painel do lojista do iFood), mas copiando só o padrão estrutural (navegação lateral + breadcrumb/título), não cores/estilo. Mantém o tema MUI padrão; sem colapso/responsividade da sidebar por ora. Primeiro uso real de `src/components/` global.
 10. **admin-front é "PDV", não "ERP"** (`docs/plan/telas-servicos-disponibilidade-veiculos`, confirmado com o usuário) — cadastro/configuração do negócio (catálogo de serviços, agenda regular, tipos de veículo) ficaria pra um onboarding do dono (hoje existe só o onboarding de cadastro com contrato, `onboarding-contrato-empresa` — sem catálogo/agenda/tipos de veículo); o admin-front só opera o dia a dia em cima disso (ativar/desativar serviço, registrar intercorrência pontual, ver veículos). Essa distinção guia o recorte de qualquer página nova que pareça "cadastro". **Exceção decidida depois** (`docs/plan/servicos-combos-catalogo`): a página `servicos` passou a criar/editar os serviços da loja, mas só como combos de itens de um catálogo global que o admin-front não altera — a loja escolhe o que oferece sem texto livre sobre o conteúdo.
 11. **Login real por CNPJ + senha fixa, não "lembrar localmente"** (`docs/plan/selecao-empresa-admin-front`, confirmado com o usuário após 3 rodadas de correção) — a primeira ideia (dispositivo "lembra" qual empresa foi cadastrada nele, sem senha) foi descartada porque não permite login de outro aparelho; a segunda ideia (selecionar entre todas as empresas cadastradas, sem cadastro próprio) também foi descartada por confundir "selecionar empresa existente" com "onboarding/cadastro da própria empresa" (analogia usada: iFood dono da loja vs. iFood consumidor). Decisão final: cadastro (nome + endereço + CNPJ, sem pedir senha) com senha sempre fixada como `"admin"` no backend, e login de verdade (CNPJ + senha) contra o backend — funciona de qualquer aparelho, sem exigir um modelo de auth completo (JWT etc., fora de escopo).
-12. **`Veiculo` sem tabela própria no backend** (`docs/plan/migrar-servicos-disponibilidade-veiculos-backend`) — um veículo já existe embutido em `Pedido.veiculo`; a página `veiculos` só precisa listar, então `GET /veiculos` deriva a lista (dedup por `placa`) em vez de normalizar uma entidade nova sem caso de uso que dependa disso (YAGNI).
+12. ~~**`Veiculo` sem tabela própria no backend**~~ (`docs/plan/migrar-servicos-disponibilidade-veiculos-backend`) — **superada no I13**: o pedido aponta para o `Veiculo` do cliente (I3) e `GET /veiculos` lista os veículos distintos dos pedidos da empresa por essa relação.
 13. **Services continuam buscando `lavaRapidoId` sozinhos, nunca recebendo por prop** (`docs/plan/migrar-servicos-disponibilidade-veiculos-backend`) — mesmo padrão que `pedidos.service.js` já usava (`getEmpresaLogadaId()` importado direto no `service.js`); nenhuma das páginas (`Servicos.jsx`/`Disponibilidade.jsx`/`Veiculos.jsx`) precisou mudar.
 14. **Badge "Aberto"/"Fechado" + "Reabrir" no `AppShell.jsx`** (`docs/plan/isopen-intercorrencia-backend/`) — achado ao validar a task `servicos-disponibilidade-app-mobile`: `LavaRapido.isOpen` nunca refletia intercorrências cadastradas. Resolvido calculando `isOpen` no backend (ver `backend.specs.md` seção 5); o admin-front só exibe o que já vem calculado e oferece "Reabrir" (`PATCH /intercorrencias/:id { reaberta: true }`) pra reverter um fechamento automático manualmente. Quando o fechamento é por estar fora do horário (`foraDoHorario`, I19), mostra "Fora do horário de funcionamento" no lugar do motivo.
 15. **Token de lava-rápido e senha própria (I17, `docs/plan/i17-acesso-seguro-painel/`)** — substitui a decisão 11 na parte da senha fixa: o cadastro pede e-mail + senha (mín. 8), o login/aceite devolvem um token guardado em `washaway:token` e enviado pelo `httpClient` em toda chamada; `401` volta ao Login com aviso. A decisão 13 continua para as leituras públicas; nas rotas de gestão a empresa vem do token.
