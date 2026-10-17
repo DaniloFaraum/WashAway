@@ -14,15 +14,21 @@ export async function getPedidos() {
 }
 
 /**
+ * Muda o status (I15). `motivo` só vai no body ao recusar e quando preenchido.
+ * Transição não permitida: o backend responde 409 e o erro lançado traz a
+ * mensagem dele em `mensagemBackend`.
  * @param {string} id
  * @param {import('./pedidos.model.js').Pedido['status']} status
+ * @param {string} [motivo]
  * @returns {Promise<import('./pedidos.model.js').Pedido>}
  */
-export async function updatePedidoStatus(id, status) {
+export async function updatePedidoStatus(id, status, motivo) {
+  const texto = motivo?.trim()
+  const body = status === 'recusado' && texto ? { status, motivo: texto } : { status }
   const data = await request(PEDIDOS_ROUTES.detail(id), {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ status }),
+    body: JSON.stringify(body),
   })
   return normalizePedido(data)
 }

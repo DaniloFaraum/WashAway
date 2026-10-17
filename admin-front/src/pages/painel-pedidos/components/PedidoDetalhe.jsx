@@ -1,4 +1,3 @@
-import { useState } from 'react'
 import Dialog from '@mui/material/Dialog'
 import DialogTitle from '@mui/material/DialogTitle'
 import DialogContent from '@mui/material/DialogContent'
@@ -6,27 +5,23 @@ import DialogActions from '@mui/material/DialogActions'
 import Button from '@mui/material/Button'
 import Typography from '@mui/material/Typography'
 import Stack from '@mui/material/Stack'
-import FormControl from '@mui/material/FormControl'
-import InputLabel from '@mui/material/InputLabel'
-import Select from '@mui/material/Select'
-import MenuItem from '@mui/material/MenuItem'
+import Chip from '@mui/material/Chip'
+import AcoesPedido from './AcoesPedido.jsx'
 import { FEATURE_FLAGS } from '../../../config/featureFlags.js'
-import { PEDIDO_STATUS, descreverVeiculo, formatarHorario, formatarPreco } from '../service/pedidos.model.js'
+import {
+  PEDIDO_STATUS,
+  descreverVeiculo,
+  formatarDataHora,
+  formatarHorario,
+  formatarPreco,
+} from '../service/pedidos.model.js'
 import { formatarDuracao } from '../../servicos/formatarDuracao.js'
 
-function PedidoDetalhe({ pedido, open, onClose, onStatusChange }) {
-  const [salvando, setSalvando] = useState(false)
-
-  async function handleStatusChange(event) {
-    const novoStatus = event.target.value
-    setSalvando(true)
-    try {
-      await onStatusChange(pedido.id, novoStatus)
-    } finally {
-      setSalvando(false)
-    }
-  }
-
+/**
+ * Detalhe do pedido. O status muda só pelas ações permitidas (I15, sem seletor
+ * livre); `onAcao(status)` é tratado no `PainelPedidos` (recusar pede confirmação).
+ */
+function PedidoDetalhe({ pedido, open, onClose, onAcao, salvando }) {
   return (
     <Dialog open={open} onClose={onClose} fullWidth maxWidth="sm">
       {pedido && (
@@ -57,21 +52,23 @@ function PedidoDetalhe({ pedido, open, onClose, onStatusChange }) {
                 </Stack>
               </Stack>
 
-              <FormControl fullWidth disabled={salvando}>
-                <InputLabel id="pedido-status-label">Status</InputLabel>
-                <Select
-                  labelId="pedido-status-label"
-                  label="Status"
-                  value={pedido.status}
-                  onChange={handleStatusChange}
-                >
-                  {Object.entries(PEDIDO_STATUS).map(([value, { label }]) => (
-                    <MenuItem key={value} value={value}>
-                      {label}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
+              <Stack spacing={1}>
+                <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+                  <Typography variant="subtitle2">Status:</Typography>
+                  <Chip
+                    label={PEDIDO_STATUS[pedido.status]?.label ?? pedido.status}
+                    color={PEDIDO_STATUS[pedido.status]?.color ?? 'default'}
+                    size="small"
+                  />
+                </Stack>
+                <Typography variant="body2" color="text.secondary">
+                  Alterado em: {pedido.statusAlteradoEm ? formatarDataHora(pedido.statusAlteradoEm) : '—'}
+                </Typography>
+                {pedido.status === 'recusado' && (
+                  <Typography variant="body2">Motivo da recusa: {pedido.motivoRecusa ?? 'não informado'}</Typography>
+                )}
+                <AcoesPedido pedido={pedido} onAcao={onAcao} disabled={salvando} />
+              </Stack>
 
               {FEATURE_FLAGS.fotosPedido && (
                 <Stack spacing={1}>

@@ -164,11 +164,15 @@ Pedido {
   precoTotal: number | null                 # calculado no backend
   duracaoMinutos: number | null
   horario: string (ISO datetime)
-  status: 'pendente' | 'em_andamento' | 'concluido'
+  status: 'pendente' | 'aceito' | 'recusado' | 'em_andamento' | 'concluido'
+  statusAlteradoEm: string (ISO) | null     # I15: última mudança de status
+  motivoRecusa: string | null               # I15: só em recusado
   fotos: string[] (URLs)
 }
 ```
 Fonte de verdade da forma desse dado: `src/pages/painel-pedidos/service/pedidos.model.js`. Desde o I13 (`docs/plan/i13-confirmacao-agendamento/`) o pedido vem do app do cliente (`POST /pedidos`) com cliente, veículo, vários serviços e total; a lista mostra **nome do cliente, total, veículo, serviços e horário**, e o detalhe (`PedidoDetalhe.jsx`) mostra veículo com cor, horário + duração estimada, um serviço por linha com preço e o total. `normalizePedido` também aceita o formato antigo (`veiculo` só com modelo/placa e `servico` em texto → um serviço sem preço, cliente "—"), usado no fixture/mock para garantir que nada quebra; o backend já migrou todos os pedidos para o formato novo. Helpers `formatarPreco` (`null` → "—") e `descreverVeiculo`.
+
+**Aceite/recusa (I15, `docs/plan/i15-aceite-recusa-pedido/`).** O `Select` livre de status saiu. A lista separa os pendentes (`separarPendentes`, do horário mais próximo ao mais distante) numa seção **"Aguardando sua resposta"** com contador e borda de alerta, com os botões **Aceitar**/**Recusar** direto no card; os demais pedidos vêm abaixo ("Demais pedidos"). O detalhe mostra o status (chip), **"Alterado em"** (`statusAlteradoEm`, "—" se nunca mudou), o motivo em recusado e só os botões das ações permitidas (`components/AcoesPedido.jsx`, a partir de `PROXIMOS_STATUS` do model — mesmo fluxo do backend, que continua sendo quem valida): pendente → Aceitar/Recusar, aceito → Iniciar atendimento, em andamento → Concluir, nenhum em recusado/concluído. Recusar abre `components/RecusarPedidoDialog.jsx` (motivo opcional, contador até 200, "Confirmar recusa"; fecha só no sucesso). `updatePedidoStatus(id, status, motivo?)` manda `motivo` só ao recusar e se preenchido. Erro do backend (ex.: `409` de transição inválida) aparece no toast com a mensagem dele: `httpClient.request` passou a anexar `status` e `mensagemBackend` (o `error` do corpo) ao erro lançado, sem mudar a `message`.
 
 ### Serviço (página `servicos`)
 ```

@@ -49,8 +49,10 @@ model LavaRapido {
   pedidos      Pedido[]
 }
 
-enum PedidoStatus {
+enum PedidoStatus {          # I15: pendente → aceito | recusado; aceito → em_andamento → concluido
   pendente
+  aceito
+  recusado
   em_andamento
   concluido
 }
@@ -66,6 +68,8 @@ model Pedido {               # I13: criado pelo cliente do app (POST /pedidos)
   precoTotal     Float        # soma dos preços dos serviços, calculada NO SERVIDOR
   duracaoMinutos Int          # soma das durações dos serviços, calculada NO SERVIDOR
   criadoEm       DateTime     @default(now())
+  statusAlteradoEm DateTime?  # I15: última mudança de status (null = nunca mudou)
+  motivoRecusa   String?      # I15: só em recusado, até 200 caracteres (validado na API)
   servicos       PedidoServico[]
 }
 
@@ -245,6 +249,8 @@ Regra de placa (`modules/veiculos-cliente/placa.ts`): `normalizarPlaca` remove h
 **`POST /lavaRapidos` e `DELETE /lavaRapidos/:id` foram removidos no I17** (respondem `404`): empresa nova só pelo fluxo `/onboarding`; a exclusão passa a ser por solicitação, processada por interno com permissão `admin` (seção 5.4). O cascade do banco (`onDelete: Cascade` em `Pedido`/`Servico`/`Intercorrencia`/`HorarioFuncionamento`) continua.
 
 **Desvio da decisão original do plano**: o plano previa uma rota específica `PATCH /pedidos/:id/status`. Na implementação, isso quebraria com o `pedidos.routes.js` do admin-front (que já usa `PATCH /pedidos/:id` genérico) e com o `json-server` de fallback (que não suporta sub-rotas customizadas — não tem `--routes`/rewrite nessa versão). Mantida `PATCH /pedidos/:id`, com a mesma segurança pretendida (só `status` é aceito, qualquer outro campo no body é ignorado) garantida na validação do controller, não na URL. Isso preserva o critério "zero mudança de código além da `BASE_URL`" nos dois front-ends.
+
+**`PATCH /pedidos/:id` — aceite/recusa e fluxo de status (I15, `docs/plan/i15-aceite-recusa-pedido/`).** Body `{ status, motivo? }` (outros campos ignorados). Só as transições de `TRANSICOES` (`src/modules/pedidos/pedidoStatus.ts`, lógica pura com `podeTransicionar`/`mensagemTransicaoInvalida`/`validarAtualizacaoStatus`): `pendente → aceito | recusado`, `aceito → em_andamento`, `em_andamento → concluido`; `recusado` e `concluido` são finais. Erros no formato `{ error, codigo }`: `400 DADOS_INVALIDOS` (status inexistente; `motivo` fora de `recusado`, não-texto ou com mais de 200 caracteres após `trim`), `404 PEDIDO_NAO_ENCONTRADO` (inexistente ou de outra empresa — a empresa vem do token), `409 TRANSICAO_INVALIDA` (ex.: "Não é possível mudar de recusado para aceito."; mesmo status → "O pedido já está aceito."). No sucesso grava `statusAlteradoEm = agora` e `motivoRecusa` (só em `recusado`; motivo vazio vira `null`) e devolve o pedido no formato do `GET`. Concorrência: o `updateMany` filtra também pelo status lido, então dois cliques simultâneos ("Aceitar" e "Recusar") não passam os dois — o segundo recebe `409`. `GET /pedidos` e o `PATCH` expõem `statusAlteradoEm` e `motivoRecusa` (consumidos pelo I18). Migration `20261017150000_aceite_recusa_pedido` (só `ADD VALUE` + colunas; pedidos existentes ficam com `statusAlteradoEm = null`). Seed/demo: exemplos `aceito` e `recusado` (com motivo); pedido de exemplo fora de `pendente` ganha `statusAlteradoEm = horario`.
 
 As 3 telas `Serviços`/`Disponibilidade`/`Veículos` do admin-front usam este backend real desde `migrar-servicos-disponibilidade-veiculos-backend` (ver `admin-front.specs.md` seção 8) — o `json-server` próprio delas continua existindo só como fallback manual, mesmo padrão já adotado pra `/pedidos`. `POST /pedidos` existe desde o I13 (app do cliente). Autenticação: ver seção 5.2.
 

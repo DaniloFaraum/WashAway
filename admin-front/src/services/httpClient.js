@@ -42,6 +42,19 @@ export async function fetchComToken(url, options = {}) {
 }
 
 /**
+ * @param {Response} response
+ * @returns {Promise<string | null>}
+ */
+async function lerMensagemDeErro(response) {
+  try {
+    const corpo = await response.json()
+    return typeof corpo?.error === 'string' ? corpo.error : null
+  } catch {
+    return null
+  }
+}
+
+/**
  * @param {string} baseUrl
  * @returns {{ request: (path: string, options?: RequestInit) => Promise<any> }}
  */
@@ -49,7 +62,12 @@ export function createHttpClient(baseUrl) {
   async function request(path, options) {
     const response = await fetchComToken(`${baseUrl}${path}`, options)
     if (!response.ok) {
-      throw new Error(`Falha na requisição ${path}: ${response.status}`)
+      // A mensagem continua a mesma; `status` e `mensagemBackend` (o `error` do
+      // corpo JSON, quando houver) vão junto para quem quiser mostrar ao usuário (I15).
+      const erro = new Error(`Falha na requisição ${path}: ${response.status}`)
+      erro.status = response.status
+      erro.mensagemBackend = await lerMensagemDeErro(response)
+      throw erro
     }
     return response.json()
   }

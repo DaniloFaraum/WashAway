@@ -23,7 +23,9 @@
  * @property {number | null} precoTotal
  * @property {number | null} duracaoMinutos
  * @property {string} horario
- * @property {'pendente' | 'em_andamento' | 'concluido'} status
+ * @property {'pendente' | 'aceito' | 'recusado' | 'em_andamento' | 'concluido'} status
+ * @property {string | null} statusAlteradoEm Última mudança de status (I15); `null` se nunca mudou.
+ * @property {string | null} motivoRecusa Só em `recusado` (I15).
  * @property {string[]} fotos
  */
 
@@ -33,6 +35,15 @@
  */
 export function formatarHorario(horario) {
   return new Date(horario).toLocaleString('pt-BR')
+}
+
+/**
+ * "17/10/2026 14:05" (sem segundos) — usado no "Alterado em" (I15).
+ * @param {string} dataIso
+ * @returns {string}
+ */
+export function formatarDataHora(dataIso) {
+  return new Date(dataIso).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })
 }
 
 /**
@@ -56,8 +67,42 @@ export function descreverVeiculo(veiculo) {
 
 export const PEDIDO_STATUS = {
   pendente: { label: 'Pendente', color: 'warning' },
+  aceito: { label: 'Aceito', color: 'primary' },
+  recusado: { label: 'Recusado', color: 'error' },
   em_andamento: { label: 'Em andamento', color: 'info' },
   concluido: { label: 'Concluído', color: 'success' },
+}
+
+/**
+ * Próximas ações a partir de cada status (I15) — o mesmo fluxo do backend
+ * (`pedidoStatus.ts`), só para decidir quais botões mostrar. Quem valida é o
+ * backend (transição não permitida → 409).
+ * @type {Record<Pedido['status'], { status: Pedido['status'], label: string }[]>}
+ */
+export const PROXIMOS_STATUS = {
+  pendente: [
+    { status: 'aceito', label: 'Aceitar' },
+    { status: 'recusado', label: 'Recusar' },
+  ],
+  aceito: [{ status: 'em_andamento', label: 'Iniciar atendimento' }],
+  em_andamento: [{ status: 'concluido', label: 'Concluir' }],
+  recusado: [],
+  concluido: [],
+}
+
+export const MOTIVO_RECUSA_MAX = 200
+
+/**
+ * Pendentes primeiro (mais próximos do horário no topo); os demais na ordem
+ * recebida do backend (mais recentes primeiro).
+ * @param {Pedido[]} pedidos
+ * @returns {{ pendentes: Pedido[], demais: Pedido[] }}
+ */
+export function separarPendentes(pedidos) {
+  const pendentes = pedidos
+    .filter((pedido) => pedido.status === 'pendente')
+    .sort((a, b) => new Date(a.horario).getTime() - new Date(b.horario).getTime())
+  return { pendentes, demais: pedidos.filter((pedido) => pedido.status !== 'pendente') }
 }
 
 function numeroOuNull(valor) {
@@ -94,6 +139,8 @@ export function normalizePedido(raw) {
     duracaoMinutos: numeroOuNull(raw.duracaoMinutos),
     horario: raw.horario ?? '',
     status: raw.status ?? 'pendente',
+    statusAlteradoEm: raw.statusAlteradoEm ?? null,
+    motivoRecusa: raw.motivoRecusa ? String(raw.motivoRecusa) : null,
     fotos: raw.fotos ?? [],
   }
 }
