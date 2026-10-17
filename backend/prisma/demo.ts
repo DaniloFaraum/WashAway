@@ -301,6 +301,26 @@ const CLIENTES_DEMO: ClienteExemplo[] = [
   },
 ]
 
+// Pedidos da Mariana para a aba "Meus pedidos" do app (I18): um de cada status,
+// no passado e no futuro, no Lava Jato Vila Madalena. Criados só se ainda não
+// existirem (mesmo cliente + lava-rápido + horário) — nada é apagado.
+type PedidoMeusPedidosDemo = PedidoDemo & { statusAlteradoEm?: string }
+const CNPJ_MEUS_PEDIDOS_DEMO = '45123987000110'
+const PEDIDOS_MEUS_PEDIDOS_DEMO: PedidoMeusPedidosDemo[] = [
+  { placa: 'RIO2A18', servicos: ['Lavagem completa'], horario: '2026-11-10T10:00:00-03:00', status: 'pendente' },
+  { placa: 'RIO2A18', servicos: ['Completa + cera'], horario: '2026-11-05T09:00:00-03:00', status: 'aceito', statusAlteradoEm: '2026-10-16T18:00:00-03:00' },
+  {
+    placa: 'FGH4521',
+    servicos: ['Polimento técnico'],
+    horario: '2026-11-06T14:00:00-03:00',
+    status: 'recusado',
+    motivoRecusa: 'Equipamento de polimento em manutenção nessa semana.',
+    statusAlteradoEm: '2026-10-16T19:30:00-03:00',
+  },
+  { placa: 'FGH4521', servicos: ['Higienização interna'], horario: '2026-10-14T15:00:00-03:00', status: 'recusado', statusAlteradoEm: '2026-10-13T11:00:00-03:00' },
+  { placa: 'RIO2A18', servicos: ['Lavagem express'], horario: '2026-10-10T08:30:00-03:00', status: 'concluido' },
+]
+
 function fotos(placa: string, quantidade = 0) {
   return Array.from({ length: quantidade }, (_, i) => `https://placehold.co/400x300?text=${placa}+foto+${i + 1}`)
 }
@@ -400,6 +420,33 @@ async function main() {
 
     criadas += 1
     console.log(`+ ${empresa.name} (CNPJ ${empresa.cnpj}): ${empresa.combos.length} serviços, ${empresa.pedidos.length} pedidos`)
+  }
+
+  const lavaJatoMeusPedidos = await prisma.lavaRapido.findUnique({ where: { cnpj: CNPJ_MEUS_PEDIDOS_DEMO } })
+  if (lavaJatoMeusPedidos) {
+    let novos = 0
+    for (const pedido of PEDIDOS_MEUS_PEDIDOS_DEMO) {
+      const dono = donoDaPlaca.get(pedido.placa)
+      if (!dono) throw new Error(`Placa ${pedido.placa} não é de nenhum cliente de CLIENTES_DEMO`)
+      const horario = new Date(pedido.horario)
+      const existe = await prisma.pedido.findFirst({
+        where: { clienteId: dono.clienteId, lavaRapidoId: lavaJatoMeusPedidos.id, horario },
+        select: { id: true },
+      })
+      if (existe) continue
+      await criarPedidoExemplo(prisma, {
+        lavaRapidoId: lavaJatoMeusPedidos.id,
+        clienteId: dono.clienteId,
+        veiculoId: dono.veiculoId,
+        servicos: pedido.servicos,
+        horario,
+        status: pedido.status,
+        motivoRecusa: pedido.motivoRecusa,
+        statusAlteradoEm: pedido.statusAlteradoEm ? new Date(pedido.statusAlteradoEm) : undefined,
+      })
+      novos += 1
+    }
+    if (novos > 0) console.log(`+ ${novos} pedido(s) de "Meus pedidos" para mariana@exemplo.com`)
   }
 
   const contrato = await prisma.contrato.findFirst({ where: { vigente: true } })

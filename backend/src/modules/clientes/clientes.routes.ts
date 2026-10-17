@@ -1,6 +1,7 @@
 import { Router } from 'express'
 import { asyncHandler } from '../../middlewares/asyncHandler.js'
 import { autenticar } from '../../middlewares/autenticar.js'
+import { notificacoesClienteRouter, pedidosClienteRouter } from '../pedidos-cliente/pedidosCliente.routes.js'
 import { veiculosClienteRouter } from '../veiculos-cliente/veiculosCliente.routes.js'
 import { cadastro, login, me } from './clientes.controller.js'
 
@@ -16,3 +17,5 @@ export const clientesRouter = Router()
 
 clientesRouter.get('/me', autenticar('cliente'), asyncHandler(me))
 clientesRouter.use('/me/veiculos', veiculosClienteRouter)
+clientesRouter.use('/me/pedidos', pedidosClienteRouter)
+clientesRouter.use('/me/notificacoes', notificacoesClienteRouter)

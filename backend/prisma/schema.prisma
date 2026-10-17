@@ -70,6 +70,8 @@ model Pedido {
   // recusa (opcional, até 200 caracteres, só em `recusado`).
   statusAlteradoEm DateTime?
   motivoRecusa     String?
+  // I18: quando o cliente viu a recusa no app (null = ainda não viu; só conta em `recusado`).
+  recusaVistaEm    DateTime?
   servicos       PedidoServico[]
 
   @@index([lavaRapidoId, horario])

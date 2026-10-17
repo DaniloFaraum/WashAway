@@ -17,6 +17,8 @@ export type PedidoExemplo = {
   fotos?: string[]
   /** Só em `recusado` (I15). */
   motivoRecusa?: string
+  /** Data da mudança de status (I15); padrão: o próprio `horario` (fora de `pendente`). */
+  statusAlteradoEm?: Date
 }
 
 export async function criarPedidoExemplo(prisma: PrismaClient, pedido: PedidoExemplo) {
@@ -41,7 +43,7 @@ export async function criarPedidoExemplo(prisma: PrismaClient, pedido: PedidoExe
       horario: pedido.horario,
       status: pedido.status,
       // I15: pedido de exemplo fora de `pendente` já "mudou de status" — no horário do pedido.
-      statusAlteradoEm: pedido.status === 'pendente' ? null : pedido.horario,
+      statusAlteradoEm: pedido.status === 'pendente' ? null : (pedido.statusAlteradoEm ?? pedido.horario),
       motivoRecusa: pedido.status === 'recusado' ? (pedido.motivoRecusa ?? null) : null,
       fotos: pedido.fotos ?? [],
       precoTotal: itens.reduce((total, item) => total + item.preco, 0),

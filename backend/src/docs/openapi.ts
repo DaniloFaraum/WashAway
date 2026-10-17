@@ -392,6 +392,38 @@ const erroAutenticacaoInterna = {
   403: { description: 'Token de outro tipo (lava-rápido, cliente) ou interno sem a permissão `admin`.', content: { 'application/json': { schema: { $ref: '#/components/schemas/Erro' } } } },
 }
 
+// I18: pedido como o cliente vê em /clientes/me/pedidos (sem fotos/dados do painel).
+const pedidoClienteSchema = {
+  type: 'object',
+  properties: {
+    id: { type: 'string' },
+    status: { type: 'string', enum: ['pendente', 'aceito', 'recusado', 'em_andamento', 'concluido'] },
+    horario: { type: 'string', format: 'date-time' },
+    precoTotal: { type: 'number' },
+    duracaoMinutos: { type: 'integer' },
+    criadoEm: { type: 'string', format: 'date-time' },
+    statusAlteradoEm: { type: 'string', format: 'date-time', nullable: true },
+    motivoRecusa: { type: 'string', nullable: true },
+    recusaVistaEm: { type: 'string', format: 'date-time', nullable: true, description: 'Quando o cliente viu a recusa (null = ainda não viu).' },
+    quando: { type: 'string', enum: ['proximo', 'anterior'], description: '`proximo` se o horário não passou e o pedido não foi recusado nem concluído.' },
+    lavaRapido: {
+      type: 'object',
+      properties: { id: { type: 'string' }, nome: { type: 'string' }, endereco: { type: 'string', nullable: true } },
+    },
+    veiculo: {
+      type: 'object',
+      properties: { id: { type: 'string' }, marca: { type: 'string', nullable: true }, modelo: { type: 'string' }, cor: { type: 'string' }, placa: { type: 'string' } },
+    },
+    servicos: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: { id: { type: 'string' }, servicoId: { type: 'string', nullable: true }, nome: { type: 'string' }, preco: { type: 'number' }, duracaoMinutos: { type: 'integer' } },
+      },
+    },
+  },
+}
+
 export const openApiDocument = {
   openapi: '3.0.3',
   info: {
@@ -410,6 +442,7 @@ export const openApiDocument = {
       NovoPedido: novoPedidoSchema,
       ErroPedido: erroPedidoSchema,
       ErroStatusPedido: erroStatusPedidoSchema,
+      PedidoCliente: pedidoClienteSchema,
       Servico: servicoSchema,
       ItemServico: itemServicoSchema,
       Intercorrencia: intercorrenciaSchema,
@@ -540,6 +573,58 @@ export const openApiDocument = {
           204: { description: 'Removido.' },
           404: { description: 'Veículo inexistente ou de outro cliente (nunca 403).', content: { 'application/json': { schema: { $ref: '#/components/schemas/Erro' } } } },
           409: { description: 'Veículo com pedidos não pode ser removido (I13).', content: { 'application/json': { schema: { $ref: '#/components/schemas/Erro' } } } },
+          ...erroAutenticacao,
+        },
+      },
+    },
+    '/clientes/me/pedidos': {
+      get: {
+        tags: ['clientes'],
+        summary: 'Pedidos do cliente logado (I18)',
+        security: [{ bearerAuth: [] }],
+        responses: {
+          200: { description: 'Só os pedidos do cliente do token, do horário mais cedo para o mais tarde.', content: { 'application/json': { schema: { type: 'array', items: { $ref: '#/components/schemas/PedidoCliente' } } } } },
+          ...erroAutenticacao,
+        },
+      },
+    },
+    '/clientes/me/pedidos/{id}': {
+      get: {
+        tags: ['clientes'],
+        summary: 'Detalhe de um pedido do cliente logado (I18)',
+        security: [{ bearerAuth: [] }],
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+        responses: {
+          200: { description: 'Pedido do cliente.', content: { 'application/json': { schema: { $ref: '#/components/schemas/PedidoCliente' } } } },
+          404: { description: 'Pedido inexistente ou de outro cliente (nunca 403).', content: { 'application/json': { schema: { $ref: '#/components/schemas/Erro' } } } },
+          ...erroAutenticacao,
+        },
+      },
+    },
+    '/clientes/me/pedidos/{id}/visto': {
+      post: {
+        tags: ['clientes'],
+        summary: 'Marca a recusa do pedido como vista (I18)',
+        description: 'Preenche `recusaVistaEm` se o pedido estiver recusado e ainda não visto; nos outros casos não muda nada (idempotente).',
+        security: [{ bearerAuth: [] }],
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+        responses: {
+          204: { description: 'Marcado (ou já estava).' },
+          404: { description: 'Pedido inexistente ou de outro cliente (nunca 403).', content: { 'application/json': { schema: { $ref: '#/components/schemas/Erro' } } } },
+          ...erroAutenticacao,
+        },
+      },
+    },
+    '/clientes/me/notificacoes': {
+      get: {
+        tags: ['clientes'],
+        summary: 'Contadores do app: recusas ainda não vistas (I18)',
+        security: [{ bearerAuth: [] }],
+        responses: {
+          200: {
+            description: 'Quantidade de pedidos do cliente recusados e ainda não vistos.',
+            content: { 'application/json': { schema: { type: 'object', properties: { recusasNaoVistas: { type: 'integer' } } } } },
+          },
           ...erroAutenticacao,
         },
       },
