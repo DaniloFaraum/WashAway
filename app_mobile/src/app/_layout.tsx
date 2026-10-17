@@ -95,6 +95,7 @@ function RootNavigator() {
         <Stack.Screen name="pedido/data-hora" />
         <Stack.Screen name="pedido/resumo" />
         <Stack.Screen name="pedido/enviado" options={{ gestureEnabled: false }} />
+        <Stack.Screen name="pedidos/[id]" />
       </Stack>
     </ThemeProvider>
   );

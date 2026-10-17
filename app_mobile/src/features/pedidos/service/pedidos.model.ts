@@ -1,6 +1,7 @@
 // Pedido como o backend devolve (I13). Ver backend: POST /pedidos.
 
-export type StatusPedido = 'pendente' | 'em_andamento' | 'concluido'
+// I15: `aceito` e `recusado` (a resposta do lava-rápido).
+export type StatusPedido = 'pendente' | 'aceito' | 'recusado' | 'em_andamento' | 'concluido'
 
 export interface ServicoComprado {
   id: string
@@ -70,5 +71,39 @@ export function normalizePedido(raw: any): Pedido {
       preco: Number(item.preco) || 0,
       duracaoMinutos: Number(item.duracaoMinutos) || 0,
     })),
+  }
+}
+
+// --- Pedidos do cliente (I18): GET /clientes/me/pedidos ---
+
+/** Em qual lista o backend põe o pedido (regra de tempo é do backend: `classificarPedido`). */
+export type QuandoPedido = 'proximo' | 'anterior'
+
+export interface PedidoCliente extends Omit<Pedido, 'lavaRapidoId'> {
+  lavaRapido: { id: string; nome: string; endereco: string | null }
+  quando: QuandoPedido
+  /** ISO da última mudança de status (I15); `null` se nunca mudou. */
+  statusAlteradoEm: string | null
+  motivoRecusa: string | null
+  /** ISO de quando o cliente viu a recusa; `null` = ainda não viu. */
+  recusaVistaEm: string | null
+}
+
+const textoOuNull = (valor: unknown) => (typeof valor === 'string' && valor !== '' ? valor : null)
+
+export function normalizePedidoCliente(raw: any): PedidoCliente {
+  const { lavaRapidoId: _lavaRapidoId, ...base } = normalizePedido(raw)
+  const lavaRapido = raw?.lavaRapido
+  return {
+    ...base,
+    lavaRapido: {
+      id: String(lavaRapido?.id ?? raw?.lavaRapidoId ?? ''),
+      nome: String(lavaRapido?.nome ?? ''),
+      endereco: textoOuNull(lavaRapido?.endereco),
+    },
+    quando: raw?.quando === 'proximo' ? 'proximo' : 'anterior',
+    statusAlteradoEm: textoOuNull(raw?.statusAlteradoEm),
+    motivoRecusa: textoOuNull(raw?.motivoRecusa),
+    recusaVistaEm: textoOuNull(raw?.recusaVistaEm),
   }
 }

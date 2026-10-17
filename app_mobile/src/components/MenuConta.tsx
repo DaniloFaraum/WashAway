@@ -1,13 +1,20 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { useRouter } from 'expo-router';
-import { useState } from 'react';
+import { useFocusEffect, useRouter } from 'expo-router';
+import { useCallback, useState } from 'react';
 import { Modal, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { colors } from '@/constants/colors';
 import { useSessaoCliente } from '@/features/auth/SessaoClienteProvider';
+import {
+  atualizarRecusasNaoVistas,
+  limparRecusasNaoVistas,
+  useRecusasNaoVistas,
+} from '@/features/pedidos/recusasNaoVistas';
 
 // Menu de conta do cabeçalho da Home (I2): botão circular com a inicial do
 // cliente → "Meus dados", "Meus veículos" (I3) e "Sair".
+// I18: badge com as recusas de pedido ainda não vistas, buscado ao montar
+// (abrir o app) e sempre que a tela que contém o menu (Home) ganha foco.
 
 type ItemMenu = {
   rotulo: string;
@@ -20,6 +27,13 @@ export function MenuConta() {
   const router = useRouter();
   const { cliente, sair } = useSessaoCliente();
   const [aberto, setAberto] = useState(false);
+  const recusasNaoVistas = useRecusasNaoVistas();
+
+  useFocusEffect(
+    useCallback(() => {
+      void atualizarRecusasNaoVistas();
+    }, []),
+  );
 
   const inicial = cliente?.nome.trim().charAt(0).toUpperCase() || '?';
 
@@ -31,7 +45,15 @@ export function MenuConta() {
   const itens: ItemMenu[] = [
     { rotulo: 'Meus dados', icone: 'person-outline', aoTocar: () => router.push('/meus-dados') },
     { rotulo: 'Meus veículos', icone: 'car-outline', aoTocar: () => router.push('/veiculos') },
-    { rotulo: 'Sair', icone: 'log-out-outline', aoTocar: () => void sair(), destrutivo: true },
+    {
+      rotulo: 'Sair',
+      icone: 'log-out-outline',
+      aoTocar: () => {
+        limparRecusasNaoVistas();
+        void sair();
+      },
+      destrutivo: true,
+    },
   ];
 
   return (
@@ -39,9 +61,18 @@ export function MenuConta() {
       <Pressable
         style={styles.botao}
         accessibilityRole="button"
-        accessibilityLabel="Menu da conta"
+        accessibilityLabel={
+          recusasNaoVistas > 0
+            ? `Menu da conta, ${recusasNaoVistas} ${recusasNaoVistas === 1 ? 'pedido recusado' : 'pedidos recusados'} não visto${recusasNaoVistas === 1 ? '' : 's'}`
+            : 'Menu da conta'
+        }
         onPress={() => setAberto(true)}>
         <Text style={styles.inicial}>{inicial}</Text>
+        {recusasNaoVistas > 0 && (
+          <View style={styles.badge} pointerEvents="none">
+            <Text style={styles.badgeTexto}>{recusasNaoVistas > 99 ? '99+' : recusasNaoVistas}</Text>
+          </View>
+        )}
       </Pressable>
 
       <Modal visible={aberto} transparent animationType="fade" onRequestClose={() => setAberto(false)}>
@@ -94,6 +125,25 @@ const styles = StyleSheet.create({
   inicial: {
     color: colors.primary,
     fontSize: 16,
+    fontWeight: '700',
+  },
+  badge: {
+    position: 'absolute',
+    top: -6,
+    right: -8,
+    minWidth: 20,
+    height: 20,
+    borderRadius: 10,
+    paddingHorizontal: 5,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.danger,
+    borderWidth: 1.5,
+    borderColor: colors.white,
+  },
+  badgeTexto: {
+    color: colors.white,
+    fontSize: 11,
     fontWeight: '700',
   },
   fundo: {

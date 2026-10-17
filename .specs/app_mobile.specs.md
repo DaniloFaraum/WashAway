@@ -67,7 +67,8 @@ app_mobile/
 │   │   ├── (tabs)/
 │   │   │   ├── _layout.tsx       # renderiza <AppTabs /> (NativeTabs)
 │   │   │   ├── index.tsx         # Home: busca/lista/mapa de lava-rápidos (consome lavaRapidos.service.ts)
-│   │   │   └── explore.tsx       # tab "Explore" — boilerplate do template, não é produto (ver seção 6)
+│   │   │   └── pedidos.tsx       # I18: aba "Meus pedidos" (Próximos / Anteriores / Recusados), no lugar do Explore do template
+│   │   ├── pedidos/[id].tsx      # I18: detalhe do pedido do cliente (confirmado / recusado com motivo e atalhos)
 │   │   ├── servicos.tsx          # serviços do lava-rápido escolhido (backend real — migrado); categorias como filtro; banner de intercorrência
 │   │   ├── disponibilidade.tsx   # lista as intercorrências futuras do lava-rápido (novo)
 │   │   └── servicos/[servicoId].tsx   # detalhe real do serviço (combo): itens, preço e duração; "Selecionar" marca no carrinho da lista (I21 parte 1)
@@ -98,7 +99,9 @@ app_mobile/
 │   │   │   ├── useServicos.ts               # hook + filtrarServicosAtivos() (só ativo: true)
 │   │   │   └── servicosSelecionados.ts      # carrinho em memória compartilhado entre servicos.tsx e servicos/[servicoId].tsx (um lava-rápido por vez)
 │   │   ├── pedidos/                       # I13: fluxo do pedido
-│   │   │   ├── service/{pedidos.routes,model,service}.ts   # criarPedido(payload), montarPayloadPedido, PedidoRecusadoError
+│   │   │   ├── service/{pedidos.routes,model,service}.ts   # criarPedido(payload), montarPayloadPedido, PedidoRecusadoError; I18: listarMeusPedidos, buscarMeuPedido, marcarRecusaVista, contarRecusasNaoVistas, normalizePedidoCliente
+│   │   │   ├── usePedidosCliente.ts, separarPedidos.ts, statusPedido.ts, SeloStatus.tsx   # I18: "Meus pedidos"
+│   │   │   ├── recusasNaoVistas.ts          # I18: store do contador de recusas não vistas (badge do MenuConta)
 │   │   │   ├── useNovoPedido.ts             # estado do fluxo (lava-rápido, serviços, veículo, horário)
 │   │   │   ├── dataHora.ts                  # datas/horários no fuso do negócio (offset -03:00); reaproveitado pelo I9
 │   │   │   └── CabecalhoDoPasso.tsx, pedidoStyles.ts
@@ -122,11 +125,11 @@ app_mobile/
 │   │   ├── CampoFormulario.tsx   # campo com rótulo + erro (login/cadastro)
 │   │   ├── CarWashCard.tsx       # card de lava-rápido (usado na Home; `image` agora é URL, não `require()` local — ver seção 4.1)
 │   │   ├── Header.tsx, VehicleBar.tsx   # migrados de .js no I21 parte 1 (fontes/cores corrigidas); hoje sem uso — guardados para o fluxo do I3/I13 (VehicleBar ainda mostra um carro fixo)
-│   │   ├── themed-text.tsx, themed-view.tsx, ui/collapsible.tsx, external-link.tsx, web-badge.tsx  # componentes do template starter (usados só por explore.tsx)
+│   │   ├── themed-text.tsx, themed-view.tsx, ui/collapsible.tsx, external-link.tsx, web-badge.tsx  # componentes do template starter (desde o I18, `ui/collapsible` e `web-badge` ficaram sem uso; `themed-*`/`external-link` só no `app-tabs.web.tsx`) — saem no I21 parte 2
 │   │   └── animated-icon.tsx / .web.tsx / .module.css   # splash screen animada
 │   ├── constants/
 │   │   ├── colors.ts             # paleta usada pelas telas do produto (Home/Servicos/detalhe do serviço/CarWashCard/Header/VehicleBar); `border` adicionada no I21
-│   │   └── theme.ts              # `Colors.light/dark` + `Spacing` — usado só pelo template starter (explore.tsx, themed-*, use-theme) — ver seção 6 (dois sistemas de cor não integrados)
+│   │   └── theme.ts              # `Colors.light/dark` + `Spacing` — usado só pelo template starter (themed-*, use-theme, app-tabs; o explore.tsx saiu no I18) — ver seção 6 (dois sistemas de cor não integrados)
 │   ├── hooks/
 │   │   ├── use-color-scheme.ts / .web.ts
 │   │   └── use-theme.ts          # usa `constants/theme.ts`, não `constants/colors.ts`
@@ -183,7 +186,10 @@ app_mobile/
 - `/veiculos` — "Meus veículos" (I3, `GET /clientes/me/veiculos`), aberta pelo menu de conta: cada item mostra marca + modelo, cor e placa formatada (antiga com hífen, Mercosul como está), com "Editar" e "Remover" (confirmação com `Alert.alert` no celular; `confirm` do navegador no Expo web, onde o `Alert` com botões não funciona). Sem veículo: "Você ainda não cadastrou nenhum veículo" + "Cadastrar meu primeiro veículo". Recarrega ao voltar do formulário (`useFocusEffect`).
 - `/veiculos/form` — criar/editar (com `id` = edição). Valida antes de enviar (`validarVeiculo`); erro abaixo de cada campo; `409` aparece na placa como "Você já cadastrou esse veículo". Param `voltarPara` (só caminho interno, começando com `/`): para onde ir depois de salvar; sem ele, volta para a tela anterior (o atalho "Cadastrar veículo" do pedido, I13, usa essa volta — `router.back()` — e não o `voltarPara`).
 - `/pedido/veiculo`, `/pedido/data-hora`, `/pedido/resumo`, `/pedido/enviado` — fluxo do pedido (I13, seção 4.1). Abertas sem estado do fluxo (ex.: refresh no web) mostram "Escolha um lava-rápido e os serviços para começar o pedido".
-- `/(tabs)` → `AppTabs` (NativeTabs) com 2 abas: **Home** (`index.tsx`) e **Explore** (`explore.tsx`, boilerplate — seção 6).
+- `/(tabs)` → `AppTabs` (NativeTabs) com 2 abas: **Home** (`index.tsx`) e **Meus pedidos** (`pedidos.tsx`, I18 — no lugar do Explore do template; ícone `explore.png` reaproveitado provisoriamente).
+- `/pedidos` (aba) — "Meus pedidos" (I18, `GET /clientes/me/pedidos`): `SectionList` com "Próximos" (horário crescente), "Anteriores" (decrescente) e "Recusados" (recusa mais recente primeiro). A regra próximo/anterior vem do backend (`quando`); `separarPedidos` só tira os recusados para a lista própria. Cada item: lava-rápido, data/hora, selo de status (`statusPedido.ts`) e total; recusado não visto ganha borda vermelha e "Novo". Busca no backend ao focar e no pull-to-refresh (`RefreshControl`). Sem pedidos: "Você ainda não tem pedidos" + "Encontrar um lava-rápido" (→ Home).
+- `/pedidos/[id]` — detalhe (I18, `GET /clientes/me/pedidos/:id`, recarrega ao focar): lava-rápido, endereço, data/hora, veículo, serviços com preço da compra, total e status. `aceito`: card "Agendamento confirmado". `recusado`: card "Pedido recusado" com o motivo (ou "não informou o motivo") e os botões "Outro horário" (`/servicos` do mesmo lava-rápido) e "Outro lava-rápido" (Home); abrir um recusado chama `POST .../visto` e atualiza o badge.
+- **Badge de recusas (I18):** o `MenuConta` mostra um contador vermelho com as recusas não vistas (`GET /clientes/me/notificacoes`), buscado ao montar e quando a Home ganha foco (`useFocusEffect` no próprio menu), e também a cada busca de "Meus pedidos". Sem push nem tempo real. "Sair" zera o contador.
 - `/servicos` — recebe `id`/`nome` (e `horario`, da busca por horário do I9) via `useLocalSearchParams` (passados pelo `CarWashCard` da Home ou pelo `Marker` do mapa). Busca os serviços reais do lava-rápido (`GET /servicos?lavaRapidoId=<id>`, só `ativo: true`); categorias filtram a lista; mostra banner de intercorrência relevante com link pra `/disponibilidade`.
 - `/disponibilidade` — recebe `id`/`nome`; lista as intercorrências futuras do lava-rápido (`GET /intercorrencias?lavaRapidoId=<id>`), ordenadas por data.
 - `/servicos/[servicoId]` — recebe `servicoId` + `id`/`nome` do lava-rápido; aberto ao tocar no texto do card em `/servicos`. Mostra nome, categorias, itens incluídos (nome, categoria, duração), preço e duração total. "Selecionar" marca o serviço no carrinho compartilhado (`features/servicos/servicosSelecionados.ts`) e volta para a lista (I21 parte 1; resolve o achado #9).
@@ -201,7 +207,7 @@ Achados de leitura direta do código (não são convenções combinadas — são
 | 5 | `src/constants/colors.ts` vs. `src/constants/theme.ts` | Dois sistemas de cor paralelos que não se falam: `colors.ts` (paleta simples, usada por Home/Serviços/detalhe do serviço/CarWashCard/Header/VehicleBar — as telas "do produto") e `theme.ts` (`Colors.light`/`Colors.dark` + `Spacing`, usado só pelo template starter do Expo: `explore.tsx`, `themed-text`/`themed-view`, `use-theme`, `app-tabs.tsx`). Não há dark mode nas telas do produto porque elas usam `colors.ts` (fixo), não `theme.ts` (com light/dark). |
 | 6 | ~~`VehicleBar.js`, `FooterCart.js`~~ | ~~Chaves de cor inexistentes (`textGray`, `textDark`, `border`)~~ — **corrigido** no I21 parte 1 (`neutralGray`, `black`; `border: '#E5E7EB'` criada em `constants/colors.ts`). |
 | 7 | ~~`Header.js`, `VehicleBar.js`, `FooterCart.js`~~ | ~~Nomes de fonte com hífen (`'Poppins-Bold'` etc.) que não batem com os carregados~~ — **corrigido** no I21 parte 1 (`Poppins_700Bold`, `Poppins_500Medium`, `AlbertSans_400Regular`). |
-| 8 | `src/app/(tabs)/explore.tsx` | É o conteúdo padrão do template `create-expo-app` (tutorial sobre file-based routing, imagens, dark mode, animações) — não tem nenhuma relação com o produto WashAway. Nunca foi customizado nem removido. Pendente para o I18 / I21 parte 2. |
+| 8 | ~~`src/app/(tabs)/explore.tsx`~~ | **Resolvido no I18**: a aba Explore (boilerplate do template) virou "Meus pedidos" (`(tabs)/pedidos.tsx`). Os restos do template (`ui/collapsible` e `web-badge` sem uso; `themed-*`, `external-link` e `theme.ts` só na tab bar) saem no I21 parte 2. |
 | 9 | ~~Fluxo Serviços → Detalhe~~ | ~~`detail.tsx` sem parâmetro, serviço hardcoded~~ — **resolvido** no I21 parte 1: `servicos/[servicoId].tsx` recebe o id e usa dados reais. |
 | 10 | ~~`detail.tsx`~~ | ~~Mock local sem chamada de rede~~ — **resolvido**: `detail.tsx` e as páginas `lavagem-*`/`higienizacao-interna` foram removidos no I21 parte 1. |
 | 11 | ~~Tipagem mista~~ | ~~`Header.js`, `VehicleBar.js`, `FooterCart.js`, `FilterModal.js` eram `.js`~~ — `Header`/`VehicleBar` migrados para `.tsx` e os outros dois removidos no I21 parte 1. |
@@ -218,7 +224,8 @@ Achados de leitura direta do código (não são convenções combinadas — são
 | `/veiculos` | `veiculos/index.tsx` | Funcional (backend real) | "Meus veículos" (I3): lista, adicionar, editar, remover. |
 | `/veiculos/form` | `veiculos/form.tsx` | Funcional (backend real) | Criar/editar veículo (I3). |
 | `/(tabs)` → Home | `index.tsx` | Funcional (backend real) | Lista de `GET /lavaRapidos` com "a partir de" calculado (ou "Sem serviços disponíveis"); busca por texto, filtros (aberto/avaliação/distância), busca por horário "Quando?" (I9), toggle lista/mapa, localização via GPS ou endereço digitado; menu de conta (Meus dados / Meus veículos / Sair). |
-| `/(tabs)` → Explore | `explore.tsx` | Não é produto | Boilerplate do template Expo — achado #8. |
+| `/(tabs)` → Meus pedidos | `pedidos.tsx` | Funcional (backend real) | "Meus pedidos" (I18): Próximos / Anteriores / Recusados, pull-to-refresh, estado vazio com atalho para a Home. |
+| `/pedidos/[id]` | `pedidos/[id].tsx` | Funcional (backend real) | Detalhe do pedido (I18): confirmado / recusado com motivo, "Outro horário" e "Outro lava-rápido". |
 | `/servicos` | `servicos.tsx` | Funcional (backend real) | Usa o `id` recebido; card mostra itens incluídos, preço e duração; busca + categorias + modal de preço/tempo filtram; carrinho começa vazio e soma preço e duração; "Avançar" (desabilitado sem serviço) abre o fluxo do pedido (I13); banner de intercorrência; horário de funcionamento de hoje no cabeçalho (toque expande a semana). |
 | `/disponibilidade` | `disponibilidade.tsx` | Funcional (backend real) | Lista intercorrências futuras do lava-rápido. |
 | `/pedido/*` | `pedido/{veiculo,data-hora,resumo,enviado}.tsx` | Funcional (backend real) | Fluxo do pedido (I13): Veículo → Data e hora → Resumo → enviado (`POST /pedidos`). |

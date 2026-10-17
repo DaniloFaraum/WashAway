@@ -70,6 +70,7 @@ model Pedido {               # I13: criado pelo cliente do app (POST /pedidos)
   criadoEm       DateTime     @default(now())
   statusAlteradoEm DateTime?  # I15: última mudança de status (null = nunca mudou)
   motivoRecusa   String?      # I15: só em recusado, até 200 caracteres (validado na API)
+  recusaVistaEm  DateTime?    # I18: quando o cliente viu a recusa no app (null = não viu)
   servicos       PedidoServico[]
 }
 
@@ -242,6 +243,10 @@ Regra de placa (`modules/veiculos-cliente/placa.ts`): `normalizarPlaca` remove h
 | `/clientes/me/veiculos` | `POST` | `autenticar('cliente')` (I3). Body `{ marca?, modelo, cor, placa }`: modelo, cor e placa obrigatórios (trim, até 60 caracteres; marca vazia vira `null`), placa no formato antigo ou Mercosul (normalizada antes de salvar). `400 { error, campos: { marca?, modelo?, cor?, placa? } }`; `409` se o cliente já tiver essa placa (`P2002`); `201` com o veículo. |
 | `/clientes/me/veiculos/:id` | `PUT` | `autenticar('cliente')` (I3). Mesmo body/validação do `POST`. `200` com o veículo; `404` se não existir ou for de outro cliente; `409` se outro veículo do cliente já tiver a placa. |
 | `/clientes/me/veiculos/:id` | `DELETE` | `autenticar('cliente')` (I3). `204`; `404` se não existir ou for de outro cliente; `409` se o veículo já tiver pedido (I13). |
+| `/clientes/me/pedidos` | `GET` | `autenticar('cliente')` (I18). Só os pedidos do cliente do token, por `horario` crescente. Cada um: `status`, `horario`, `precoTotal`, `duracaoMinutos`, `criadoEm`, `statusAlteradoEm`, `motivoRecusa`, `recusaVistaEm`, `lavaRapido { id, nome, endereco }`, `veiculo`, `servicos[] { nome, preco, ... }` e `quando` (`proximo` \| `anterior`, de `classificarPedido`: `proximo` se `horario >= agora` e o status não é `recusado` nem `concluido`). Sem `fotos`. |
+| `/clientes/me/pedidos/:id` | `GET` | `autenticar('cliente')` (I18). Mesmo formato; `404 { error, codigo: 'PEDIDO_NAO_ENCONTRADO' }` se não existir ou for de outro cliente. |
+| `/clientes/me/pedidos/:id/visto` | `POST` | `autenticar('cliente')` (I18). Preenche `recusaVistaEm` se o pedido for `recusado` e ainda não visto (idempotente; outros status não mudam). `204`; `404` se for de outro cliente. O app chama ao abrir o detalhe de um recusado. |
+| `/clientes/me/notificacoes` | `GET` | `autenticar('cliente')` (I18). `{ recusasNaoVistas }`: pedidos do cliente com `status = recusado` e `recusaVistaEm = null` (badge do botão de conta no app). |
 | `/contratos/vigente` | `GET` | Contrato vigente do onboarding (maior `versao` com `vigente: true`); `404` se não houver. |
 | `/onboarding/solicitacoes` | `POST` | Público. Body `{ name, address?, cnpj, email, senha }` (I17). `400` se `name` faltar, `cnpj` não tiver 14 dígitos, `email` faltar/for inválido (mesmo formato do cliente, até 254) ou `senha` tiver menos de 8 caracteres (ou mais de 72 bytes); `409` se o `cnpj` **ou o e-mail** (normalizado) já for de um `LavaRapido`; se já houver uma `aguardando_contrato` com o mesmo `cnpj`: com e-mail e senha (I17), `200` devolvendo a mesma solicitação (retomar, com nome/endereço deste envio) **só se o e-mail e a senha conferem** — senão `409` ("solicitação de cadastro em andamento"), sem trocar as credenciais nem devolver o `id` (o CNPJ é público: sobrescrever deixaria qualquer um trocar a senha da empresa em cadastro); sem senha (anterior ao I17), `200` completando-a com o e-mail e a senha deste envio; com **limite de tentativas** (seção 5.3, só as recusas contam); `503` se não houver contrato vigente; senão `201` com a solicitação (`status: aguardando_contrato`, `email`) + `contrato: { id, versao, titulo, conteudo }`. A senha é gravada **só como hash bcrypt** em `SolicitacaoOnboarding.senhaHash`, que nunca sai na resposta. |
 | `/onboarding/solicitacoes/:id` | `GET` | Status + contrato da solicitação; `404` se não existir. |
@@ -399,6 +404,7 @@ backend/
 │   │   ├── lava-rapidos/senhas.{routes,controller,service}.ts  # i17-senha-gerada: /auth/lava-rapido/*, senha gerada, troca em massa
 │   │   ├── clientes/{clientes.routes,controller,service,validation}.ts  # I1/I2: /auth/cliente/{cadastro,login}, /clientes/me
 │   │   ├── veiculos-cliente/{veiculosCliente.routes,controller,service,validation}.ts + placa.ts  # I3: /clientes/me/veiculos (aninhado no clientesRouter)
+│   │   ├── pedidos-cliente/{pedidosCliente.routes,controller,service}.ts + classificarPedido.ts  # I18: /clientes/me/pedidos e /clientes/me/notificacoes (aninhados no clientesRouter)
 │   │   ├── contratos/{contratos.routes,controller,service}.ts       # "BackEnd Onboard": contrato vigente
 │   │   ├── onboarding/{onboarding.routes,controller,service,validation}.ts  # solicitação → aceite → cria LavaRapido
 │   │   ├── pedidos/{pedidos.routes,controller,service,validation}.ts   # POST (cliente) + GET/PATCH (painel)
@@ -430,6 +436,7 @@ backend/
 │       ├── clientes.test.ts         # I1: cadastro
 │       ├── clientesAuth.test.ts     # I2: login, /clientes/me, token expirado/inválido
 │       ├── veiculosCliente.test.ts  # I3: CRUD /clientes/me/veiculos, placa, 409, 404 de outro cliente, 401
+│       ├── pedidosCliente.test.ts   # I18: isolamento entre clientes, 404 do pedido alheio, 401/403, ordenação, recusas não vistas
 │       ├── autenticar.test.ts       # contrato do middleware (401 × 403, escopo, vários tipos)
 │       ├── authPainel.test.ts       # I17: rotas de gestão sem token/token de cliente/outra empresa; públicas
 │       ├── limiteTentativas.test.ts # I17: 429 nos logins e no cadastro do cliente
@@ -500,7 +507,7 @@ Usuario
 
 - **Autenticação**: token (JWT) do cliente e do lava-rápido e rotas de gestão protegidas existem (seções 5.2 e 5.3). Senha gerada, troca obrigatória, "esqueci minha senha" e o script de troca em massa existem (seção 5.5). Faltam: refresh token/revogação (o token normal emitido antes de uma troca de senha continua valendo até expirar), expiração da `senhaGerada` por tempo, disparo da troca em massa pela interface/por região. Usuários internos e exclusão por solicitação existem (seção 5.4); falta tela interna (hoje só pelo Swagger) e gestão de internos fora do script.
 - **Upload de fotos do veículo**: `Pedido.fotos` continua array de URLs estáticas — sem endpoint de upload nem storage.
-- **Pedido**: vários serviços por pedido e `POST /pedidos` existem desde o I13. O backend já recusa horário fora do funcionamento/intercorrência (I20); falta no app o retorno ao passo de data e hora e o horário do dia no seletor. Faltam aceite/recusa (I15), "Meus pedidos" (I18), cancelamento pelo cliente e capacidade (vários carros no mesmo horário).
+- **Pedido**: vários serviços por pedido e `POST /pedidos` existem desde o I13. O backend já recusa horário fora do funcionamento/intercorrência (I20); falta no app o retorno ao passo de data e hora e o horário do dia no seletor. "Meus pedidos" do cliente existe desde o I18 (`/clientes/me/pedidos`). Faltam cancelamento pelo cliente, notificação push e capacidade (vários carros no mesmo horário).
 - **Excluir `Servico` / editar ou excluir `Intercorrencia`**: fora de escopo — serviço pode ser criado/editado/ativado (`servicos-combos-catalogo`), mas não excluído; intercorrência só cria e "reabre" (`PATCH .../reaberta`, task `isopen-intercorrencia-backend`), não edita/exclui de verdade.
 - **Deploy/hosting em produção**: não definido; só ambiente local via Docker Compose.
 

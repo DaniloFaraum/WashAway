@@ -20,8 +20,9 @@ export default function AppTabs() {
         />
       </NativeTabs.Trigger>
 
-      <NativeTabs.Trigger name="explore">
-        <NativeTabs.Trigger.Label>Explore</NativeTabs.Trigger.Label>
+      {/* I18: "Meus pedidos" no lugar do Explore do template (ícone provisório). */}
+      <NativeTabs.Trigger name="pedidos">
+        <NativeTabs.Trigger.Label>Meus pedidos</NativeTabs.Trigger.Label>
         <NativeTabs.Trigger.Icon
           src={require('@/assets/images/tabIcons/explore.png')}
           renderingMode="template"
