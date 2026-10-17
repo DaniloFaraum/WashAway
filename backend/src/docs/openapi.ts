@@ -376,12 +376,57 @@ const erroAutenticacaoInterna = {
   403: { description: 'Token de outro tipo (lava-rápido, cliente) ou interno sem a permissão `admin`.', content: { 'application/json': { schema: { $ref: '#/components/schemas/Erro' } } } },
 }
 
+// i17-interno-exclusao: usuário interno (equipe WashAway) e exclusão de empresa por solicitação.
+const usuarioInternoSchema = {
+  type: 'object',
+  properties: {
+    id: { type: 'string' },
+    nome: { type: 'string' },
+    email: { type: 'string', format: 'email' },
+    permissoes: { type: 'array', items: { type: 'string' }, example: ['admin'] },
+    criadoEm: { type: 'string', format: 'date-time' },
+  },
+}
+
+const loginInternoSchema = {
+  type: 'object',
+  properties: {
+    token: { type: 'string', description: 'JWT HS256 (tipo interno, com `permissoes`) — clicar em "Authorize" no Swagger e colar o token.' },
+    expiraEm: { type: 'string', format: 'date-time' },
+    interno: { $ref: '#/components/schemas/UsuarioInterno' },
+  },
+}
+
+const solicitacaoExclusaoSchema = {
+  type: 'object',
+  properties: {
+    id: { type: 'string' },
+    lavaRapidoId: { type: 'string', nullable: true, description: 'null depois que a exclusão é aprovada (a empresa não existe mais).' },
+    nome: { type: 'string', description: 'Snapshot do nome da empresa.' },
+    cnpj: { type: 'string', description: 'Snapshot do CNPJ.' },
+    email: { type: 'string', format: 'email', nullable: true, description: 'Snapshot do e-mail (null em empresas anteriores ao I17 — sem e-mail enfileirado).' },
+    motivo: { type: 'string', nullable: true },
+    status: { type: 'string', enum: ['pendente', 'aprovada', 'recusada', 'cancelada'] },
+    criadoEm: { type: 'string', format: 'date-time' },
+    decididoEm: { type: 'string', format: 'date-time', nullable: true, description: 'Quando foi aprovada, recusada ou cancelada.' },
+    decididoPorId: { type: 'string', nullable: true, description: 'Usuário interno que aprovou/recusou.' },
+    observacao: { type: 'string', nullable: true, description: 'Observação do interno ao recusar.' },
+  },
+}
+
+// Rotas internas: autenticar('interno') (401) + autorizar('admin') (403).
+const segurancaInterna = [{ bearerAuth: [] }]
+const erroAutenticacaoInterna = {
+  401: { description: 'Sem token, token inválido/expirado, ou interno que não existe mais.', content: { 'application/json': { schema: { $ref: '#/components/schemas/Erro' } } } },
+  403: { description: 'Token de outro tipo (lava-rápido, cliente) ou interno sem a permissão `admin`.', content: { 'application/json': { schema: { $ref: '#/components/schemas/Erro' } } } },
+}
+
 export const openApiDocument = {
   openapi: '3.0.3',
   info: {
     title: 'WashAway — API',
     version: '1.0.0',
-    description: 'Backend do WashAway (admin-front + app_mobile). Rotas do cliente logado usam `Authorization: Bearer <token>` (JWT, `POST /auth/cliente/login`); rotas de gestão do painel usam o token de lava-rápido (`POST /lavaRapidos/login`), e a empresa vem do token. Leituras do app, login, cadastro e onboarding são públicos — ver WashAway/.specs/backend.specs.md.',
+    description: 'Backend do WashAway (admin-front + app_mobile). Rotas do cliente logado usam `Authorization: Bearer <token>` (JWT, `POST /auth/cliente/login`); rotas de gestão do painel usam o token de lava-rápido (`POST /lavaRapidos/login`), e a empresa vem do token. Rotas internas (`/interno/*`) usam o token de usuário interno (`POST /auth/interno/login`) e exigem a permissão `admin` (401 = autenticação, 403 = permissão). Leituras do app, login, cadastro e onboarding são públicos — ver WashAway/.specs/backend.specs.md.',
   },
   servers: [{ url: 'http://localhost:4000' }],
   components: {
@@ -405,6 +450,9 @@ export const openApiDocument = {
       LoginLavaRapido: loginLavaRapidoSchema,
       VeiculoCliente: veiculoClienteSchema,
       ErroVeiculoCliente: erroVeiculoClienteSchema,
+      UsuarioInterno: usuarioInternoSchema,
+      LoginInterno: loginInternoSchema,
+      SolicitacaoExclusao: solicitacaoExclusaoSchema,
       UsuarioInterno: usuarioInternoSchema,
       LoginInterno: loginInternoSchema,
       SolicitacaoExclusao: solicitacaoExclusaoSchema,
@@ -559,6 +607,113 @@ export const openApiDocument = {
           200: { description: 'Credenciais válidas: `{ token, expiraEm, lavaRapido }`.', content: { 'application/json': { schema: { $ref: '#/components/schemas/LoginLavaRapido' } } } },
           401: { description: 'cnpj ou senha inválidos.', content: { 'application/json': { schema: { $ref: '#/components/schemas/Erro' } } } },
           ...respostaLimiteTentativas,
+        },
+      },
+    },
+    '/lavaRapidos/me/solicitacao-exclusao': {
+      post: {
+        tags: ['exclusao'],
+        summary: 'A empresa do token solicita a exclusão (painel)',
+        description: 'Só uma pendente por empresa: se já houver, devolve a existente (200). Enfileira o e-mail `exclusao_solicitada`. Quem exclui é um interno `admin`, ao aprovar.',
+        security: segurancaPainel,
+        requestBody: {
+          required: false,
+          content: { 'application/json': { schema: { type: 'object', properties: { motivo: { type: 'string', maxLength: 500, nullable: true } } } } },
+        },
+        responses: {
+          201: { description: 'Solicitação criada (pendente).', content: { 'application/json': { schema: { $ref: '#/components/schemas/SolicitacaoExclusao' } } } },
+          200: { description: 'Já havia uma pendente: devolve a mesma.', content: { 'application/json': { schema: { $ref: '#/components/schemas/SolicitacaoExclusao' } } } },
+          400: { description: 'motivo não é texto ou passa de 500 caracteres.', content: { 'application/json': { schema: { $ref: '#/components/schemas/Erro' } } } },
+          401: { description: 'Sem token, token inválido/expirado ou empresa que não existe mais.', content: { 'application/json': { schema: { $ref: '#/components/schemas/Erro' } } } },
+          403: { description: 'Token de outro tipo (cliente, interno).', content: { 'application/json': { schema: { $ref: '#/components/schemas/Erro' } } } },
+        },
+      },
+      get: {
+        tags: ['exclusao'],
+        summary: 'Solicitação de exclusão mais recente da empresa do token (qualquer status)',
+        security: segurancaPainel,
+        responses: {
+          200: { description: 'Encontrada.', content: { 'application/json': { schema: { $ref: '#/components/schemas/SolicitacaoExclusao' } } } },
+          404: { description: 'A empresa nunca solicitou.', content: { 'application/json': { schema: { $ref: '#/components/schemas/Erro' } } } },
+          ...erroAutenticacaoPainel,
+        },
+      },
+      delete: {
+        tags: ['exclusao'],
+        summary: 'Cancela a solicitação pendente da empresa do token',
+        security: segurancaPainel,
+        responses: {
+          200: { description: 'Cancelada (status cancelada).', content: { 'application/json': { schema: { $ref: '#/components/schemas/SolicitacaoExclusao' } } } },
+          404: { description: 'Não há solicitação pendente.', content: { 'application/json': { schema: { $ref: '#/components/schemas/Erro' } } } },
+          ...erroAutenticacaoPainel,
+        },
+      },
+    },
+    '/auth/interno/login': {
+      post: {
+        tags: ['interno'],
+        summary: 'Login da equipe WashAway (usuário interno)',
+        description: 'Internos só são criados por script/seed/demo (`npm run interno:criar`). Em dev, o `npm run prisma:demo` cria `dev@washaway.dev` / `demo1234` (admin).',
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: { type: 'object', required: ['email', 'senha'], properties: { email: { type: 'string', format: 'email' }, senha: { type: 'string' } } },
+            },
+          },
+        },
+        responses: {
+          200: { description: 'Credenciais válidas: token tipo interno com as permissões.', content: { 'application/json': { schema: { $ref: '#/components/schemas/LoginInterno' } } } },
+          401: { description: '"E-mail ou senha incorretos" — mesma resposta para e-mail inexistente, senha errada ou body incompleto.', content: { 'application/json': { schema: { $ref: '#/components/schemas/Erro' } } } },
+          ...respostaLimiteTentativas,
+        },
+      },
+    },
+    '/interno/solicitacoes-exclusao': {
+      get: {
+        tags: ['interno'],
+        summary: 'Lista as solicitações de exclusão (mais antigas primeiro) — admin',
+        security: segurancaInterna,
+        parameters: [{ name: 'status', in: 'query', required: false, schema: { type: 'string', enum: ['pendente', 'aprovada', 'recusada', 'cancelada'] } }],
+        responses: {
+          200: { description: 'Lista.', content: { 'application/json': { schema: { type: 'array', items: { $ref: '#/components/schemas/SolicitacaoExclusao' } } } } },
+          400: { description: 'status inválido.', content: { 'application/json': { schema: { $ref: '#/components/schemas/Erro' } } } },
+          ...erroAutenticacaoInterna,
+        },
+      },
+    },
+    '/interno/solicitacoes-exclusao/{id}/aprovar': {
+      post: {
+        tags: ['interno'],
+        summary: 'Aprova a solicitação e EXCLUI a empresa — admin',
+        description: 'Numa transação: marca `aprovada`, enfileira o e-mail `exclusao_aprovada` e exclui o lava-rápido (pedidos, serviços, intercorrências e horários vão junto). O registro da solicitação continua, com o snapshot.',
+        security: segurancaInterna,
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+        responses: {
+          200: { description: 'Aprovada (lavaRapidoId agora null).', content: { 'application/json': { schema: { $ref: '#/components/schemas/SolicitacaoExclusao' } } } },
+          404: { description: 'Solicitação não encontrada.', content: { 'application/json': { schema: { $ref: '#/components/schemas/Erro' } } } },
+          409: { description: 'Solicitação não está mais pendente (já aprovada, recusada ou cancelada).', content: { 'application/json': { schema: { $ref: '#/components/schemas/Erro' } } } },
+          ...erroAutenticacaoInterna,
+        },
+      },
+    },
+    '/interno/solicitacoes-exclusao/{id}/recusar': {
+      post: {
+        tags: ['interno'],
+        summary: 'Recusa a solicitação (a empresa continua) — admin',
+        description: 'Grava a observação e enfileira o e-mail `exclusao_recusada`.',
+        security: segurancaInterna,
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+        requestBody: {
+          required: false,
+          content: { 'application/json': { schema: { type: 'object', properties: { observacao: { type: 'string', maxLength: 500, nullable: true } } } } },
+        },
+        responses: {
+          200: { description: 'Recusada.', content: { 'application/json': { schema: { $ref: '#/components/schemas/SolicitacaoExclusao' } } } },
+          400: { description: 'observacao não é texto ou passa de 500 caracteres.', content: { 'application/json': { schema: { $ref: '#/components/schemas/Erro' } } } },
+          404: { description: 'Solicitação não encontrada.', content: { 'application/json': { schema: { $ref: '#/components/schemas/Erro' } } } },
+          409: { description: 'Solicitação não está mais pendente.', content: { 'application/json': { schema: { $ref: '#/components/schemas/Erro' } } } },
+          ...erroAutenticacaoInterna,
         },
       },
     },

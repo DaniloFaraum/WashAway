@@ -21,6 +21,7 @@ const porIds = (ids: string[]): PorIds => ({ where: { id: { in: ids } } })
 // referenciam): a ordem das chaves é a ordem do laço em `limparDadosDeTeste`.
 // Modelo novo (ex.: cliente no I1, veiculo no I3) = uma linha aqui.
 const REMOVEDORES = {
+  solicitacaoExclusao: (ids: string[]) => prisma.solicitacaoExclusao.deleteMany(porIds(ids)),
   pedido: (ids: string[]) => prisma.pedido.deleteMany(porIds(ids)),
   intercorrencia: (ids: string[]) => prisma.intercorrencia.deleteMany(porIds(ids)),
   servico: (ids: string[]) => prisma.servico.deleteMany(porIds(ids)),
@@ -30,6 +31,7 @@ const REMOVEDORES = {
   cliente: (ids: string[]) => prisma.cliente.deleteMany(porIds(ids)),
   lavaRapido: (ids: string[]) => prisma.lavaRapido.deleteMany(porIds(ids)),
   contrato: (ids: string[]) => prisma.contrato.deleteMany(porIds(ids)),
+  usuarioInterno: (ids: string[]) => prisma.usuarioInterno.deleteMany(porIds(ids)),
 } satisfies Record<string, (ids: string[]) => Promise<unknown>>
 
 export type ModeloLimpavel = keyof typeof REMOVEDORES

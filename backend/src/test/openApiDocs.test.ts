@@ -19,5 +19,9 @@ describe('/api-docs', () => {
     expect(response.body.openapi).toBe('3.0.3')
     expect(response.body.paths).toHaveProperty('/lavaRapidos')
     expect(response.body.paths).toHaveProperty('/intercorrencias/{id}')
+    // i17-interno-exclusao
+    expect(response.body.paths).toHaveProperty('/auth/interno/login')
+    expect(response.body.paths).toHaveProperty('/lavaRapidos/me/solicitacao-exclusao')
+    expect(response.body.paths).toHaveProperty('/interno/solicitacoes-exclusao/{id}/aprovar')
   })
 })

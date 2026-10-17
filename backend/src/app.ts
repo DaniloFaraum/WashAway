@@ -10,7 +10,9 @@ import {
 } from './middlewares/limiteTentativas.js'
 import { authClienteRouter, clientesRouter } from './modules/clientes/clientes.routes.js'
 import { contratosRouter } from './modules/contratos/contratos.routes.js'
+import { solicitacaoExclusaoEmpresaRouter, solicitacoesExclusaoInternoRouter } from './modules/exclusoes/exclusoes.routes.js'
 import { horariosRouter } from './modules/horarios/horarios.routes.js'
+import { authInternoRouter } from './modules/internos/internos.routes.js'
 import { intercorrenciasRouter } from './modules/intercorrencias/intercorrencias.routes.js'
 import { itensServicoRouter } from './modules/itens-servico/itensServico.routes.js'
 import { lavaRapidosRouter } from './modules/lava-rapidos/lavaRapidos.routes.js'
@@ -34,6 +36,7 @@ export function createApp({ limiteTentativas: configLimite = configLimiteTentati
   // Registrado antes dos routers; passa adiante (next) enquanto não estoura.
   app.post('/auth/cliente/login', limiteTentativas(configLimite, { identificador: 'email', soFalhasContam: true }))
   app.post('/lavaRapidos/login', limiteTentativas(configLimite, { identificador: 'cnpj', soFalhasContam: true }))
+  app.post('/auth/interno/login', limiteTentativas(configLimite, { identificador: 'email', soFalhasContam: true }))
   app.post('/auth/cliente/cadastro', limiteTentativas(configLimite, { identificador: 'email' }))
   // Retomar uma solicitação pendente confere e-mail + senha: mesmo limite do login.
   app.post('/onboarding/solicitacoes', limiteTentativas(configLimite, { identificador: 'cnpj', soFalhasContam: true }))
@@ -45,6 +48,8 @@ export function createApp({ limiteTentativas: configLimite = configLimiteTentati
   // existente em app_mobile/src/features/lava-rapidos/service/lavaRapidos.routes.ts
   // — sem isso, o app_mobile (que não muda além da BASE_URL) recebe 404.
   app.use('/lavaRapidos/:id/horarios', horariosRouter)
+  // Exclusão por solicitação (i17-interno-exclusao): a empresa só solicita.
+  app.use('/lavaRapidos/me/solicitacao-exclusao', solicitacaoExclusaoEmpresaRouter)
   app.use('/lavaRapidos', lavaRapidosRouter)
   app.use('/pedidos', pedidosRouter)
   app.use('/servicos', servicosRouter)
@@ -57,6 +62,9 @@ export function createApp({ limiteTentativas: configLimite = configLimiteTentati
   // "BackEnd Onboard": fluxo de solicitação + contrato, separado da aplicação.
   app.use('/onboarding', onboardingRouter)
   app.use('/contratos', contratosRouter)
+  // Equipe WashAway (i17-interno-exclusao): login e rotas internas (permissão admin).
+  app.use('/auth/interno', authInternoRouter)
+  app.use('/interno/solicitacoes-exclusao', solicitacoesExclusaoInternoRouter)
 
   // Express 4.x não repassa rejeição de Promise em handler assíncrono pro
   // middleware de erro sozinho — cada rota usa `asyncHandler` pra chamar

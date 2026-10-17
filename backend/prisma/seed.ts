@@ -1,6 +1,7 @@
 import 'dotenv/config'
 import { PrismaClient } from '@prisma/client'
 import bcrypt from 'bcryptjs'
+import { garantirInternoDemo, INTERNO_DEMO } from './internoExemplo.js'
 import { criarHorariosSeNaoTiver, HORARIO_PADRAO, HORARIO_TODOS_OS_DIAS } from './horariosExemplo.js'
 import { criarPedidoExemplo, garantirClienteExemplo, type ClienteExemplo } from './pedidosExemplo.js'
 
@@ -271,6 +272,12 @@ async function main() {
   ]
   for (const pedido of pedidosData) {
     await criarPedidoExemplo(prisma, pedido)
+  }
+
+  // Usuário interno de exemplo (i17-interno-exclusao), só para dev: opera as
+  // rotas internas pelo Swagger (/api-docs). Só cria se não existir.
+  if (await garantirInternoDemo(prisma)) {
+    console.log(`+ Usuário interno: ${INTERNO_DEMO.email} / senha "${INTERNO_DEMO.senha}" (permissão admin)`)
   }
 
   console.log(

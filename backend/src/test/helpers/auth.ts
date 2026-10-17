@@ -14,6 +14,11 @@ export function tokenDeLavaRapido(lavaRapido: { id: string }): string {
   return assinarToken({ id: lavaRapido.id, tipo: 'lavaRapido' })
 }
 
+/** Token de usuário interno (i17-interno-exclusao) com as permissões dadas — mesmo formato do `POST /auth/interno/login`. */
+export function tokenDeInterno(permissoes: string[], interno: { id: string } = { id: 'interno-de-teste' }): string {
+  return assinarToken({ id: interno.id, tipo: 'interno', permissoes })
+}
+
 /** Anexa o token no header Authorization (Bearer) de uma requisição supertest. */
 export function comToken(req: Test, token: string): Test {
   return req.set('Authorization', `Bearer ${token}`)

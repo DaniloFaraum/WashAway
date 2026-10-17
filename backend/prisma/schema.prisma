@@ -29,6 +29,7 @@ model LavaRapido {
   servicos     Servico[]
   intercorrencias Intercorrencia[]
   horarios     HorarioFuncionamento[]
+  solicitacoesExclusao SolicitacaoExclusao[]
 }
 
 enum PedidoStatus {
@@ -223,6 +224,10 @@ enum StatusEventoEmail {
 // Cada plano consumidor acrescenta os seus valores (sem reescrever os dos outros).
 enum TipoEventoEmail {
   teste
+  // i17-interno-exclusao
+  exclusao_solicitada
+  exclusao_aprovada
+  exclusao_recusada
 }
 
 model EventoEmail {
@@ -241,5 +246,48 @@ model EventoEmail {
   criadoEm     DateTime          @default(now())
   enviadoEm    DateTime?
 
+  @@index([status, criadoEm])
+}
+
+// Equipe WashAway (i17-interno-exclusao). Criado só por script/seed/demo
+// (`npm run interno:criar`), nunca por rota. `email` normalizado (trim +
+// minúsculas); `senha` = hash bcrypt. Permissões (ex.: `admin`) vão no token
+// e são conferidas por `autorizar(...)`.
+model UsuarioInterno {
+  id         String   @id @default(cuid())
+  nome       String
+  email      String   @unique
+  senha      String
+  permissoes String[] @default([])
+  criadoEm   DateTime @default(now())
+  decisoesExclusao SolicitacaoExclusao[]
+}
+
+enum StatusSolicitacaoExclusao {
+  pendente
+  aprovada
+  recusada
+  cancelada
+}
+
+// Pedido de exclusão da empresa (i17-interno-exclusao): a empresa solicita, um
+// interno `admin` aprova (exclui o LavaRapido) ou recusa. `nome`/`cnpj`/`email`
+// são snapshot, para o registro sobreviver à exclusão (`lavaRapidoId` vira null).
+model SolicitacaoExclusao {
+  id            String                    @id @default(cuid())
+  lavaRapidoId  String?
+  lavaRapido    LavaRapido?               @relation(fields: [lavaRapidoId], references: [id], onDelete: SetNull)
+  nome          String
+  cnpj          String
+  email         String?
+  motivo        String?
+  status        StatusSolicitacaoExclusao @default(pendente)
+  criadoEm      DateTime                  @default(now())
+  decididoEm    DateTime?
+  decididoPorId String?
+  decididoPor   UsuarioInterno?           @relation(fields: [decididoPorId], references: [id], onDelete: SetNull)
+  observacao    String?
+
+  @@index([lavaRapidoId, status])
   @@index([status, criadoEm])
 }

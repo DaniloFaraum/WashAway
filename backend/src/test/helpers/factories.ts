@@ -167,3 +167,24 @@ export async function criarVeiculoTeste(
   registrarParaLimpeza('veiculo', veiculo.id)
   return veiculo
 }
+
+/** Senha padrão dos internos da factory (em texto puro, pra testar login). */
+export const SENHA_INTERNO_TESTE = 'senha-interno-teste'
+
+/** Usuário interno (i17-interno-exclusao), por padrão com permissão `admin`. */
+export async function criarUsuarioInternoTeste(
+  overrides: Partial<Omit<Prisma.UsuarioInternoUncheckedCreateInput, 'senha'>> & { senha?: string } = {},
+) {
+  const { senha = SENHA_INTERNO_TESTE, ...resto } = overrides
+  const interno = await prisma.usuarioInterno.create({
+    data: {
+      nome: `Interno de teste ${sufixoUnico()}`,
+      email: `interno-${sufixoUnico()}@teste.washaway.dev`,
+      senha: await bcrypt.hash(senha, 4),
+      permissoes: ['admin'],
+      ...resto,
+    },
+  })
+  registrarParaLimpeza('usuarioInterno', interno.id)
+  return interno
+}
