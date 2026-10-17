@@ -1,0 +1,372 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Arquitetura WashAway</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=Figtree:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: coluna de leitura com índice lateral fixo no desktop; cada seção = texto curto + diagrama largo */
+:root {
+  --bg: #f3f6f7;
+  --surface: #ffffff;
+  --fg: #16232a;
+  --muted: #56666e;
+  --line: #d5dfe2;
+  --accent: #0d7c86;
+  --accent-soft: #dcf0f1;
+  --warn: #9a5b00;
+  --warn-soft: #fbefd9;
+  --font-display: "Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
+  --font-body: "Figtree", "Segoe UI", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "Cascadia Code", monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0f171b; --surface: #16232a; --fg: #e3ecee; --muted: #93a6ad; --line: #2a3b42;
+    --accent: #4cc3cc; --accent-soft: #143238; --warn: #f0b860; --warn-soft: #3a2c14;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0f171b; --surface: #16232a; --fg: #e3ecee; --muted: #93a6ad; --line: #2a3b42;
+  --accent: #4cc3cc; --accent-soft: #143238; --warn: #f0b860; --warn-soft: #3a2c14;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  background: var(--bg); color: var(--fg);
+  font-family: var(--font-body); font-size: 15px; line-height: 1.6;
+  padding-inline: 16px; padding-block: 0 64px;
+}
+.wrap { max-width: 1180px; margin: 0 auto; display: grid; grid-template-columns: 200px minmax(0, 1fr); gap: 40px; }
+@media (max-width: 860px) { .wrap { grid-template-columns: minmax(0, 1fr); gap: 0; } nav.toc { display: none; } }
+
+header.top { max-width: 1180px; margin: 0 auto; padding-block: 40px 28px; border-bottom: 1px solid var(--line); margin-bottom: 32px; }
+.eyebrow { font-family: var(--font-mono); font-size: 12px; letter-spacing: .06em; text-transform: uppercase; color: var(--accent); }
+h1 { font-family: var(--font-display); font-size: clamp(30px, 5vw, 44px); line-height: 1.1; margin: 8px 0 12px; text-wrap: balance; }
+h2 { font-family: var(--font-display); font-size: 24px; margin: 0 0 6px; text-wrap: balance; }
+h3 { font-size: 15px; margin: 0 0 8px; }
+p { margin: 0; max-width: 68ch; }
+.lead { color: var(--muted); font-size: 16px; }
+code, .mono { font-family: var(--font-mono); font-size: .88em; }
+code { background: var(--accent-soft); padding: 1px 5px; border-radius: 4px; }
+
+.chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 20px; }
+.chip { font-family: var(--font-mono); font-size: 12.5px; border: 1px solid var(--line); background: var(--surface); padding: 4px 10px; border-radius: 999px; white-space: nowrap; }
+.chip b { color: var(--accent); font-weight: 500; }
+
+nav.toc { position: sticky; top: calc(env(safe-area-inset-top, 0px) + 24px); align-self: start; display: flex; flex-direction: column; gap: 2px; font-size: 14px; }
+nav.toc a { color: var(--muted); text-decoration: none; padding: 6px 10px; border-left: 2px solid var(--line); }
+nav.toc a:hover, nav.toc a:focus-visible { color: var(--fg); border-left-color: var(--accent); outline: none; }
+
+main { display: flex; flex-direction: column; gap: 56px; min-width: 0; }
+section { display: flex; flex-direction: column; gap: 16px; min-width: 0; scroll-margin-top: 24px; }
+.diagram { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 20px; overflow-x: auto; }
+.diagram pre.mermaid { margin: 0; display: flex; justify-content: center; min-width: 640px; background: transparent; }
+
+.grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; }
+.note { border: 1px solid var(--line); border-radius: 8px; padding: 14px 16px; background: var(--surface); min-width: 0; }
+.note.warn { background: var(--warn-soft); border-color: transparent; }
+.note.warn h3 { color: var(--warn); }
+ul { margin: 0; padding-left: 18px; }
+li + li { margin-top: 4px; }
+
+.tablewrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); }
+table { border-collapse: collapse; width: 100%; font-size: 14px; }
+th, td { text-align: left; padding: 9px 14px; border-bottom: 1px solid var(--line); vertical-align: top; }
+tr:last-child td { border-bottom: 0; }
+th { font-size: 12px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); font-weight: 600; }
+td.num { font-family: var(--font-mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.status { display: inline-block; font-family: var(--font-mono); font-size: 12px; padding: 1px 7px; border-radius: 4px; background: var(--accent-soft); color: var(--accent); }
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+html { scroll-behavior: smooth; }
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="eyebrow">Branch main · 17 out 2026</div>
+  <h1>Arquitetura do WashAway</h1>
+  <p class="lead">Como o sistema está depois das ondas 1 a 6 da sprint: quem usa o quê, como um pedido vai do app ao painel, por onde passam as chamadas, onde ficam os dados e quais telas existem.</p>
+  <div class="chips">
+    <span class="chip">backend <b>:4000</b></span>
+    <span class="chip">admin-front <b>:5173</b></span>
+    <span class="chip">app_mobile web <b>:8081</b></span>
+    <span class="chip">Postgres 16 <b>docker</b></span>
+    <span class="chip">worker de e-mail <b>Python</b></span>
+    <span class="chip">testes <b>732 passando</b></span>
+  </div>
+</header>
+
+<div class="wrap">
+  <nav class="toc" aria-label="Seções">
+    <a href="#visao">Visão geral</a>
+    <a href="#pedido">Ciclo do pedido</a>
+    <a href="#rotas">Rotas e acesso</a>
+    <a href="#dados">Modelo de dados</a>
+    <a href="#telas">Telas</a>
+    <a href="#ferramentas">Ferramentas</a>
+  </nav>
+
+  <main>
+    <section id="visao">
+      <div>
+        <h2>Visão geral</h2>
+        <p class="lead">Dois front-ends falam com um único backend. A equipe interna usa o Swagger, sem tela própria. O backend grava os e-mails numa fila dentro do Postgres, e um worker separado faz o envio.</p>
+      </div>
+      <div class="diagram"><pre class="mermaid">
+flowchart TB
+    subgraph Usuarios["Pessoas"]
+        Dono["Dono do lava-rápido"]
+        Cliente["Cliente"]
+        Equipe["Equipe interna"]
+    end
+
+    subgraph Front["Front-ends"]
+        Admin["admin-front<br/>Wash Your Way — Painel<br/>Vite + React + MUI · :5173"]
+        App["app_mobile<br/>Expo Router · web :8081"]
+    end
+
+    subgraph Back["backend · Express + Prisma · :4000"]
+        Rotas["Rotas REST"]
+        MW["autenticar(tipo) · autorizar(permissão)<br/>limiteTentativas"]
+        Auth["auth/token.ts<br/>JWT com tipo e escopo"]
+        Disp["disponibilidade.service<br/>estaAberto · listarAbertos"]
+        Docs["/api-docs · Swagger"]
+    end
+
+    subgraph Dados["Docker"]
+        PG[("PostgreSQL 16<br/>washaway · washaway_test_N")]
+        PGA["pgAdmin"]
+    end
+
+    Worker["scripts/email_worker.py"]
+    Emails[".emails/*.eml (dev)<br/>SMTP (produção)"]
+    ViaCEP["ViaCEP"]
+
+    Dono --> Admin
+    Cliente --> App
+    Equipe --> Docs
+    Admin -- "Bearer token" --> Rotas
+    App -- "apiFetch + Bearer token" --> Rotas
+    Admin -. "CEP no cadastro" .-> ViaCEP
+    Rotas --> MW --> Auth
+    Rotas --> Disp
+    Rotas -- "Prisma" --> PG
+    PGA --> PG
+    PG -- "NOTIFY email_pendente<br/>+ varredura a cada 30 s" --> Worker
+    Worker --> Emails
+      </pre></div>
+      <div class="grid2">
+        <div class="note">
+          <h3>Fila de e-mail</h3>
+          <p>O backend grava o e-mail em <code>EventoEmail</code> na mesma transação da ação que o gerou: senha gerada, esqueci minha senha e pedidos de exclusão. O worker pega cada um com <code>FOR UPDATE SKIP LOCKED</code>, então dois workers nunca mandam o mesmo e-mail.</p>
+        </div>
+        <div class="note">
+          <h3>Sessão e senha</h3>
+          <p>O painel guarda o token em <code>washaway:token</code>; o app usa <code>apiFetch</code>. Quem entra com a senha gerada recebe um token de escopo <code>trocar-senha</code> (15 min), que só serve para definir a senha nova.</p>
+        </div>
+      </div>
+    </section>
+
+    <section id="pedido">
+      <div>
+        <h2>Ciclo do pedido</h2>
+        <p class="lead">Do app ao painel e de volta. Preço, duração e horário são sempre conferidos no servidor.</p>
+      </div>
+      <div class="diagram"><pre class="mermaid">
+sequenceDiagram
+    actor C as Cliente (app)
+    participant B as backend
+    actor D as Dono (painel)
+
+    C->>B: GET /lavaRapidos?horario=… (só os abertos)
+    C->>B: POST /pedidos { lavaRapidoId, veiculoId, servicoIds, horario }
+    Note over B: calcula preço e duração<br/>congela nome e preço de cada serviço<br/>confere o horário de funcionamento
+    B-->>C: 201 pendente, ou 400 HORARIO_INDISPONIVEL
+    D->>B: GET /pedidos ("Aguardando sua resposta")
+    D->>B: PATCH /pedidos/:id { aceito ou recusado, motivo? }
+    C->>B: GET /clientes/me/pedidos · /clientes/me/notificacoes
+    C->>B: POST /clientes/me/pedidos/:id/visto
+      </pre></div>
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th>História</th><th>O que entra no ciclo</th></tr></thead>
+          <tbody>
+            <tr><td class="num">I9</td><td>Filtro "Quando?" na Home; o horário escolhido chega preenchido no pedido.</td></tr>
+            <tr><td class="num">I13</td><td>Fluxo Veículo → Data e hora → Resumo → Enviado; <code>PedidoServico</code> com nome e preço congelados.</td></tr>
+            <tr><td class="num">I20</td><td>Pedido fora do horário de funcionamento é recusado e o app volta para a escolha de horário.</td></tr>
+            <tr><td class="num">I15</td><td>Aceitar ou recusar no painel; transição inválida dá <span class="status">409</span>.</td></tr>
+            <tr><td class="num">I18</td><td>"Meus pedidos" com Próximos, Anteriores e Recusados, e contador de recusas não vistas.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="rotas">
+      <div>
+        <h2>Rotas e acesso</h2>
+        <p class="lead">Quem chama cada grupo de rotas. Nas rotas protegidas, a empresa, o cliente ou o interno vem sempre do token, nunca de um parâmetro enviado pelo navegador.</p>
+      </div>
+      <div class="diagram"><pre class="mermaid">
+flowchart LR
+    Admin["admin-front"]
+    App["app_mobile"]
+    Swagger["equipe via /api-docs"]
+
+    subgraph Publicas["Públicas"]
+        P1["GET /lavaRapidos (?horario=) · /lavaRapidos/:id<br/>GET /lavaRapidos/:id/horarios"]
+        P2["GET /servicos · /itensServico · /intercorrencias"]
+        P3["GET /contratos/vigente"]
+        P4["POST /onboarding/solicitacoes<br/>GET /onboarding/solicitacoes/:id<br/>POST /onboarding/solicitacoes/:id/aceite"]
+        P5["POST /lavaRapidos/login<br/>POST /auth/lava-rapido/esqueci-senha"]
+        P6["POST /auth/cliente/cadastro<br/>POST /auth/cliente/login"]
+        P7["POST /auth/interno/login"]
+    end
+
+    subgraph Painel["Token de lava-rápido"]
+        L1["GET /pedidos · PATCH /pedidos/:id"]
+        L2["POST · PUT · PATCH /servicos"]
+        L3["POST · PATCH /intercorrencias"]
+        L4["PUT /lavaRapidos/:id/horarios"]
+        L5["GET /veiculos (vem dos pedidos)"]
+        L6["/lavaRapidos/me/solicitacao-exclusao"]
+        L7["POST /auth/lava-rapido/trocar-senha"]
+    end
+
+    subgraph ClienteR["Token de cliente"]
+        C1["GET /clientes/me"]
+        C2["/clientes/me/veiculos"]
+        C3["POST /pedidos"]
+        C4["/clientes/me/pedidos<br/>/clientes/me/notificacoes"]
+    end
+
+    subgraph InternoR["Token interno + permissão admin"]
+        I1["GET /interno/solicitacoes-exclusao<br/>POST /:id/aprovar · /:id/recusar"]
+    end
+
+    Admin --> P3 & P4 & P5
+    Admin --> Painel
+    App --> P1 & P2 & P6
+    App --> ClienteR
+    Swagger --> P7 & InternoR
+      </pre></div>
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th>Situação</th><th>Resposta</th></tr></thead>
+          <tbody>
+            <tr><td>Sem token, token inválido ou vencido</td><td><span class="status">401</span></td></tr>
+            <tr><td>Token do tipo errado, escopo <code>trocar-senha</code> fora da troca ou falta de permissão</td><td><span class="status">403</span></td></tr>
+            <tr><td>Recurso de outra empresa ou de outro cliente</td><td><span class="status">404</span></td></tr>
+            <tr><td>Logins, cadastros, onboarding e esqueci minha senha acima do limite</td><td><span class="status">429</span> com <code>Retry-After</code></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="dados">
+      <div>
+        <h2>Modelo de dados</h2>
+        <p class="lead">As 15 tabelas do Prisma e como se ligam.</p>
+      </div>
+      <div class="diagram"><pre class="mermaid">
+erDiagram
+    LavaRapido ||--o{ Pedido : recebe
+    LavaRapido ||--o{ Servico : oferece
+    LavaRapido ||--o{ Intercorrencia : registra
+    LavaRapido ||--o{ HorarioFuncionamento : "abre em"
+    LavaRapido |o--o{ SolicitacaoExclusao : pede
+    Servico ||--o{ ServicoItem : "é composto de"
+    ItemServico ||--o{ ServicoItem : "entra em"
+    Cliente ||--o{ Veiculo : possui
+    Cliente ||--o{ Pedido : faz
+    Veiculo ||--o{ Pedido : "vai em"
+    Pedido ||--|{ PedidoServico : "contém"
+    Servico |o--o{ PedidoServico : origem
+    Contrato ||--o{ SolicitacaoOnboarding : "aceito em"
+    SolicitacaoOnboarding |o--o| LavaRapido : "vira, ao aceitar"
+    UsuarioInterno |o--o{ SolicitacaoExclusao : decide
+    Pedido {
+        enum status
+        float precoTotal
+        int duracaoMinutos
+        string motivoRecusa
+        datetime recusaVistaEm
+    }
+    PedidoServico {
+        string nome "congelado"
+        float preco "congelado"
+    }
+    LavaRapido {
+        string cnpj "único"
+        string email "único"
+        string senhaGerada "temporária"
+    }
+      </pre></div>
+      <div class="grid2">
+        <div class="note warn">
+          <h3>Veículo com pedido não sai</h3>
+          <p><code>Pedido → Veiculo</code> usa <code>onDelete: Restrict</code>: apagar um veículo que já teve pedido responde <span class="status">409</span>, para não sumir o histórico do lava-rápido. Arquivar em vez de apagar fica para um plano próprio.</p>
+        </div>
+        <div class="note">
+          <h3>Exclusão com rastro</h3>
+          <p>Aprovar uma exclusão apaga o <code>LavaRapido</code> em cascata, mas a <code>SolicitacaoExclusao</code> guarda nome, CNPJ e e-mail e continua no banco.</p>
+        </div>
+      </div>
+    </section>
+
+    <section id="telas">
+      <div>
+        <h2>Telas</h2>
+        <p class="lead">Painel organizado por página em <code>src/pages/</code>; app com rotas por arquivo em <code>src/app/</code>.</p>
+      </div>
+      <div class="diagram"><pre class="mermaid">
+flowchart LR
+    subgraph AdminTelas["admin-front"]
+        AL["Login · Esqueci minha senha<br/>Definir nova senha<br/>cadastro de empresa (contrato)"] --> Shell["AppShell + Sidebar"]
+        Shell --> PP["Pedidos<br/>aceitar · recusar"]
+        Shell --> PS["Serviços"]
+        Shell --> PD["Disponibilidade<br/>horário editável"]
+        Shell --> PV["Veículos"]
+        Shell --> PM["Minha empresa<br/>pedido de exclusão"]
+    end
+
+    subgraph AppTelas["app_mobile"]
+        ALog["login · cadastro"] --> Home["Home<br/>filtro Quando? + menu de conta"]
+        Home --> Serv["servicos<br/>servicos/[servicoId]"]
+        Serv --> Ped["pedido: veículo → data e hora<br/>→ resumo → enviado"]
+        Home --> MP["Meus pedidos"] --> PDet["pedidos/[id]"]
+        Home --> Disp["disponibilidade"]
+        Home --> MD["meus-dados"]
+        Home --> MV["Meus veículos"] --> VF["form de veículo"]
+    end
+      </pre></div>
+    </section>
+
+    <section id="ferramentas">
+      <div>
+        <h2>Ferramentas</h2>
+        <p class="lead">Comandos rodados a partir da pasta <code>WashAway/</code>.</p>
+      </div>
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th>Comando</th><th>O que faz</th></tr></thead>
+          <tbody>
+            <tr><td class="num">python3 scripts/restart.py [--project X]</td><td>Reinicia backend, admin, app e worker. Logs em <code>/tmp/washaway-*.log</code>.</td></tr>
+            <tr><td class="num">python3 scripts/test.py --project all</td><td>Testes de backend (514), admin-front (63) e app_mobile (155).</td></tr>
+            <tr><td class="num">python3 scripts/test.py --project email-worker</td><td>Testes do worker de e-mail.</td></tr>
+            <tr><td class="num">npm run prisma:demo</td><td>Na pasta <code>backend/</code>: insere dados de demonstração sem apagar nada, inclusive o interno <code>dev@washaway.dev</code>.</td></tr>
+            <tr><td class="num">npm run interno:criar</td><td>Na pasta <code>backend/</code>: cria um usuário interno (<code>--email … --permissoes admin</code>).</td></tr>
+            <tr><td class="num">npm run senhas:troca-em-massa</td><td>Na pasta <code>backend/</code>: troca, uma vez, a senha <code>admin</code> das empresas antigas por senha gerada enviada por e-mail.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10.9.1/dist/mermaid.min.js"></script>
+<script>mermaid.initialize({ startOnLoad: true, theme: matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "default" })</script>
+</body>
+</html>
