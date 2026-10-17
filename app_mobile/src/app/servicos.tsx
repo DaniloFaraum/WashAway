@@ -34,7 +34,8 @@ export default function ServicosScreen() {
   const insets = useSafeAreaInsets();
 
   // Recebe o ID e Nome do lava-rápido passados na navegação
-  const { id, nome } = useLocalSearchParams<{ id?: string; nome?: string }>();
+  // `horario` (I9): data/hora da busca da Home (ISO com offset), pré-preenche o passo "Data e hora".
+  const { id, nome, horario } = useLocalSearchParams<{ id?: string; nome?: string; horario?: string }>();
 
   const { lavaRapido } = useLavaRapido(id);
   const { servicos, loading, error } = useServicos(id);
@@ -89,6 +90,7 @@ export default function ServicosScreen() {
         preco,
         duracaoMinutos,
       })),
+      horario ?? null,
     );
     router.push('/pedido/veiculo');
   };

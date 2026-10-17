@@ -23,10 +23,13 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { CarWashCard } from '@/components/CarWashCard';
 import { MenuConta } from '@/components/MenuConta';
+import { SeletorDataHora, type ValorDataHora } from '@/components/SeletorDataHora';
 import { colors } from '@/constants/colors';
 import { centeredStyle } from '@/constants/commonStyles';
 import { formatarPrecoAPartirDe } from '@/features/lava-rapidos/formatarPrecoAPartirDe';
 import { useLavaRapidos } from '@/features/lava-rapidos/useLavaRapidos';
+import { validarHorarioBusca } from '@/features/lava-rapidos/validarHorarioBusca';
+import { formatarDataHora, montarHorarioIso, separarHorarioIso } from '@/features/pedidos/dataHora';
 
 let MapView: any = null;
 let Marker: any = null;
@@ -45,7 +48,12 @@ function parseDistance(distance: string) {
 
 export default function HomeScreen() {
   const router = useRouter();
-  const { lavaRapidos, loading: loadingLavaRapidos, error: lavaRapidosError } = useLavaRapidos();
+  // Busca por horário (I9): ISO com offset do negócio; com ele, o backend
+  // devolve só os lava-rápidos abertos naquele instante (lista e mapa).
+  const [horarioBusca, setHorarioBusca] = useState<string | null>(null);
+  const [isHorarioModalVisible, setIsHorarioModalVisible] = useState(false);
+  const [valorHorario, setValorHorario] = useState<ValorDataHora>({ data: null, hora: null });
+  const { lavaRapidos, loading: loadingLavaRapidos, error: lavaRapidosError } = useLavaRapidos(horarioBusca);
 
   const [fontsLoaded] = useFonts({
     Viga_400Regular,
@@ -134,6 +142,29 @@ export default function HomeScreen() {
     setTypedAddress('');
   }
 
+  function abrirModalHorario() {
+    setValorHorario((horarioBusca && separarHorarioIso(horarioBusca)) || { data: null, hora: null });
+    setIsHorarioModalVisible(true);
+  }
+
+  const horarioEscolhido =
+    valorHorario.data && valorHorario.hora ? montarHorarioIso(valorHorario.data, valorHorario.hora) : null;
+  const erroHorarioEscolhido = horarioEscolhido
+    ? validarHorarioBusca(new Date(horarioEscolhido), new Date())
+    : null;
+
+  function aplicarHorario() {
+    if (!horarioEscolhido || validarHorarioBusca(new Date(horarioEscolhido), new Date())) return;
+    setHorarioBusca(horarioEscolhido);
+    setIsHorarioModalVisible(false);
+  }
+
+  function limparHorario() {
+    setHorarioBusca(null);
+    setValorHorario({ data: null, hora: null });
+    setIsHorarioModalVisible(false);
+  }
+
   const header = (
     <View style={styles.header}>
       <Text style={styles.title}>
@@ -176,6 +207,28 @@ export default function HomeScreen() {
         </Pressable>
       </View>
 
+      <View style={styles.horarioRow}>
+        <Pressable
+          style={[styles.horarioChip, horarioBusca && styles.horarioChipAtivo]}
+          accessibilityRole="button"
+          accessibilityLabel={horarioBusca ? `Horário da busca: ${formatarDataHora(horarioBusca)}. Mudar horário` : 'Quando? Escolher data e hora'}
+          onPress={abrirModalHorario}>
+          <Ionicons name="time-outline" size={18} color={horarioBusca ? colors.white : colors.primary} />
+          <Text style={[styles.horarioChipText, horarioBusca && styles.horarioChipTextAtivo]} numberOfLines={1}>
+            {horarioBusca ? formatarDataHora(horarioBusca) : 'Quando?'}
+          </Text>
+        </Pressable>
+        {horarioBusca && (
+          <Pressable
+            style={styles.horarioLimpar}
+            accessibilityRole="button"
+            accessibilityLabel="Limpar horário"
+            onPress={limparHorario}>
+            <Ionicons name="close" size={18} color={colors.primary} />
+          </Pressable>
+        )}
+      </View>
+
       <View style={styles.toggleContainer}>
         <Pressable
           style={[styles.toggleButton, activeTab === 'lista' && styles.toggleButtonActive]}
@@ -199,7 +252,9 @@ export default function HomeScreen() {
     </View>
   );
 
-  if (loadingLavaRapidos) {
+  // Sem horário: carregamento/erro em tela cheia, como antes. Com horário (I9),
+  // o cabeçalho continua visível para o cliente mudar ou limpar o horário.
+  if (loadingLavaRapidos && !horarioBusca) {
     return (
       <SafeAreaView style={[styles.container, centeredStyle]}>
         <ActivityIndicator color={colors.primary} size="large" />
@@ -207,7 +262,7 @@ export default function HomeScreen() {
     );
   }
 
-  if (lavaRapidosError) {
+  if (lavaRapidosError && !horarioBusca) {
     return (
       <SafeAreaView style={[styles.container, centeredStyle]}>
         <Text style={styles.mapUnavailableText}>
@@ -221,7 +276,9 @@ export default function HomeScreen() {
     item.name.toLowerCase().includes(searchQuery.toLowerCase()),
   );
 
-  if (activeFilter === 'aberto') {
+  // "Aberto Agora" não se aplica com horário escolhido (I9): a lista já vem
+  // filtrada pelo horário buscado.
+  if (activeFilter === 'aberto' && !horarioBusca) {
     result = result.filter((item) => item.isOpen === true);
   }
 
@@ -237,10 +294,49 @@ export default function HomeScreen() {
 
   const filteredData = result;
 
+  const acoesHorario = (
+    <View style={styles.vazioAcoes}>
+      <Pressable style={styles.vazioBotao} accessibilityRole="button" onPress={abrirModalHorario}>
+        <Text style={styles.vazioBotaoTexto}>Mudar horário</Text>
+      </Pressable>
+      <Pressable accessibilityRole="button" accessibilityLabel="Limpar horário da busca" onPress={limparHorario}>
+        <Text style={styles.clearFiltersText}>Limpar horário</Text>
+      </Pressable>
+    </View>
+  );
+
+  // Estado da busca por horário que substitui a lista/o mapa (I9): carregando,
+  // erro (ex.: o horário passou com o app aberto) ou nenhum disponível.
+  const avisoHorario = !horarioBusca ? null : loadingLavaRapidos ? (
+    <View style={styles.vazio}>
+      <ActivityIndicator color={colors.primary} size="large" />
+    </View>
+  ) : lavaRapidosError ? (
+    <View style={styles.vazio}>
+      <Text style={styles.mapUnavailableText}>
+        Não foi possível buscar os lava-rápidos neste horário: {lavaRapidosError}
+      </Text>
+      {acoesHorario}
+    </View>
+  ) : lavaRapidos.length === 0 ? (
+    <View style={styles.vazio}>
+      <Text style={styles.mapUnavailableText}>Nenhum lava-rápido disponível neste horário</Text>
+      {acoesHorario}
+    </View>
+  ) : null;
+
+  const listaVazia = (
+    <View style={styles.vazio}>
+      <Text style={styles.mapUnavailableText}>Nenhum lava-rápido encontrado</Text>
+    </View>
+  );
+
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       {header}
-      {activeTab === 'lista' ? (
+      {avisoHorario ? (
+        avisoHorario
+      ) : activeTab === 'lista' ? (
         <FlatList
           data={filteredData}
           keyExtractor={(item) => item.id}
@@ -256,8 +352,10 @@ export default function HomeScreen() {
               isOpen={item.isOpen}
               image={item.image}
               rank={index + 1}
+              horario={horarioBusca}
             />
           )}
+          ListEmptyComponent={listaVazia}
           showsVerticalScrollIndicator={false}
           contentContainerStyle={styles.listContent}
           style={styles.list}
@@ -280,7 +378,9 @@ export default function HomeScreen() {
               onPress={() =>
                 router.push({
                   pathname: '/servicos',
-                  params: { id: item.id, nome: item.name },
+                  params: horarioBusca
+                    ? { id: item.id, nome: item.name, horario: horarioBusca }
+                    : { id: item.id, nome: item.name },
                 })
               }
             />
@@ -342,6 +442,7 @@ export default function HomeScreen() {
           <View style={styles.modalSheet}>
             <Text style={styles.modalTitle}>Filtrar por:</Text>
             <View style={styles.filterChips}>
+              {!horarioBusca && (
               <TouchableOpacity
                 style={[styles.filterChip, activeFilter === 'aberto' && styles.filterChipActive]}
                 onPress={() => {
@@ -358,6 +459,7 @@ export default function HomeScreen() {
                   Aberto Agora
                 </Text>
               </TouchableOpacity>
+              )}
               <TouchableOpacity
                 style={[styles.filterChip, activeFilter === 'avaliacao' && styles.filterChipActive]}
                 onPress={() => {
@@ -405,6 +507,38 @@ export default function HomeScreen() {
               accessibilityRole="button"
               accessibilityLabel="Limpar filtros">
               <Text style={styles.clearFiltersText}>Limpar Filtros</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal
+        animationType="slide"
+        transparent={true}
+        visible={isHorarioModalVisible}
+        onRequestClose={() => setIsHorarioModalVisible(false)}>
+        <View style={styles.modalOverlay}>
+          <Pressable
+            style={styles.modalBackdrop}
+            onPress={() => setIsHorarioModalVisible(false)}
+            accessibilityRole="button"
+            accessibilityLabel="Fechar escolha de horário"
+          />
+          <View style={styles.modalSheet}>
+            <Text style={styles.modalTitle}>Quando você quer lavar?</Text>
+            <Text style={styles.horarioDica}>Mostramos só os lava-rápidos abertos no horário (de Brasília).</Text>
+            <SeletorDataHora valor={valorHorario} onChange={setValorHorario} />
+            {erroHorarioEscolhido && <Text style={styles.horarioErro}>{erroHorarioEscolhido}</Text>}
+            <Pressable
+              style={[styles.confirmButton, (!horarioEscolhido || erroHorarioEscolhido) && styles.confirmButtonDisabled]}
+              disabled={!horarioEscolhido || Boolean(erroHorarioEscolhido)}
+              accessibilityRole="button"
+              accessibilityState={{ disabled: !horarioEscolhido || Boolean(erroHorarioEscolhido) }}
+              onPress={aplicarHorario}>
+              <Text style={styles.confirmButtonText}>Aplicar</Text>
+            </Pressable>
+            <TouchableOpacity onPress={limparHorario} accessibilityRole="button" accessibilityLabel="Limpar horário">
+              <Text style={styles.clearFiltersText}>Limpar horário</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -575,6 +709,71 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     paddingVertical: 14,
     alignItems: 'center',
+  },
+  confirmButtonDisabled: {
+    opacity: 0.4,
+  },
+  horarioRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  horarioChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexShrink: 1,
+    gap: 6,
+    borderWidth: 1.5,
+    borderColor: colors.primary,
+    borderRadius: 22,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+  },
+  horarioChipAtivo: {
+    backgroundColor: colors.primary,
+  },
+  horarioChipText: {
+    color: colors.primary,
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  horarioChipTextAtivo: {
+    color: colors.white,
+  },
+  horarioLimpar: {
+    padding: 6,
+  },
+  horarioDica: {
+    fontSize: 13,
+    color: colors.neutralGray,
+    textAlign: 'center',
+  },
+  horarioErro: {
+    fontSize: 13,
+    color: colors.danger,
+    textAlign: 'center',
+  },
+  vazio: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 24,
+    gap: 16,
+  },
+  vazioAcoes: {
+    alignItems: 'center',
+    gap: 8,
+  },
+  vazioBotao: {
+    backgroundColor: colors.primary,
+    borderRadius: 14,
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+  },
+  vazioBotaoTexto: {
+    color: colors.white,
+    fontSize: 15,
+    fontWeight: '700',
   },
   confirmButtonText: {
     color: colors.white,

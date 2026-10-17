@@ -23,6 +23,12 @@ export type CarWashCardProps = {
   isOpen: boolean;
   image: string;
   rank: number;
+  /**
+   * Busca por horário ativa (I9, ISO com offset): vai junto para `/servicos`
+   * (pré-preenche o passo "Data e hora" do pedido) e o selo mostra
+   * "DISPONÍVEL" — o `isOpen` é de agora, não do horário buscado.
+   */
+  horario?: string | null;
 };
 
 export function CarWashCard({
@@ -36,12 +42,19 @@ export function CarWashCard({
   isOpen,
   image,
   rank,
+  horario,
 }: CarWashCardProps) {
+  const selo = horario
+    ? { texto: 'DISPONÍVEL', estilo: styles.statusOpen }
+    : isOpen
+      ? { texto: 'ABERTO', estilo: styles.statusOpen }
+      : { texto: 'FECHADO', estilo: styles.statusClosed };
+
   return (
     <Link
       href={{
         pathname: '/servicos',
-        params: { id, nome: name },
+        params: horario ? { id, nome: name, horario } : { id, nome: name },
       }}
       asChild>
       <TouchableOpacity style={styles.card} activeOpacity={0.7}>
@@ -69,8 +82,8 @@ export function CarWashCard({
 
           <Text style={styles.price}>{formatarPrecoAPartirDe(price)}</Text>
 
-          <View style={[styles.statusBadge, isOpen ? styles.statusOpen : styles.statusClosed]}>
-            <Text style={styles.statusText}>{isOpen ? 'ABERTO' : 'FECHADO'}</Text>
+          <View style={[styles.statusBadge, selo.estilo]}>
+            <Text style={styles.statusText}>{selo.texto}</Text>
           </View>
         </View>
       </TouchableOpacity>

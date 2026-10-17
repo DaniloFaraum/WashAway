@@ -12,8 +12,9 @@ async function request(path: string, options?: RequestInit): Promise<any> {
   return response.json()
 }
 
-export async function getLavaRapidos(): Promise<LavaRapido[]> {
-  const data = await request(LAVA_RAPIDOS_ROUTES.list)
+/** Todos os lava-rápidos ou, com `horario` (ISO com offset, I9), só os abertos naquele instante. */
+export async function getLavaRapidos(horario?: string | null): Promise<LavaRapido[]> {
+  const data = await request(LAVA_RAPIDOS_ROUTES.list(horario))
   return data.map(normalizeLavaRapido)
 }
 

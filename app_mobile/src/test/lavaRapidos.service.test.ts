@@ -1,7 +1,28 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { getLavaRapido, getLavaRapidos } from '../features/lava-rapidos/service/lavaRapidos.service'
 
 describe('lavaRapidos.service', () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  // O json-server de teste não implementa o filtro por horário: só a URL é conferida.
+  it('getLavaRapidos(horario) manda ?horario= codificado (I9)', async () => {
+    const fetchMock = vi.spyOn(global, 'fetch').mockResolvedValue({ ok: true, status: 200, json: async () => [] } as unknown as Response)
+
+    await getLavaRapidos('2026-10-20T10:00:00-03:00')
+
+    expect(String(fetchMock.mock.calls[0][0])).toMatch(/\/lavaRapidos\?horario=2026-10-20T10%3A00%3A00-03%3A00$/)
+  })
+
+  it('getLavaRapidos sem horario não manda o parâmetro', async () => {
+    const fetchMock = vi.spyOn(global, 'fetch').mockResolvedValue({ ok: true, status: 200, json: async () => [] } as unknown as Response)
+
+    await getLavaRapidos()
+
+    expect(String(fetchMock.mock.calls[0][0])).toMatch(/\/lavaRapidos$/)
+  })
+
   it('getLavaRapidos busca os lava-rápidos do json-server de teste', async () => {
     const lavaRapidos = await getLavaRapidos()
 
