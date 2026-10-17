@@ -1,5 +1,6 @@
 import type { HorarioFuncionamento } from '@prisma/client'
 import { prisma } from '../../config/prisma.js'
+import type { HorarioDiaInput } from './horarios.validation.js'
 
 export type HorarioDia = {
   diaSemana: number
@@ -32,4 +33,16 @@ export async function listarHorarios(lavaRapidoId: string): Promise<HorarioDia[]
     const registro = porDia.get(diaSemana)
     return registro ? paraHorarioDia(registro) : horarioNaoDefinido(diaSemana)
   })
+}
+
+/**
+ * Substitui o horário semanal inteiro do lava-rápido (os 7 dias, já validados por
+ * `parseHorariosInput`) numa transação e devolve os 7 dias como o `GET`.
+ */
+export async function substituirHorarios(lavaRapidoId: string, dias: HorarioDiaInput[]): Promise<HorarioDia[]> {
+  await prisma.$transaction([
+    prisma.horarioFuncionamento.deleteMany({ where: { lavaRapidoId } }),
+    prisma.horarioFuncionamento.createMany({ data: dias.map((dia) => ({ lavaRapidoId, ...dia })) }),
+  ])
+  return listarHorarios(lavaRapidoId)
 }
