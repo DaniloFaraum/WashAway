@@ -7,6 +7,7 @@ import { emailsEnfileirados, limparEmails } from './helpers/email.js'
 import {
   criarClienteTeste,
   criarLavaRapidoTeste,
+  criarPedidoTeste,
   criarServicoTeste,
   criarUsuarioInternoTeste,
   sufixoUnico,
@@ -126,8 +127,8 @@ describe('empresa: solicitar, ver e cancelar', () => {
       motivo: 'Vou fechar a loja',
       status: 'pendente',
       decididoEm: null,
-      decididoPorId: null,
     })
+    expect(primeira.body).not.toHaveProperty('decididoPorId')
     expect(segunda.status).toBe(200)
     expect(segunda.body.id).toBe(primeira.body.id)
     expect(segunda.body.motivo).toBe('Vou fechar a loja')
@@ -300,5 +301,79 @@ describe('interno admin: listar, aprovar e recusar', () => {
 
     expect(response.status).toBe(401)
     expect(await prisma.lavaRapido.count({ where: { id: empresa.id } })).toBe(1)
+  })
+})
+
+describe('review i17-interno-exclusao rodada 1', () => {
+  it('aprovar apaga os pedidos (e itens) da empresa; cliente e veículo continuam', async () => {
+    const { empresa, token } = await empresaComEmail()
+    const pedido = await criarPedidoTeste(empresa.id)
+    const solicitada = await solicitar(token)
+
+    const aprovada = await comToken(supertest(app).post(`${ROTA_INTERNA}/${solicitada.body.id}/aprovar`), tokenAdmin)
+
+    expect(aprovada.status).toBe(200)
+    expect(await prisma.pedido.count({ where: { id: pedido.id } })).toBe(0)
+    expect(await prisma.pedidoServico.count({ where: { pedidoId: pedido.id } })).toBe(0)
+    expect(await prisma.cliente.count({ where: { id: pedido.clienteId } })).toBe(1)
+    expect(await prisma.veiculo.count({ where: { id: pedido.veiculoId } })).toBe(1)
+  })
+
+  it('duas aprovações simultâneas: uma 200, a outra 409 com o status já aprovado', async () => {
+    const { token } = await empresaComEmail()
+    const solicitada = await solicitar(token)
+
+    const respostas = await Promise.all([
+      comToken(supertest(app).post(`${ROTA_INTERNA}/${solicitada.body.id}/aprovar`), tokenAdmin),
+      comToken(supertest(app).post(`${ROTA_INTERNA}/${solicitada.body.id}/aprovar`), tokenAdmin),
+    ])
+
+    expect(respostas.map((r) => r.status).sort()).toEqual([200, 409])
+    const conflito = respostas.find((r) => r.status === 409)!
+    expect(conflito.body.error).toContain('aprovada')
+  })
+
+  it('interno que perdeu `admin` no banco (token ainda com admin): 403 em listar e aprovar', async () => {
+    const semAdmin = await criarUsuarioInternoTeste({ permissoes: [] })
+    const tokenAntigo = tokenDeInterno(['admin'], semAdmin)
+    const { empresa, token } = await empresaComEmail()
+    const solicitada = await solicitar(token)
+
+    const listar = await comToken(supertest(app).get(ROTA_INTERNA), tokenAntigo)
+    const aprovar = await comToken(supertest(app).post(`${ROTA_INTERNA}/${solicitada.body.id}/aprovar`), tokenAntigo)
+
+    expect(listar.status).toBe(403)
+    expect(aprovar.status).toBe(403)
+    expect(await prisma.lavaRapido.count({ where: { id: empresa.id } })).toBe(1)
+  })
+
+  it('interno removido: 401 também em listar', async () => {
+    const response = await comToken(
+      supertest(app).get(ROTA_INTERNA),
+      tokenDeInterno(['admin'], { id: `interno-removido-${sufixoUnico()}` }),
+    )
+
+    expect(response.status).toBe(401)
+  })
+
+  it('empresa excluída: GET e DELETE com o token antigo respondem 401', async () => {
+    const { token } = await empresaComEmail()
+    const solicitada = await solicitar(token)
+    await comToken(supertest(app).post(`${ROTA_INTERNA}/${solicitada.body.id}/aprovar`), tokenAdmin)
+
+    expect((await comToken(supertest(app).get(ROTA_EMPRESA), token)).status).toBe(401)
+    expect((await comToken(supertest(app).delete(ROTA_EMPRESA), token)).status).toBe(401)
+  })
+
+  it('respostas da empresa não trazem decididoPorId', async () => {
+    const { token } = await empresaComEmail()
+    const solicitada = await solicitar(token)
+    expect(solicitada.body).not.toHaveProperty('decididoPorId')
+    await comToken(supertest(app).post(`${ROTA_INTERNA}/${solicitada.body.id}/recusar`), tokenAdmin)
+
+    const ver = await comToken(supertest(app).get(ROTA_EMPRESA), token)
+
+    expect(ver.body.status).toBe('recusada')
+    expect(ver.body).not.toHaveProperty('decididoPorId')
   })
 })

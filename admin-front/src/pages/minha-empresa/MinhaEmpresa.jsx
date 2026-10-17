@@ -43,6 +43,16 @@ function MinhaEmpresa({ empresaLogada }) {
   const [dialogAberto, setDialogAberto] = useState(false)
   const [enviando, setEnviando] = useState(false)
 
+  // Depois de um erro (ex.: a equipe decidiu com a tela aberta e o cancelamento
+  // deu 404), mostra o estado real da solicitação em vez do que estava na tela.
+  async function recarregar() {
+    try {
+      setSolicitacao(await getSolicitacaoExclusao())
+    } catch {
+      // Mantém o que está na tela; o toast já avisou do erro.
+    }
+  }
+
   async function confirmarSolicitacao(motivo) {
     setEnviando(true)
     try {
@@ -51,6 +61,7 @@ function MinhaEmpresa({ empresaLogada }) {
       showToast('Pedido de exclusão enviado para a equipe.')
     } catch (err) {
       showToast(err.message, 'error')
+      await recarregar()
     } finally {
       setEnviando(false)
     }
@@ -63,6 +74,7 @@ function MinhaEmpresa({ empresaLogada }) {
       showToast('Pedido de exclusão cancelado.')
     } catch (err) {
       showToast(err.message, 'error')
+      await recarregar()
     } finally {
       setEnviando(false)
     }

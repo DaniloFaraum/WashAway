@@ -1,9 +1,9 @@
 import type { Request, Response } from 'express'
 import type { StatusSolicitacaoExclusao } from '@prisma/client'
-import { getUsuarioInternoById } from '../internos/internos.service.js'
 import {
   aprovarSolicitacao,
   cancelarSolicitacaoDaEmpresa,
+  empresaExiste,
   getSolicitacaoDaEmpresa,
   listarSolicitacoes,
   recusarSolicitacao,
@@ -16,6 +16,13 @@ import { textoOpcional } from './exclusoes.validation.js'
 const SESSAO_INVALIDA = 'Sessão inválida'
 
 // --- Empresa (autenticar('lavaRapido')): a empresa é `req.auth.id` ---
+
+/** Token válido de uma empresa que não existe mais (ex.: exclusão aprovada) → 401. */
+async function empresaDaSessao(req: Request, res: Response): Promise<boolean> {
+  if (await empresaExiste(req.auth!.id)) return true
+  res.status(401).json({ error: SESSAO_INVALIDA })
+  return false
+}
 
 /** POST /lavaRapidos/me/solicitacao-exclusao { motivo? } */
 export async function solicitar(req: Request, res: Response) {
@@ -36,6 +43,7 @@ export async function solicitar(req: Request, res: Response) {
 
 /** GET /lavaRapidos/me/solicitacao-exclusao → a mais recente (qualquer status) */
 export async function verDaEmpresa(req: Request, res: Response) {
+  if (!(await empresaDaSessao(req, res))) return
   const solicitacao = await getSolicitacaoDaEmpresa(req.auth!.id)
   if (!solicitacao) {
     res.status(404).json({ error: 'Nenhuma solicitação de exclusão' })
@@ -46,6 +54,7 @@ export async function verDaEmpresa(req: Request, res: Response) {
 
 /** DELETE /lavaRapidos/me/solicitacao-exclusao → cancela a pendente */
 export async function cancelar(req: Request, res: Response) {
+  if (!(await empresaDaSessao(req, res))) return
   const solicitacao = await cancelarSolicitacaoDaEmpresa(req.auth!.id)
   if (!solicitacao) {
     res.status(404).json({ error: 'Nenhuma solicitação de exclusão pendente' })
@@ -54,7 +63,8 @@ export async function cancelar(req: Request, res: Response) {
   res.json(solicitacao)
 }
 
-// --- Equipe interna (autenticar('interno') + autorizar('admin')) ---
+// --- Equipe interna (autenticar('interno') + autorizar('admin') + internoAtivo('admin')):
+// o interno do token existe e tem `admin` no banco; é ele quem vai em `decididoPorId`. ---
 
 function ehStatus(valor: unknown): valor is StatusSolicitacaoExclusao {
   return typeof valor === 'string' && (STATUS_SOLICITACAO_EXCLUSAO as string[]).includes(valor)
@@ -68,16 +78,6 @@ export async function listar(req: Request, res: Response) {
     return
   }
   res.json(await listarSolicitacoes(status))
-}
-
-/** O interno do token ainda existe? (é ele quem vai em `decididoPorId`) */
-async function internoDaSessao(req: Request, res: Response): Promise<string | null> {
-  const interno = await getUsuarioInternoById(req.auth!.id)
-  if (!interno) {
-    res.status(401).json({ error: SESSAO_INVALIDA })
-    return null
-  }
-  return interno.id
 }
 
 function responderDecisao(res: Response, resultado: DecisaoResultado) {
@@ -94,9 +94,7 @@ function responderDecisao(res: Response, resultado: DecisaoResultado) {
 
 /** POST /interno/solicitacoes-exclusao/:id/aprovar → exclui a empresa */
 export async function aprovar(req: Request, res: Response) {
-  const internoId = await internoDaSessao(req, res)
-  if (!internoId) return
-  responderDecisao(res, await aprovarSolicitacao(req.params.id, internoId))
+  responderDecisao(res, await aprovarSolicitacao(req.params.id, req.auth!.id))
 }
 
 /** POST /interno/solicitacoes-exclusao/:id/recusar { observacao? } */
@@ -106,7 +104,5 @@ export async function recusar(req: Request, res: Response) {
     res.status(400).json({ error: observacao.erro })
     return
   }
-  const internoId = await internoDaSessao(req, res)
-  if (!internoId) return
-  responderDecisao(res, await recusarSolicitacao(req.params.id, internoId, observacao.valor))
+  responderDecisao(res, await recusarSolicitacao(req.params.id, req.auth!.id, observacao.valor))
 }

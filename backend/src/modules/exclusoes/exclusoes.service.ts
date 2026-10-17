@@ -1,4 +1,4 @@
-import type { Prisma, SolicitacaoExclusao, StatusSolicitacaoExclusao } from '@prisma/client'
+import { StatusSolicitacaoExclusao, type Prisma, type SolicitacaoExclusao } from '@prisma/client'
 import { prisma } from '../../config/prisma.js'
 import { enfileirarEmail } from '../email/email.service.js'
 
@@ -12,7 +12,14 @@ import { enfileirarEmail } from '../email/email.service.js'
 // `nome`/`cnpj`/`email` são snapshot: o registro sobrevive à exclusão
 // (`lavaRapidoId` vira null pelo `onDelete: SetNull`).
 
-export const STATUS_SOLICITACAO_EXCLUSAO: StatusSolicitacaoExclusao[] = ['pendente', 'aprovada', 'recusada', 'cancelada']
+export const STATUS_SOLICITACAO_EXCLUSAO = Object.values(StatusSolicitacaoExclusao)
+
+// `decididoPorId` (id do interno que decidiu) só sai nas rotas internas: a
+// empresa não precisa dele.
+const OMIT_DA_EMPRESA = { decididoPorId: true } as const
+
+/** Solicitação como a empresa vê (sem `decididoPorId`). */
+export type SolicitacaoDaEmpresa = Omit<SolicitacaoExclusao, 'decididoPorId'>
 
 const NOME_PRODUTO = 'Wash Your Way'
 
@@ -64,8 +71,8 @@ async function enfileirarEmailDaEtapa(
 
 export type SolicitarExclusaoResultado =
   | { tipo: 'empresa_inexistente' }
-  | { tipo: 'existente'; solicitacao: SolicitacaoExclusao }
-  | { tipo: 'criada'; solicitacao: SolicitacaoExclusao }
+  | { tipo: 'existente'; solicitacao: SolicitacaoDaEmpresa }
+  | { tipo: 'criada'; solicitacao: SolicitacaoDaEmpresa }
 
 /**
  * Cria a solicitação pendente da empresa, ou devolve a que já existe. A linha
@@ -77,7 +84,10 @@ export function solicitarExclusao(lavaRapidoId: string, motivo: string | null): 
     const travada = await tx.$queryRaw<{ id: string }[]>`SELECT id FROM "LavaRapido" WHERE id = ${lavaRapidoId} FOR UPDATE`
     if (travada.length === 0) return { tipo: 'empresa_inexistente' }
 
-    const pendente = await tx.solicitacaoExclusao.findFirst({ where: { lavaRapidoId, status: 'pendente' } })
+    const pendente = await tx.solicitacaoExclusao.findFirst({
+      where: { lavaRapidoId, status: 'pendente' },
+      omit: OMIT_DA_EMPRESA,
+    })
     if (pendente) return { tipo: 'existente', solicitacao: pendente }
 
     const empresa = await tx.lavaRapido.findUniqueOrThrow({
@@ -86,10 +96,16 @@ export function solicitarExclusao(lavaRapidoId: string, motivo: string | null): 
     })
     const solicitacao = await tx.solicitacaoExclusao.create({
       data: { lavaRapidoId, nome: empresa.name, cnpj: empresa.cnpj, email: empresa.email, motivo },
+      omit: OMIT_DA_EMPRESA,
     })
     await enfileirarEmailDaEtapa(tx, 'exclusao_solicitada', solicitacao)
     return { tipo: 'criada', solicitacao }
   })
+}
+
+/** A empresa do token ainda existe? (token de empresa excluída continua válido até expirar) */
+export async function empresaExiste(lavaRapidoId: string): Promise<boolean> {
+  return (await prisma.lavaRapido.count({ where: { id: lavaRapidoId } })) > 0
 }
 
 /** Solicitação mais recente da empresa (qualquer status), ou `null` se nunca houve. */
@@ -97,6 +113,7 @@ export function getSolicitacaoDaEmpresa(lavaRapidoId: string) {
   return prisma.solicitacaoExclusao.findFirst({
     where: { lavaRapidoId },
     orderBy: { criadoEm: 'desc' },
+    omit: OMIT_DA_EMPRESA,
   })
 }
 
@@ -110,7 +127,7 @@ export async function cancelarSolicitacaoDaEmpresa(lavaRapidoId: string) {
       data: { status: 'cancelada', decididoEm: new Date() },
     })
     if (count === 0) return null
-    return tx.solicitacaoExclusao.findUniqueOrThrow({ where: { id: pendente.id } })
+    return tx.solicitacaoExclusao.findUniqueOrThrow({ where: { id: pendente.id }, omit: OMIT_DA_EMPRESA })
   })
 }
 
@@ -145,7 +162,10 @@ async function decidir(
     where: { id, status: 'pendente' },
     data: { status, decididoEm: new Date(), decididoPorId: internoId, observacao },
   })
-  if (count === 0) return { tipo: 'ja_decidida', solicitacao: atual }
+  // Relê: numa decisão concorrente, `atual` ainda diria `pendente`.
+  if (count === 0) {
+    return { tipo: 'ja_decidida', solicitacao: await tx.solicitacaoExclusao.findUniqueOrThrow({ where: { id } }) }
+  }
 
   return { tipo: 'ok', solicitacao: await tx.solicitacaoExclusao.findUniqueOrThrow({ where: { id } }) }
 }

@@ -380,7 +380,7 @@ const solicitacaoExclusaoSchema = {
     status: { type: 'string', enum: ['pendente', 'aprovada', 'recusada', 'cancelada'] },
     criadoEm: { type: 'string', format: 'date-time' },
     decididoEm: { type: 'string', format: 'date-time', nullable: true, description: 'Quando foi aprovada, recusada ou cancelada.' },
-    decididoPorId: { type: 'string', nullable: true, description: 'Usuário interno que aprovou/recusou.' },
+    decididoPorId: { type: 'string', nullable: true, description: 'Usuário interno que aprovou/recusou. Só nas rotas internas (não sai nas respostas da empresa).' },
     observacao: { type: 'string', nullable: true, description: 'Observação do interno ao recusar.' },
   },
 }
@@ -389,7 +389,7 @@ const solicitacaoExclusaoSchema = {
 const segurancaInterna = [{ bearerAuth: [] }]
 const erroAutenticacaoInterna = {
   401: { description: 'Sem token, token inválido/expirado, ou interno que não existe mais.', content: { 'application/json': { schema: { $ref: '#/components/schemas/Erro' } } } },
-  403: { description: 'Token de outro tipo (lava-rápido, cliente) ou interno sem a permissão `admin`.', content: { 'application/json': { schema: { $ref: '#/components/schemas/Erro' } } } },
+  403: { description: 'Token de outro tipo (lava-rápido, cliente) ou interno sem a permissão `admin` (no token ou, conferido a cada requisição, no banco).', content: { 'application/json': { schema: { $ref: '#/components/schemas/Erro' } } } },
 }
 
 // I18: pedido como o cliente vê em /clientes/me/pedidos (sem fotos/dados do painel).

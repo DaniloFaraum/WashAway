@@ -1,5 +1,5 @@
 import type { PrismaClient } from '@prisma/client'
-import bcrypt from 'bcryptjs'
+import { gerarHashSenha } from '../src/auth/senha.js'
 
 // Usuário interno de exemplo (i17-interno-exclusao), SÓ PARA DEV: usado pelo
 // demo.ts e pelo seed.ts para operar as rotas internas pelo Swagger
@@ -19,7 +19,7 @@ export async function garantirInternoDemo(prisma: PrismaClient): Promise<boolean
     data: {
       nome: INTERNO_DEMO.nome,
       email: INTERNO_DEMO.email,
-      senha: await bcrypt.hash(INTERNO_DEMO.senha, 10),
+      senha: await gerarHashSenha(INTERNO_DEMO.senha),
       permissoes: INTERNO_DEMO.permissoes,
     },
   })

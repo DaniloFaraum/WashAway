@@ -2,7 +2,14 @@ import { afterAll, describe, expect, it } from 'vitest'
 import supertest from 'supertest'
 import { createApp } from '../app.js'
 import { prisma } from '../config/prisma.js'
-import { criarClienteTeste, criarLavaRapidoTeste, SENHA_CLIENTE_TESTE, sufixoUnico } from './helpers/factories.js'
+import {
+  criarClienteTeste,
+  criarLavaRapidoTeste,
+  criarUsuarioInternoTeste,
+  SENHA_CLIENTE_TESTE,
+  SENHA_INTERNO_TESTE,
+  sufixoUnico,
+} from './helpers/factories.js'
 import { limparDadosDeTeste, registrarParaLimpeza } from './helpers/limpeza.js'
 
 // Limite de tentativas (I17, decisão de 2026-10-10): login do cliente, login do
@@ -124,5 +131,20 @@ describe('POST /auth/cliente/cadastro', () => {
 
     expect(bloqueado.status).toBe(429)
     expect(bloqueado.body.error).toMatch(/Muitas tentativas/)
+  })
+})
+
+describe('POST /auth/interno/login', () => {
+  it(`depois de ${LIMITE} senhas erradas, responde 429; logins certos não contam`, async () => {
+    const app = novoApp()
+    const interno = await criarUsuarioInternoTeste()
+    const tentar = (senha: string) => supertest(app).post('/auth/interno/login').send({ email: interno.email, senha })
+
+    for (let i = 0; i < LIMITE + 1; i++) expect((await tentar(SENHA_INTERNO_TESTE)).status).toBe(200)
+    for (let i = 0; i < LIMITE; i++) expect((await tentar('errada')).status).toBe(401)
+    const bloqueada = await tentar(SENHA_INTERNO_TESTE)
+
+    expect(bloqueada.status).toBe(429)
+    expect(bloqueada.body.error).toMatch(/Muitas tentativas/)
   })
 })

@@ -1,8 +1,9 @@
 import 'dotenv/config'
 import { randomBytes } from 'node:crypto'
 import { parseArgs } from 'node:util'
-import { PrismaClient } from '@prisma/client'
-import bcrypt from 'bcryptjs'
+import { prisma } from '../src/config/prisma.js'
+import { criarUsuarioInterno } from '../src/modules/internos/internos.service.js'
+import { FORMATO_EMAIL, normalizarEmail } from '../src/utils/email.js'
 
 // Cria um usuário interno (equipe WashAway, i17-interno-exclusao). É o único
 // caminho fora de seed/demo: não existe rota de cadastro de interno.
@@ -13,9 +14,8 @@ import bcrypt from 'bcryptjs'
 // - --permissoes: lista separada por vírgula (hoje só `admin` tem uso).
 // - sem --senha: gera uma senha aleatória e mostra UMA vez no terminal.
 // - e-mail já cadastrado: recusa (não altera o existente).
-
-const CUSTO_BCRYPT = 10
-const FORMATO_EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+// Hash e normalização do e-mail são os de `src/` (criarUsuarioInterno), os
+// mesmos do login.
 
 function falhar(mensagem: string): never {
   console.error(`Erro: ${mensagem}`)
@@ -32,7 +32,7 @@ const { values } = parseArgs({
   },
 })
 
-const email = values.email?.trim().toLowerCase()
+const email = values.email === undefined ? undefined : normalizarEmail(values.email)
 if (!email || !FORMATO_EMAIL.test(email)) falhar('informe um --email válido')
 
 const permissoes = (values.permissoes ?? '')
@@ -47,15 +47,11 @@ if (senha.length < 8 || Buffer.byteLength(senha, 'utf8') > 72) falhar('a senha p
 
 const nome = values.nome?.trim() || email.split('@')[0]
 
-const prisma = new PrismaClient()
-
 async function main() {
   if (await prisma.usuarioInterno.findUnique({ where: { email } })) {
     falhar(`já existe um usuário interno com o e-mail ${email}`)
   }
-  const interno = await prisma.usuarioInterno.create({
-    data: { nome, email: email!, senha: await bcrypt.hash(senha, CUSTO_BCRYPT), permissoes },
-  })
+  const interno = await criarUsuarioInterno({ nome, email: email!, senha, permissoes })
   console.log(`+ Usuário interno ${interno.email} (${interno.nome}), permissões: ${interno.permissoes.join(', ')}`)
   if (senhaGerada) console.log(`  Senha gerada (anote agora, não será mostrada de novo): ${senha}`)
 }
