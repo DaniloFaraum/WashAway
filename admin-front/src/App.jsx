@@ -4,6 +4,7 @@ import CircularProgress from '@mui/material/CircularProgress'
 import AppShell from './components/layout/AppShell.jsx'
 import Login from './login/Login.jsx'
 import OnboardingContrato from './login/OnboardingContrato.jsx'
+import DefinirNovaSenha from './login/DefinirNovaSenha.jsx'
 import { useSessaoEmpresa } from './login/useSessaoEmpresa.js'
 import PainelPedidos from './pages/painel-pedidos/PainelPedidos.jsx'
 import Servicos from './pages/servicos/Servicos.jsx'
@@ -17,6 +18,10 @@ function App() {
     solicitacaoPendente,
     loading,
     avisoSessao,
+    trocaDeSenhaObrigatoria,
+    empresaEmTrocaDeSenha,
+    definirNovaSenha,
+    cancelarTrocaDeSenha,
     entrar,
     cadastrar,
     aceitarContrato,
@@ -31,6 +36,17 @@ function App() {
       <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '100vh' }}>
         <CircularProgress />
       </Box>
+    )
+  }
+
+  // Entrou com a senha temporária (i17-senha-gerada): nada do painel até trocar.
+  if (trocaDeSenhaObrigatoria) {
+    return (
+      <DefinirNovaSenha
+        empresa={empresaEmTrocaDeSenha}
+        onDefinir={definirNovaSenha}
+        onCancelar={cancelarTrocaDeSenha}
+      />
     )
   }
 

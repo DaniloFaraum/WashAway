@@ -60,17 +60,20 @@ export function normalizeHorarioDia(raw) {
 /**
  * Sessão do painel: resposta do login e do aceite do contrato (I17).
  * @typedef {Object} SessaoEmpresa
- * @property {string} token - token de lava-rápido (Authorization: Bearer)
+ * @property {string} token - token de lava-rápido (Authorization: Bearer); com
+ *   `trocaDeSenhaObrigatoria`, token de escopo `trocar-senha` (só troca a senha)
+ * @property {boolean} trocaDeSenhaObrigatoria - entrou com a senha temporária (i17-senha-gerada)
  * @property {LavaRapido} empresa
  */
 
 /**
- * @param {any} raw - `{ token, expiraEm, lavaRapido }`
+ * @param {any} raw - `{ token, expiraEm, trocaDeSenhaObrigatoria, lavaRapido }`
  * @returns {SessaoEmpresa}
  */
 export function normalizeSessao(raw) {
   return {
     token: String(raw.token ?? ''),
+    trocaDeSenhaObrigatoria: raw.trocaDeSenhaObrigatoria === true,
     empresa: normalizeLavaRapido(raw.lavaRapido ?? {}),
   }
 }

@@ -11,20 +11,11 @@ import Stack from '@mui/material/Stack'
 import Snackbar from '@mui/material/Snackbar'
 import Alert from '@mui/material/Alert'
 import CircularProgress from '@mui/material/CircularProgress'
+import Link from '@mui/material/Link'
 import { useToast } from '../hooks/useToast.js'
 import { buscarCep } from './service/cep.service.js'
-
-// Mesmas regras do backend (onboarding, I17).
-const SENHA_MINIMA = 8
-
-/**
- * @returns {string | null} mensagem de erro, ou null se a senha do cadastro estiver ok
- */
-function validarSenhaCadastro(senha, confirmarSenha) {
-  if (senha.length < SENHA_MINIMA) return `A senha precisa ter no mínimo ${SENHA_MINIMA} caracteres.`
-  if (senha !== confirmarSenha) return 'As senhas não conferem.'
-  return null
-}
+import { SENHA_MINIMA, validarNovaSenha } from './validarNovaSenha.js'
+import EsqueciSenha from './EsqueciSenha.jsx'
 
 function montarAddress({ logradouro, numero, bairro, cidade, estado, cep }) {
   return `${logradouro}, ${numero} - ${bairro}, ${cidade} - ${estado}, CEP ${cep}`
@@ -45,6 +36,7 @@ function Login({ onEntrar, onCadastrar, aviso = null }) {
   const [email, setEmail] = useState('')
   const [confirmarSenha, setConfirmarSenha] = useState('')
   const [enviando, setEnviando] = useState(false)
+  const [esqueciSenha, setEsqueciSenha] = useState(false)
   const { toast, showToast, closeToast } = useToast()
 
   async function handleBuscarCep() {
@@ -78,7 +70,7 @@ function Login({ onEntrar, onCadastrar, aviso = null }) {
       if (modo === 'entrar') {
         await onEntrar({ cnpj, senha })
       } else {
-        const erroSenha = validarSenhaCadastro(senha, confirmarSenha)
+        const erroSenha = validarNovaSenha(senha, confirmarSenha)
         if (erroSenha) {
           showToast(erroSenha, 'error')
           return
@@ -115,143 +107,155 @@ function Login({ onEntrar, onCadastrar, aviso = null }) {
             </Alert>
           )}
 
-          <Tabs value={modo} onChange={(_, value) => setModo(value)} variant="fullWidth" sx={{ mb: 3 }}>
-            <Tab label="Entrar" value="entrar" />
-            <Tab label="Cadastrar" value="cadastrar" />
-          </Tabs>
+          {esqueciSenha ? (
+            <EsqueciSenha onVoltar={() => setEsqueciSenha(false)} onErro={(mensagem) => showToast(mensagem, 'error')} />
+          ) : (
+            <>
+              <Tabs value={modo} onChange={(_, value) => setModo(value)} variant="fullWidth" sx={{ mb: 3 }}>
+                <Tab label="Entrar" value="entrar" />
+                <Tab label="Cadastrar" value="cadastrar" />
+              </Tabs>
 
-          <Box component="form" onSubmit={handleSubmit}>
-            <Stack spacing={2}>
-              {modo === 'cadastrar' && (
-                <>
+              <Box component="form" onSubmit={handleSubmit}>
+                <Stack spacing={2}>
+                  {modo === 'cadastrar' && (
+                    <>
+                      <TextField
+                        label="Nome da empresa"
+                        value={name}
+                        onChange={(event) => setName(event.target.value)}
+                        required
+                        fullWidth
+                      />
+                      <Stack direction="row" spacing={1}>
+                        <TextField
+                          label="CEP"
+                          value={cep}
+                          onChange={(event) => setCep(event.target.value.replace(/\D/g, ''))}
+                          required
+                          fullWidth
+                          inputProps={{ maxLength: 8, inputMode: 'numeric' }}
+                          helperText="Só números, 8 dígitos"
+                        />
+                        <Button
+                          onClick={handleBuscarCep}
+                          disabled={buscandoCep || cep.length !== 8}
+                          variant="outlined"
+                          sx={{ height: 56, whiteSpace: 'nowrap' }}
+                          startIcon={buscandoCep ? <CircularProgress size={16} /> : null}
+                        >
+                          Buscar
+                        </Button>
+                      </Stack>
+                      <Stack direction="row" spacing={2}>
+                        <TextField
+                          label="Logradouro"
+                          value={logradouro}
+                          onChange={(event) => setLogradouro(event.target.value)}
+                          required
+                          fullWidth
+                        />
+                        <TextField
+                          label="Número"
+                          value={numero}
+                          onChange={(event) => setNumero(event.target.value)}
+                          required
+                          sx={{ width: '40%' }}
+                        />
+                      </Stack>
+                      <TextField
+                        label="Bairro"
+                        value={bairro}
+                        onChange={(event) => setBairro(event.target.value)}
+                        required
+                        fullWidth
+                      />
+                      <Stack direction="row" spacing={2}>
+                        <TextField
+                          label="Cidade"
+                          value={cidade}
+                          onChange={(event) => setCidade(event.target.value)}
+                          required
+                          fullWidth
+                        />
+                        <TextField
+                          label="Estado"
+                          value={estado}
+                          onChange={(event) => setEstado(event.target.value)}
+                          required
+                          sx={{ width: '30%' }}
+                        />
+                      </Stack>
+                    </>
+                  )}
+
                   <TextField
-                    label="Nome da empresa"
-                    value={name}
-                    onChange={(event) => setName(event.target.value)}
+                    label="CNPJ"
+                    value={cnpj}
+                    onChange={(event) => setCnpj(event.target.value.replace(/\D/g, ''))}
                     required
                     fullWidth
+                    inputProps={{ maxLength: 14, inputMode: 'numeric' }}
+                    helperText="Só números, 14 dígitos"
                   />
-                  <Stack direction="row" spacing={1}>
+
+                  {modo === 'cadastrar' && (
                     <TextField
-                      label="CEP"
-                      value={cep}
-                      onChange={(event) => setCep(event.target.value.replace(/\D/g, ''))}
+                      label="E-mail"
+                      type="email"
+                      value={email}
+                      onChange={(event) => setEmail(event.target.value)}
                       required
                       fullWidth
-                      inputProps={{ maxLength: 8, inputMode: 'numeric' }}
-                      helperText="Só números, 8 dígitos"
+                      autoComplete="email"
+                      helperText="Usado para avisos e para recuperar o acesso"
                     />
-                    <Button
-                      onClick={handleBuscarCep}
-                      disabled={buscandoCep || cep.length !== 8}
-                      variant="outlined"
-                      sx={{ height: 56, whiteSpace: 'nowrap' }}
-                      startIcon={buscandoCep ? <CircularProgress size={16} /> : null}
-                    >
-                      Buscar
-                    </Button>
-                  </Stack>
-                  <Stack direction="row" spacing={2}>
-                    <TextField
-                      label="Logradouro"
-                      value={logradouro}
-                      onChange={(event) => setLogradouro(event.target.value)}
-                      required
-                      fullWidth
-                    />
-                    <TextField
-                      label="Número"
-                      value={numero}
-                      onChange={(event) => setNumero(event.target.value)}
-                      required
-                      sx={{ width: '40%' }}
-                    />
-                  </Stack>
+                  )}
+
                   <TextField
-                    label="Bairro"
-                    value={bairro}
-                    onChange={(event) => setBairro(event.target.value)}
+                    label="Senha"
+                    type="password"
+                    value={senha}
+                    onChange={(event) => setSenha(event.target.value)}
                     required
                     fullWidth
+                    autoComplete={modo === 'entrar' ? 'current-password' : 'new-password'}
+                    helperText={modo === 'cadastrar' ? `Mínimo de ${SENHA_MINIMA} caracteres` : undefined}
                   />
-                  <Stack direction="row" spacing={2}>
+
+                  {modo === 'cadastrar' && (
                     <TextField
-                      label="Cidade"
-                      value={cidade}
-                      onChange={(event) => setCidade(event.target.value)}
+                      label="Confirmar senha"
+                      type="password"
+                      value={confirmarSenha}
+                      onChange={(event) => setConfirmarSenha(event.target.value)}
                       required
                       fullWidth
+                      autoComplete="new-password"
+                      error={confirmarSenha !== '' && confirmarSenha !== senha}
+                      helperText={confirmarSenha !== '' && confirmarSenha !== senha ? 'As senhas não conferem' : undefined}
                     />
-                    <TextField
-                      label="Estado"
-                      value={estado}
-                      onChange={(event) => setEstado(event.target.value)}
-                      required
-                      sx={{ width: '30%' }}
-                    />
-                  </Stack>
-                </>
-              )}
+                  )}
 
-              <TextField
-                label="CNPJ"
-                value={cnpj}
-                onChange={(event) => setCnpj(event.target.value.replace(/\D/g, ''))}
-                required
-                fullWidth
-                inputProps={{ maxLength: 14, inputMode: 'numeric' }}
-                helperText="Só números, 14 dígitos"
-              />
+                  {modo === 'cadastrar' && (
+                    <Typography variant="body2" color="text.secondary">
+                      Depois de enviar, você verá o contrato de parceria para assinar.
+                    </Typography>
+                  )}
 
-              {modo === 'cadastrar' && (
-                <TextField
-                  label="E-mail"
-                  type="email"
-                  value={email}
-                  onChange={(event) => setEmail(event.target.value)}
-                  required
-                  fullWidth
-                  autoComplete="email"
-                  helperText="Usado para avisos e para recuperar o acesso"
-                />
-              )}
+                  <Button type="submit" variant="contained" size="large" disabled={enviando}>
+                    {modo === 'entrar' ? 'Entrar' : 'Solicitar cadastro'}
+                  </Button>
 
-              <TextField
-                label="Senha"
-                type="password"
-                value={senha}
-                onChange={(event) => setSenha(event.target.value)}
-                required
-                fullWidth
-                autoComplete={modo === 'entrar' ? 'current-password' : 'new-password'}
-                helperText={modo === 'cadastrar' ? `Mínimo de ${SENHA_MINIMA} caracteres` : undefined}
-              />
-
-              {modo === 'cadastrar' && (
-                <TextField
-                  label="Confirmar senha"
-                  type="password"
-                  value={confirmarSenha}
-                  onChange={(event) => setConfirmarSenha(event.target.value)}
-                  required
-                  fullWidth
-                  autoComplete="new-password"
-                  error={confirmarSenha !== '' && confirmarSenha !== senha}
-                  helperText={confirmarSenha !== '' && confirmarSenha !== senha ? 'As senhas não conferem' : undefined}
-                />
-              )}
-
-              {modo === 'cadastrar' && (
-                <Typography variant="body2" color="text.secondary">
-                  Depois de enviar, você verá o contrato de parceria para assinar.
-                </Typography>
-              )}
-
-              <Button type="submit" variant="contained" size="large" disabled={enviando}>
-                {modo === 'entrar' ? 'Entrar' : 'Solicitar cadastro'}
-              </Button>
-            </Stack>
-          </Box>
+                  {modo === 'entrar' && (
+                    <Link component="button" type="button" variant="body2" onClick={() => setEsqueciSenha(true)} sx={{ alignSelf: 'center' }}>
+                      Esqueci minha senha
+                    </Link>
+                  )}
+                </Stack>
+              </Box>
+            </>
+          )}
         </Paper>
       </Container>
 

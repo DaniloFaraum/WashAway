@@ -5,6 +5,7 @@ import { entrar } from '../login/service/lavaRapidos.service.js'
 const CNPJ_EXISTENTE = '11111111000111'
 const CNPJ_BLOQUEADO = '22222222000122'
 const SENHA_VALIDA = 'senha-forte-123'
+const SENHA_TEMPORARIA = 'Temp7Kx9Pq'
 
 // Stub do backend real: login devolve { token, expiraEm, lavaRapido } (I17).
 function startStubBackend() {
@@ -24,6 +25,14 @@ function startStubBackend() {
       if (req.method === 'POST' && req.url === '/lavaRapidos/login') {
         if (payload.cnpj === CNPJ_BLOQUEADO) {
           return send(429, { error: 'Muitas tentativas. Aguarde 15 minutos e tente de novo.' })
+        }
+        if (payload.cnpj === CNPJ_EXISTENTE && payload.senha === SENHA_TEMPORARIA) {
+          return send(200, {
+            token: 'token-de-troca',
+            expiraEm: '2026-10-17T00:15:00.000Z',
+            trocaDeSenhaObrigatoria: true,
+            lavaRapido: { id: 'lr-1', name: 'Lava Rápido Teste', horarios: [] },
+          })
         }
         if (payload.cnpj === CNPJ_EXISTENTE && payload.senha === SENHA_VALIDA) {
           return send(200, {
@@ -72,6 +81,7 @@ describe('lavaRapidos.service', () => {
 
     expect(sessao).toEqual({
       token: 'token-do-lava-rapido',
+      trocaDeSenhaObrigatoria: false,
       empresa: {
         id: 'lr-1',
         name: 'Lava Rápido Teste',
@@ -82,6 +92,14 @@ describe('lavaRapidos.service', () => {
         horarios: [{ diaSemana: 1, fechado: false, abertura: '08:00', fechamento: '18:00', definido: true }],
       },
     })
+  })
+
+  it('entrar com a senha temporária marca a troca de senha obrigatória (i17-senha-gerada)', async () => {
+    const sessao = await entrar({ cnpj: CNPJ_EXISTENTE, senha: SENHA_TEMPORARIA }, baseUrl)
+
+    expect(sessao.trocaDeSenhaObrigatoria).toBe(true)
+    expect(sessao.token).toBe('token-de-troca')
+    expect(sessao.empresa.id).toBe('lr-1')
   })
 
   it('entrar lança erro amigável quando a senha está errada (401)', async () => {

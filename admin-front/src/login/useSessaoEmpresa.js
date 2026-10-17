@@ -12,6 +12,7 @@ import {
 import { entrar, getLavaRapido } from './service/lavaRapidos.service.js'
 import { aceitarContrato, getSolicitacao, solicitar } from './service/onboarding.service.js'
 import { reabrirIntercorrencia } from './service/intercorrencias.service.js'
+import { trocarSenha, TrocaDeSenhaExpiradaError } from './service/senhas.service.js'
 import { definirAoExpirarSessao } from '../services/httpClient.js'
 
 export const MENSAGEM_SESSAO_EXPIRADA = 'Sua sessão expirou. Entre de novo.'
@@ -22,9 +23,13 @@ export const MENSAGEM_SESSAO_EXPIRADA = 'Sua sessão expirou. Entre de novo.'
  *   solicitacaoPendente: import('./service/onboarding.model.js').SolicitacaoOnboarding | null,
  *   loading: boolean,
  *   avisoSessao: string | null,
+ *   trocaDeSenhaObrigatoria: boolean,
+ *   empresaEmTrocaDeSenha: import('./service/lavaRapidos.model.js').LavaRapido | null,
  *   entrar: (credenciais: { cnpj: string, senha: string }) => Promise<void>,
  *   cadastrar: (dados: { name: string, address?: string, cnpj: string, email: string, senha: string }) => Promise<void>,
  *   aceitarContrato: () => Promise<void>,
+ *   definirNovaSenha: (novaSenha: string) => Promise<void>,
+ *   cancelarTrocaDeSenha: () => void,
  *   cancelarOnboarding: () => void,
  *   sair: () => void,
  *   reabrir: () => Promise<void>,
@@ -36,6 +41,9 @@ export function useSessaoEmpresa() {
   const [solicitacaoPendente, setSolicitacaoPendente] = useState(null)
   const [loading, setLoading] = useState(true)
   const [avisoSessao, setAvisoSessao] = useState(null)
+  // Login com a senha temporária (i17-senha-gerada): `{ token, empresa }` com o
+  // token de escopo `trocar-senha`. Só em memória — recarregar volta ao Login.
+  const [trocaDeSenha, setTrocaDeSenha] = useState(null)
 
   // 401 em qualquer chamada do painel (token ausente/expirado): volta ao Login com aviso.
   useEffect(() => {
@@ -87,7 +95,32 @@ export function useSessaoEmpresa() {
   }
 
   async function handleEntrar(credenciais) {
-    abrirSessao(await entrar(credenciais))
+    const sessao = await entrar(credenciais)
+    if (sessao.trocaDeSenhaObrigatoria) {
+      setAvisoSessao(null)
+      setTrocaDeSenha({ token: sessao.token, empresa: sessao.empresa })
+      return
+    }
+    abrirSessao(sessao)
+  }
+
+  async function definirNovaSenha(novaSenha) {
+    if (!trocaDeSenha) return
+    try {
+      const sessao = await trocarSenha({ novaSenha, token: trocaDeSenha.token })
+      setTrocaDeSenha(null)
+      abrirSessao(sessao)
+    } catch (error) {
+      if (error instanceof TrocaDeSenhaExpiradaError) {
+        setTrocaDeSenha(null)
+        setAvisoSessao(error.message)
+      }
+      throw error
+    }
+  }
+
+  function cancelarTrocaDeSenha() {
+    setTrocaDeSenha(null)
   }
 
   async function handleCadastrar(dados) {
@@ -132,9 +165,13 @@ export function useSessaoEmpresa() {
     solicitacaoPendente,
     loading,
     avisoSessao,
+    trocaDeSenhaObrigatoria: trocaDeSenha !== null,
+    empresaEmTrocaDeSenha: trocaDeSenha?.empresa ?? null,
     entrar: handleEntrar,
     cadastrar: handleCadastrar,
     aceitarContrato: handleAceitarContrato,
+    definirNovaSenha,
+    cancelarTrocaDeSenha,
     cancelarOnboarding,
     sair,
     reabrir,
