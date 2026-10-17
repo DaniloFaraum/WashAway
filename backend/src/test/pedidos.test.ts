@@ -63,23 +63,129 @@ describe('/pedidos (painel, token de lava-rápido)', () => {
     expect(response.body.some((item: { id: string }) => item.id === pedidoDeOutraEmpresaId)).toBe(false)
   })
 
-  it('PATCH /pedidos/:id atualiza o status', async () => {
-    const response = await comToken(supertest(app).patch(`/pedidos/${pedidoId}`), token).send({ status: 'em_andamento' })
+  // --- PATCH /pedidos/:id: aceite/recusa e transições (I15) ---
+
+  const patch = (id: string, body: object, comTokenDe: string | null = token) => {
+    const req = supertest(app).patch(`/pedidos/${id}`)
+    return (comTokenDe ? comToken(req, comTokenDe) : req).send(body)
+  }
+
+  it('PATCH aceita um pedido pendente: 200 e statusAlteradoEm preenchido', async () => {
+    const antes = Date.now()
+    const response = await patch(pedidoId, { status: 'aceito' })
 
     expect(response.status).toBe(200)
-    expect(response.body.status).toBe('em_andamento')
+    expect(response.body).toMatchObject({ id: pedidoId, status: 'aceito', motivoRecusa: null })
+    expect(new Date(response.body.statusAlteradoEm).getTime()).toBeGreaterThanOrEqual(antes - 1000)
+    // Mantém o formato de resposta do I13.
+    expect(response.body).toHaveProperty('servicos')
+    expect(response.body.cliente).toHaveProperty('nome')
   })
 
-  it('PATCH /pedidos/:id rejeita um status inválido', async () => {
-    const response = await comToken(supertest(app).patch(`/pedidos/${pedidoId}`), token).send({ status: 'inexistente' })
+  it('PATCH segue o fluxo aceito → em_andamento → concluido', async () => {
+    const pedido = await criarPedidoTeste(lavaRapidoId, { status: 'aceito' })
+
+    expect((await patch(pedido.id, { status: 'em_andamento' })).body.status).toBe('em_andamento')
+    expect((await patch(pedido.id, { status: 'concluido' })).body.status).toBe('concluido')
+  })
+
+  it('PATCH recusa com motivo: motivo salvo; GET /pedidos expõe motivo e data', async () => {
+    const pedido = await criarPedidoTeste(lavaRapidoId)
+    const response = await patch(pedido.id, { status: 'recusado', motivo: '  Agenda cheia  ' })
+
+    expect(response.status).toBe(200)
+    expect(response.body).toMatchObject({ status: 'recusado', motivoRecusa: 'Agenda cheia' })
+
+    const lista = await comToken(supertest(app).get('/pedidos'), token)
+    expect(lista.body.find((item: { id: string }) => item.id === pedido.id)).toMatchObject({
+      status: 'recusado',
+      motivoRecusa: 'Agenda cheia',
+      statusAlteradoEm: expect.any(String),
+    })
+  })
+
+  it('PATCH recusa sem motivo (opcional)', async () => {
+    const pedido = await criarPedidoTeste(lavaRapidoId)
+    const response = await patch(pedido.id, { status: 'recusado' })
+
+    expect(response.status).toBe(200)
+    expect(response.body).toMatchObject({ status: 'recusado', motivoRecusa: null })
+  })
+
+  it.each([
+    ['recusado', 'aceito', 'Não é possível mudar de recusado para aceito.'],
+    ['pendente', 'concluido', 'Não é possível mudar de pendente para concluído.'],
+    ['pendente', 'em_andamento', 'Não é possível mudar de pendente para em andamento.'],
+    ['concluido', 'pendente', 'Não é possível mudar de concluído para pendente.'],
+    ['aceito', 'aceito', 'O pedido já está aceito.'],
+  ] as const)('PATCH %s → %s: 409 com mensagem clara e status inalterado', async (de, para, mensagem) => {
+    const pedido = await criarPedidoTeste(lavaRapidoId, { status: de })
+    const response = await patch(pedido.id, { status: para })
+
+    expect(response.status).toBe(409)
+    expect(response.body).toEqual({ error: mensagem, codigo: 'TRANSICAO_INVALIDA' })
+    const depois = await prisma.pedido.findUniqueOrThrow({ where: { id: pedido.id } })
+    expect(depois.status).toBe(de)
+    expect(depois.statusAlteradoEm).toBeNull()
+  })
+
+  it('PATCH com motivo acima de 200 caracteres → 400, nada muda', async () => {
+    const pedido = await criarPedidoTeste(lavaRapidoId)
+    const response = await patch(pedido.id, { status: 'recusado', motivo: 'a'.repeat(201) })
 
     expect(response.status).toBe(400)
+    expect(response.body.codigo).toBe('DADOS_INVALIDOS')
+    expect((await prisma.pedido.findUniqueOrThrow({ where: { id: pedido.id } })).status).toBe('pendente')
   })
 
-  it('PATCH /pedidos/:id retorna 404 para um pedido inexistente', async () => {
-    const response = await comToken(supertest(app).patch('/pedidos/id-que-nao-existe'), token).send({ status: 'concluido' })
+  it('PATCH com motivo em status diferente de recusado → 400', async () => {
+    const pedido = await criarPedidoTeste(lavaRapidoId)
+    const response = await patch(pedido.id, { status: 'aceito', motivo: 'tanto faz' })
 
+    expect(response.status).toBe(400)
+    expect((await prisma.pedido.findUniqueOrThrow({ where: { id: pedido.id } })).status).toBe('pendente')
+  })
+
+  it('PATCH rejeita um status inexistente com 400', async () => {
+    const response = await patch(pedidoId, { status: 'inexistente' })
+
+    expect(response.status).toBe(400)
+    expect(response.body.codigo).toBe('DADOS_INVALIDOS')
+  })
+
+  it('PATCH ignora outros campos do body', async () => {
+    const pedido = await criarPedidoTeste(lavaRapidoId)
+    const response = await patch(pedido.id, { status: 'aceito', precoTotal: 1, lavaRapidoId: 'outro' })
+
+    expect(response.status).toBe(200)
+    expect(response.body).toMatchObject({ precoTotal: 50, lavaRapidoId })
+  })
+
+  it('PATCH retorna 404 para pedido inexistente e para pedido de outra empresa (sem alterar)', async () => {
+    expect((await patch('id-que-nao-existe', { status: 'aceito' })).status).toBe(404)
+
+    const response = await patch(pedidoDeOutraEmpresaId, { status: 'aceito' })
     expect(response.status).toBe(404)
+    expect(response.body.codigo).toBe('PEDIDO_NAO_ENCONTRADO')
+    expect((await prisma.pedido.findUniqueOrThrow({ where: { id: pedidoDeOutraEmpresaId } })).status).toBe('pendente')
+  })
+
+  it('PATCH sem token → 401; com token de cliente → 403', async () => {
+    const pedido = await criarPedidoTeste(lavaRapidoId)
+    const cliente = await criarClienteTeste()
+
+    expect((await patch(pedido.id, { status: 'aceito' }, null)).status).toBe(401)
+    expect((await patch(pedido.id, { status: 'aceito' }, tokenDeCliente(cliente))).status).toBe(403)
+    expect((await prisma.pedido.findUniqueOrThrow({ where: { id: pedido.id } })).status).toBe('pendente')
+  })
+
+  it('PATCH concorrente: "Aceitar" e "Recusar" ao mesmo tempo, só um passa', async () => {
+    const pedido = await criarPedidoTeste(lavaRapidoId)
+    const respostas = await Promise.all([patch(pedido.id, { status: 'aceito' }), patch(pedido.id, { status: 'recusado' })])
+
+    expect(respostas.map((r) => r.status).sort()).toEqual([200, 409])
+    const vencedor = respostas.find((r) => r.status === 200)!.body.status
+    expect((await prisma.pedido.findUniqueOrThrow({ where: { id: pedido.id } })).status).toBe(vencedor)
   })
 
   describe('erro inesperado', () => {

@@ -33,7 +33,7 @@ function emailDemo(nome: string) {
 type Combo = { nome: string; preco: number; ativo?: boolean; itens: string[] }
 // Pedido (I13): o cliente/veículo vem da placa (CLIENTES_DEMO); `servicos` são
 // nomes de combos da própria empresa, congelados no pedido.
-type PedidoDemo = { placa: string; servicos: string[]; horario: string; status: PedidoStatus; fotos?: number }
+type PedidoDemo = { placa: string; servicos: string[]; horario: string; status: PedidoStatus; fotos?: number; motivoRecusa?: string }
 type IntercorrenciaDemo = { data: string; motivo: string; horaInicio?: string; horaFim?: string }
 
 type EmpresaDemo = {
@@ -99,6 +99,8 @@ const empresas: EmpresaDemo[] = [
       { placa: 'MNO3P71', servicos: ['Lavagem express'], horario: '2026-10-03T14:30:00-03:00', status: 'pendente', fotos: 1 },
       { placa: 'UVW8X14', servicos: ['Polimento técnico'], horario: '2026-10-03T15:00:00-03:00', status: 'pendente', fotos: 3 },
       { placa: 'KLM1N66', servicos: ['Lavagem express', 'Completa + cera'], horario: '2026-10-04T09:00:00-03:00', status: 'pendente', fotos: 1 },
+      { placa: 'QWE2C45', servicos: ['Completa + cera'], horario: '2026-10-04T11:00:00-03:00', status: 'aceito', fotos: 1 },
+      { placa: 'GHI7J88', servicos: ['Polimento técnico'], horario: '2026-10-04T16:00:00-03:00', status: 'recusado', fotos: 1, motivoRecusa: 'Agenda de polimento cheia nesse horário.' },
       { placa: 'FTR4B21', servicos: ['Lavagem completa'], horario: '2026-09-26T11:00:00-03:00', status: 'concluido', fotos: 2 },
       { placa: 'PQR6S09', servicos: ['Completa + cera'], horario: '2026-10-02T16:00:00-03:00', status: 'concluido', fotos: 2 },
     ],
@@ -130,6 +132,8 @@ const empresas: EmpresaDemo[] = [
       { placa: 'BMW3A20', servicos: ['Spa completo'], horario: '2026-10-03T09:00:00-03:00', status: 'em_andamento', fotos: 3 },
       { placa: 'AUD1Q33', servicos: ['Lavagem tradicional', 'Cristalização de pintura'], horario: '2026-10-03T11:00:00-03:00', status: 'pendente', fotos: 2 },
       { placa: 'SWF4T44', servicos: ['Lavagem tradicional'], horario: '2026-10-02T15:30:00-03:00', status: 'concluido', fotos: 2 },
+      { placa: 'SWF4T44', servicos: ['Spa completo'], horario: '2026-10-04T10:00:00-03:00', status: 'aceito', fotos: 1 },
+      { placa: 'BMW3A20', servicos: ['Cristalização de pintura'], horario: '2026-10-04T15:00:00-03:00', status: 'recusado', fotos: 1 },
     ],
     intercorrencias: [...FERIADOS],
   },
@@ -376,6 +380,7 @@ async function main() {
         servicos: pedido.servicos,
         horario: new Date(pedido.horario),
         status: pedido.status,
+        motivoRecusa: pedido.motivoRecusa,
         fotos: fotos(pedido.placa, pedido.fotos),
       })
     }

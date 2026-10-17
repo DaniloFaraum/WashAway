@@ -256,6 +256,26 @@ async function main() {
       status: 'em_andamento' as const,
       fotos: ['https://placehold.co/400x300?text=Antes+1'],
     },
+    // I15: exemplos de aceito e recusado (com motivo).
+    {
+      lavaRapidoId: lavaRapidos[0].id,
+      clienteId: bruno.clienteId,
+      veiculoId: bruno.veiculoIdPorPlaca.get('XYZ9E88')!,
+      servicos: ['Lavagem completa'],
+      horario: new Date('2026-09-17T13:00:00.000Z'),
+      status: 'aceito' as const,
+      fotos: [],
+    },
+    {
+      lavaRapidoId: lavaRapidos[0].id,
+      clienteId: ana.clienteId,
+      veiculoId: ana.veiculoIdPorPlaca.get('ABC1D23')!,
+      servicos: ['Lavagem completa'],
+      horario: new Date('2026-09-17T19:00:00.000Z'),
+      status: 'recusado' as const,
+      motivoRecusa: 'Fechamos mais cedo nesse dia.',
+      fotos: [],
+    },
     {
       lavaRapidoId: lavaRapidos[2].id,
       clienteId: bruno.clienteId,

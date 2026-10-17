@@ -1,12 +1,13 @@
 import type { Request, Response } from 'express'
 import { criarPedido, listPedidos, updatePedidoStatus } from './pedidos.service.js'
-import { isValidStatus, validarCriacaoPedido, type ErroPedido } from './pedidos.validation.js'
+import { validarCriacaoPedido, type ErroPedido } from './pedidos.validation.js'
+import { validarAtualizacaoStatus, type ErroStatusPedido } from './pedidoStatus.js'
 
 // Rotas do painel (autenticar('lavaRapido')): a empresa é `req.auth.id`.
 // `?lavaRapidoId=` é ignorado; pedido de outra empresa = 404.
 // Criação (autenticar('cliente'), I13): o cliente é `req.auth.id`.
 
-function responderErro(res: Response, { status, ...corpo }: ErroPedido) {
+function responderErro(res: Response, { status, ...corpo }: ErroPedido | ErroStatusPedido) {
   res.status(status).json(corpo)
 }
 
@@ -31,18 +32,19 @@ export async function index(req: Request, res: Response) {
   res.json(pedidos)
 }
 
+/** PATCH /pedidos/:id — `{ status, motivo? }`, só nas transições permitidas (I15). */
 export async function updateStatus(req: Request, res: Response) {
-  const { status } = req.body ?? {}
-
-  if (!isValidStatus(status)) {
-    res.status(400).json({ error: 'status inválido' })
+  const validacao = validarAtualizacaoStatus(req.body)
+  if ('erro' in validacao) {
+    responderErro(res, validacao.erro)
     return
   }
 
-  const pedido = await updatePedidoStatus(req.params.id, req.auth!.id, status)
-  if (!pedido) {
-    res.status(404).json({ error: 'Pedido não encontrado' })
+  const { status, motivo } = validacao.dados
+  const resultado = await updatePedidoStatus(req.params.id, req.auth!.id, status, motivo)
+  if (!resultado.ok) {
+    responderErro(res, resultado.erro)
     return
   }
-  res.json(pedido)
+  res.json(resultado.pedido)
 }

@@ -1,6 +1,7 @@
 import { PedidoStatus, type Prisma } from '@prisma/client'
 import { prisma } from '../../config/prisma.js'
 import { duracaoDoServico } from '../servicos/servicos.service.js'
+import { mensagemTransicaoInvalida, podeTransicionar, type ErroStatusPedido } from './pedidoStatus.js'
 import { validarHorarioPedido, type DadosCriacaoPedido, type ErroPedido } from './pedidos.validation.js'
 
 // I17: no painel o lava-rápido vem sempre do token (`req.auth.id`), nunca do navegador.
@@ -24,11 +25,49 @@ export function listPedidos(lavaRapidoId: string) {
   })
 }
 
-/** Atualiza o status só se o pedido for da empresa; senão devolve `null`. */
-export async function updatePedidoStatus(id: string, lavaRapidoId: string, status: PedidoStatus) {
-  const { count } = await prisma.pedido.updateMany({ where: { id, lavaRapidoId }, data: { status } })
-  if (count === 0) return null
-  return prisma.pedido.findUnique({ where: { id }, include: includePedido })
+export type ResultadoAtualizacaoStatus =
+  | { ok: true; pedido: Prisma.PedidoGetPayload<{ include: typeof includePedido }> }
+  | { ok: false; erro: ErroStatusPedido }
+
+/**
+ * Muda o status do pedido da empresa (I15), seguindo `TRANSICOES`:
+ * - pedido de outra empresa ou inexistente → 404;
+ * - transição não permitida → 409 com mensagem clara;
+ * - grava `statusAlteradoEm` e, em `recusado`, o `motivoRecusa`.
+ * O `updateMany` só casa se o status ainda for o lido: dois cliques
+ * concorrentes ("Aceitar" e "Recusar") não passam os dois — o segundo vira 409.
+ */
+export async function updatePedidoStatus(
+  id: string,
+  lavaRapidoId: string,
+  status: PedidoStatus,
+  motivo: string | null = null,
+  agora: Date = new Date(),
+): Promise<ResultadoAtualizacaoStatus> {
+  const naoEncontrado = { status: 404, error: 'Pedido não encontrado', codigo: 'PEDIDO_NAO_ENCONTRADO' } as const
+  const atual = await prisma.pedido.findFirst({ where: { id, lavaRapidoId }, select: { status: true } })
+  if (!atual) return { ok: false, erro: naoEncontrado }
+
+  const transicaoInvalida = (de: PedidoStatus) =>
+    ({ ok: false, erro: { status: 409, error: mensagemTransicaoInvalida(de, status), codigo: 'TRANSICAO_INVALIDA' } }) as const
+  if (!podeTransicionar(atual.status, status)) return transicaoInvalida(atual.status)
+
+  const { count } = await prisma.pedido.updateMany({
+    where: { id, lavaRapidoId, status: atual.status },
+    data: {
+      status,
+      statusAlteradoEm: agora,
+      motivoRecusa: status === PedidoStatus.recusado ? motivo : null,
+    },
+  })
+  if (count === 0) {
+    // Mudou (ou sumiu) entre a leitura e a escrita.
+    const depois = await prisma.pedido.findFirst({ where: { id, lavaRapidoId }, select: { status: true } })
+    return depois ? transicaoInvalida(depois.status) : { ok: false, erro: naoEncontrado }
+  }
+
+  const pedido = await prisma.pedido.findUniqueOrThrow({ where: { id }, include: includePedido })
+  return { ok: true, pedido }
 }
 
 export type ResultadoCriacaoPedido =

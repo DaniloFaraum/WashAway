@@ -35,8 +35,12 @@ model LavaRapido {
   solicitacoesExclusao SolicitacaoExclusao[]
 }
 
+// Fluxo (I15): pendente → aceito | recusado; aceito → em_andamento → concluido.
+// A regra fica em src/modules/pedidos/pedidoStatus.ts.
 enum PedidoStatus {
   pendente
+  aceito
+  recusado
   em_andamento
   concluido
 }
@@ -62,6 +66,10 @@ model Pedido {
   precoTotal     Float
   duracaoMinutos Int
   criadoEm       DateTime        @default(now())
+  // I15: data da última mudança de status (null = nunca mudou) e motivo da
+  // recusa (opcional, até 200 caracteres, só em `recusado`).
+  statusAlteradoEm DateTime?
+  motivoRecusa     String?
   servicos       PedidoServico[]
 
   @@index([lavaRapidoId, horario])

@@ -111,7 +111,13 @@ const pedidoSchema = {
     clienteId: { type: 'string' },
     veiculoId: { type: 'string' },
     horario: { type: 'string', format: 'date-time', description: 'Início do atendimento (UTC).' },
-    status: { type: 'string', enum: ['pendente', 'em_andamento', 'concluido'] },
+    status: {
+      type: 'string',
+      enum: ['pendente', 'aceito', 'recusado', 'em_andamento', 'concluido'],
+      description: 'Fluxo (I15): pendente → aceito ou recusado; aceito → em_andamento → concluido.',
+    },
+    statusAlteradoEm: { type: 'string', format: 'date-time', nullable: true, description: 'Última mudança de status (I15); null se nunca mudou.' },
+    motivoRecusa: { type: 'string', nullable: true, description: 'Motivo informado ao recusar (I15), até 200 caracteres.' },
     fotos: { type: 'array', items: { type: 'string' } },
     precoTotal: { type: 'number', description: 'Soma dos preços dos serviços, calculada no servidor.' },
     duracaoMinutos: { type: 'integer', description: 'Soma das durações dos serviços, calculada no servidor.' },
@@ -165,6 +171,15 @@ const erroPedidoSchema = {
       enum: ['DADOS_INVALIDOS', 'HORARIO_PASSADO', 'HORARIO_INDISPONIVEL', 'SERVICO_INVALIDO', 'LAVA_RAPIDO_NAO_ENCONTRADO', 'VEICULO_NAO_ENCONTRADO'],
     },
     servicoIdsInvalidos: { type: 'array', items: { type: 'string' }, description: 'Só em SERVICO_INVALIDO.' },
+  },
+}
+
+const erroStatusPedidoSchema = {
+  type: 'object',
+  description: 'Recusa do PATCH /pedidos/:id (I15).',
+  properties: {
+    error: { type: 'string', example: 'Não é possível mudar de recusado para aceito.' },
+    codigo: { type: 'string', enum: ['DADOS_INVALIDOS', 'PEDIDO_NAO_ENCONTRADO', 'TRANSICAO_INVALIDA'] },
   },
 }
 
@@ -394,6 +409,7 @@ export const openApiDocument = {
       Pedido: pedidoSchema,
       NovoPedido: novoPedidoSchema,
       ErroPedido: erroPedidoSchema,
+      ErroStatusPedido: erroStatusPedidoSchema,
       Servico: servicoSchema,
       ItemServico: itemServicoSchema,
       Intercorrencia: intercorrenciaSchema,
@@ -829,7 +845,10 @@ export const openApiDocument = {
     '/pedidos/{id}': {
       patch: {
         tags: ['pedidos'],
-        summary: 'Atualiza só o status do pedido (painel)',
+        summary: 'Muda o status do pedido: aceitar, recusar, iniciar, concluir (painel)',
+        description:
+          'Só as transições permitidas (I15): pendente → aceito | recusado; aceito → em_andamento; em_andamento → concluido. ' +
+          'Grava `statusAlteradoEm`; `motivo` (opcional, até 200 caracteres) só ao recusar. Outros campos do body são ignorados.',
         security: segurancaPainel,
         parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
         requestBody: {
@@ -839,15 +858,19 @@ export const openApiDocument = {
               schema: {
                 type: 'object',
                 required: ['status'],
-                properties: { status: { type: 'string', enum: ['pendente', 'em_andamento', 'concluido'] } },
+                properties: {
+                  status: { type: 'string', enum: ['pendente', 'aceito', 'recusado', 'em_andamento', 'concluido'] },
+                  motivo: { type: 'string', maxLength: 200, description: 'Só com status recusado.' },
+                },
               },
             },
           },
         },
         responses: {
           200: { description: 'Atualizado.', content: { 'application/json': { schema: { $ref: '#/components/schemas/Pedido' } } } },
-          400: { description: 'status inválido.', content: { 'application/json': { schema: { $ref: '#/components/schemas/Erro' } } } },
-          404: { description: 'Pedido não encontrado ou de outra empresa.', content: { 'application/json': { schema: { $ref: '#/components/schemas/Erro' } } } },
+          400: { description: 'status inexistente ou motivo inválido (DADOS_INVALIDOS).', content: { 'application/json': { schema: { $ref: '#/components/schemas/ErroStatusPedido' } } } },
+          404: { description: 'Pedido não encontrado ou de outra empresa (PEDIDO_NAO_ENCONTRADO).', content: { 'application/json': { schema: { $ref: '#/components/schemas/ErroStatusPedido' } } } },
+          409: { description: 'Transição não permitida a partir do status atual (TRANSICAO_INVALIDA).', content: { 'application/json': { schema: { $ref: '#/components/schemas/ErroStatusPedido' } } } },
           ...erroAutenticacaoPainel,
         },
       },
