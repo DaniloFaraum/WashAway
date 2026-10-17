@@ -28,6 +28,7 @@ export const MENSAGEM_SESSAO_EXPIRADA = 'Sua sessão expirou. Entre de novo.'
  *   cancelarOnboarding: () => void,
  *   sair: () => void,
  *   reabrir: () => Promise<void>,
+ *   recarregarEmpresa: () => Promise<void>,
  * }}
  */
 export function useSessaoEmpresa() {
@@ -120,6 +121,12 @@ export function useSessaoEmpresa() {
     setEmpresaLogada(await getLavaRapido(empresaLogada.id))
   }
 
+  /** Busca a empresa de novo (ex.: depois de salvar o horário: isOpen/foraDoHorario/horarios mudam). */
+  async function recarregarEmpresa() {
+    if (!empresaLogada) return
+    setEmpresaLogada(await getLavaRapido(empresaLogada.id))
+  }
+
   return {
     empresaLogada,
     solicitacaoPendente,
@@ -131,5 +138,6 @@ export function useSessaoEmpresa() {
     cancelarOnboarding,
     sair,
     reabrir,
+    recarregarEmpresa,
   }
 }

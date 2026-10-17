@@ -47,7 +47,7 @@ export function normalizeLavaRapido(raw) {
  * @param {any} raw
  * @returns {HorarioDia}
  */
-function normalizeHorarioDia(raw) {
+export function normalizeHorarioDia(raw) {
   return {
     diaSemana: Number(raw.diaSemana),
     fechado: Boolean(raw.fechado),

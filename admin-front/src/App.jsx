@@ -22,6 +22,7 @@ function App() {
     cancelarOnboarding,
     sair,
     reabrir,
+    recarregarEmpresa,
   } = useSessaoEmpresa()
 
   if (loading) {
@@ -51,7 +52,7 @@ function App() {
       <Routes>
         <Route path="/" element={<PainelPedidos />} />
         <Route path="/servicos" element={<Servicos />} />
-        <Route path="/disponibilidade" element={<Disponibilidade empresaLogada={empresaLogada} />} />
+        <Route path="/disponibilidade" element={<Disponibilidade empresaLogada={empresaLogada} onHorarioSalvo={recarregarEmpresa} />} />
         <Route path="/veiculos" element={<Veiculos />} />
       </Routes>
     </AppShell>

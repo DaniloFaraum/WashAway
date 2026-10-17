@@ -34,3 +34,43 @@ export function formatarHorarioDoDia(horario) {
   if (horario.fechado || !horario.abertura || !horario.fechamento) return 'Fechado'
   return `${horario.abertura}–${horario.fechamento}`
 }
+
+/**
+ * @typedef {Object} HorarioEmEdicao
+ * @property {number} diaSemana
+ * @property {boolean} fechado
+ * @property {string} abertura - "HH:mm" ou '' (campo vazio)
+ * @property {string} fechamento - "HH:mm" ou '' (campo vazio)
+ */
+
+/**
+ * Estado inicial do formulário: os 7 dias (0 a 6) a partir dos horários da empresa.
+ * Dia sem horário cadastrado começa aberto e com os campos vazios.
+ * @param {import('../../login/service/lavaRapidos.model.js').HorarioDia[]} horarios
+ * @returns {HorarioEmEdicao[]}
+ */
+export function horariosParaEdicao(horarios) {
+  const porDia = new Map((horarios ?? []).map((horario) => [horario.diaSemana, horario]))
+  return Array.from({ length: 7 }, (_, diaSemana) => {
+    const horario = porDia.get(diaSemana)
+    if (!horario || !horario.definido) return { diaSemana, fechado: false, abertura: '', fechamento: '' }
+    return {
+      diaSemana,
+      fechado: horario.fechado,
+      abertura: horario.fechado ? '' : (horario.abertura ?? ''),
+      fechamento: horario.fechado ? '' : (horario.fechamento ?? ''),
+    }
+  })
+}
+
+/**
+ * Body do `PUT`: dia fechado vai sem horas; dia aberto, com as horas digitadas
+ * (o backend valida formato e abertura antes do fechamento).
+ * @param {HorarioEmEdicao[]} edicao
+ * @returns {{ diaSemana: number, fechado: boolean, abertura?: string, fechamento?: string }[]}
+ */
+export function edicaoParaDias(edicao) {
+  return edicao.map(({ diaSemana, fechado, abertura, fechamento }) =>
+    fechado ? { diaSemana, fechado } : { diaSemana, fechado, abertura, fechamento },
+  )
+}

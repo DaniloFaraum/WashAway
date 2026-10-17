@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { diaSemanaNoFuso, formatarHorarioDoDia } from '../pages/disponibilidade/horarioFuncionamento.js'
+import {
+  diaSemanaNoFuso,
+  edicaoParaDias,
+  formatarHorarioDoDia,
+  horariosParaEdicao,
+} from '../pages/disponibilidade/horarioFuncionamento.js'
 import { normalizeLavaRapido } from '../login/service/lavaRapidos.model.js'
 
 describe('horarioFuncionamento', () => {
@@ -44,5 +49,31 @@ describe('horarioFuncionamento', () => {
 
   it('normalizeLavaRapido devolve horários vazios quando o backend não manda', () => {
     expect(normalizeLavaRapido({ id: 'lr-1' }).horarios).toEqual([])
+  })
+
+  it('horariosParaEdicao monta os 7 dias na ordem 0 a 6; dia sem cadastro começa aberto e vazio', () => {
+    const edicao = horariosParaEdicao([
+      { diaSemana: 1, fechado: false, abertura: '08:00', fechamento: '18:00', definido: true },
+      { diaSemana: 0, fechado: true, abertura: null, fechamento: null, definido: true },
+      { diaSemana: 3, fechado: false, abertura: null, fechamento: null, definido: false },
+    ])
+
+    expect(edicao.map((dia) => dia.diaSemana)).toEqual([0, 1, 2, 3, 4, 5, 6])
+    expect(edicao[0]).toEqual({ diaSemana: 0, fechado: true, abertura: '', fechamento: '' })
+    expect(edicao[1]).toEqual({ diaSemana: 1, fechado: false, abertura: '08:00', fechamento: '18:00' })
+    expect(edicao[3]).toEqual({ diaSemana: 3, fechado: false, abertura: '', fechamento: '' })
+    expect(horariosParaEdicao([])).toHaveLength(7)
+  })
+
+  it('edicaoParaDias manda dia fechado sem horas e dia aberto com as horas', () => {
+    expect(
+      edicaoParaDias([
+        { diaSemana: 0, fechado: true, abertura: '08:00', fechamento: '12:00' },
+        { diaSemana: 1, fechado: false, abertura: '08:00', fechamento: '18:00' },
+      ]),
+    ).toEqual([
+      { diaSemana: 0, fechado: true },
+      { diaSemana: 1, fechado: false, abertura: '08:00', fechamento: '18:00' },
+    ])
   })
 })

@@ -4,3 +4,8 @@ export const INTERCORRENCIAS_ROUTES = {
   // Escrita: a empresa vem do token (I17), sem lavaRapidoId no body.
   create: '/intercorrencias',
 }
+
+export const HORARIOS_ROUTES = {
+  // Escrita do horário semanal (I19 parte 2): exige o token; o :id tem de ser a empresa do token (outra = 404).
+  update: (lavaRapidoId) => `/lavaRapidos/${encodeURIComponent(lavaRapidoId)}/horarios`,
+}

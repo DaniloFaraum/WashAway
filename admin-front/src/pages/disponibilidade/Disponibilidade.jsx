@@ -34,9 +34,12 @@ function DiaComIntercorrencia(props) {
 }
 
 /**
- * @param {{ empresaLogada: import('../../login/service/lavaRapidos.model.js').LavaRapido }} props
+ * @param {{
+ *   empresaLogada: import('../../login/service/lavaRapidos.model.js').LavaRapido,
+ *   onHorarioSalvo?: () => void | Promise<void>,
+ * }} props
  */
-function Disponibilidade({ empresaLogada }) {
+function Disponibilidade({ empresaLogada, onHorarioSalvo }) {
   const { data: intercorrencias, setData: setIntercorrencias, loading, error } = useFetch(getIntercorrencias)
   const { toast, showToast, closeToast } = useToast()
   const [diaSelecionado, setDiaSelecionado] = useState(null)
@@ -95,7 +98,7 @@ function Disponibilidade({ empresaLogada }) {
     <>
       <PageHeader title="Disponibilidade" />
       <Stack direction={{ xs: 'column', md: 'row' }} spacing={3} alignItems="flex-start">
-        <HorarioFuncionamento empresa={empresaLogada} />
+        <HorarioFuncionamento empresa={empresaLogada} onSalvo={onHorarioSalvo} mostrarAviso={showToast} />
         <LocalizationProvider dateAdapter={AdapterDayjs}>
           <DateCalendar
             onChange={handleSelecionarDia}
