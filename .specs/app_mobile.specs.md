@@ -120,20 +120,14 @@ app_mobile/
 │   │   ├── useServicos.test.ts
 │   │   └── useIntercorrencias.test.ts
 │   ├── components/
-│   │   ├── app-tabs.tsx / .web.tsx   # definição da tab bar (NativeTabs)
+│   │   ├── app-tabs.tsx / .web.tsx   # definição da tab bar (NativeTabs no nativo; barra própria no web) — usa `constants/colors.ts` desde o I21 parte 2
 │   │   ├── MenuConta.tsx         # I2: botão com a inicial do cliente no cabeçalho da Home → Meus dados / Meus veículos (I3) / Sair
 │   │   ├── CampoFormulario.tsx   # campo com rótulo + erro (login/cadastro)
 │   │   ├── CarWashCard.tsx       # card de lava-rápido (usado na Home; `image` agora é URL, não `require()` local — ver seção 4.1)
 │   │   ├── Header.tsx, VehicleBar.tsx   # migrados de .js no I21 parte 1 (fontes/cores corrigidas); hoje sem uso — guardados para o fluxo do I3/I13 (VehicleBar ainda mostra um carro fixo)
-│   │   ├── themed-text.tsx, themed-view.tsx, ui/collapsible.tsx, external-link.tsx, web-badge.tsx  # componentes do template starter (desde o I18, `ui/collapsible` e `web-badge` ficaram sem uso; `themed-*`/`external-link` só no `app-tabs.web.tsx`) — saem no I21 parte 2
 │   │   └── animated-icon.tsx / .web.tsx / .module.css   # splash screen animada
 │   ├── constants/
-│   │   ├── colors.ts             # paleta usada pelas telas do produto (Home/Servicos/detalhe do serviço/CarWashCard/Header/VehicleBar); `border` adicionada no I21
-│   │   └── theme.ts              # `Colors.light/dark` + `Spacing` — usado só pelo template starter (themed-*, use-theme, app-tabs; o explore.tsx saiu no I18) — ver seção 6 (dois sistemas de cor não integrados)
-│   ├── hooks/
-│   │   ├── use-color-scheme.ts / .web.ts
-│   │   └── use-theme.ts          # usa `constants/theme.ts`, não `constants/colors.ts`
-│   └── global.css                # usado pelo template starter (web)
+│   │   └── colors.ts             # paleta única do app (telas do produto e tab bar); `border` adicionada no I21. O `theme.ts`, os `themed-*`, `hooks/` e `global.css` do template saíram no I21 parte 2
 ├── assets/                       # ícones, imagens do template Expo (as imagens mockadas lava1/2/3.jpg pararam de ser usadas pela Home — ver seção 4.1)
 ├── vitest.config.ts              # alias @/* + globalSetup + env EXPO_PUBLIC_API_BASE_URL de teste
 ├── app.json                      # config Expo (nome "tela-lava-rapido", permissão de localização, splash, plugins)
@@ -204,10 +198,10 @@ Achados de leitura direta do código (não são convenções combinadas — são
 | 2 | ~~`src/components/colors.ts`~~ | ~~Cópia morta e desatualizada de `src/constants/colors.ts`~~ — **removida** no I21 parte 1. |
 | 3 | ~~`src/components/FilterModal.js`~~ | ~~Arquivo vazio, não importado~~ — **removido** no I21 parte 1. |
 | 4 | ~~`src/components/FooterCart.js`~~ | ~~Componente não usado em nenhuma tela~~ — **removido** no I21 parte 1. |
-| 5 | `src/constants/colors.ts` vs. `src/constants/theme.ts` | Dois sistemas de cor paralelos que não se falam: `colors.ts` (paleta simples, usada por Home/Serviços/detalhe do serviço/CarWashCard/Header/VehicleBar — as telas "do produto") e `theme.ts` (`Colors.light`/`Colors.dark` + `Spacing`, usado só pelo template starter do Expo: `explore.tsx`, `themed-text`/`themed-view`, `use-theme`, `app-tabs.tsx`). Não há dark mode nas telas do produto porque elas usam `colors.ts` (fixo), não `theme.ts` (com light/dark). |
+| 5 | ~~`src/constants/colors.ts` vs. `src/constants/theme.ts`~~ | **Resolvido no I21 parte 2**: as abas passaram a usar `colors.ts` e o `theme.ts` foi removido (o app segue sem dark mode). Antes: ~~Dois sistemas de cor paralelos que não se falam: `colors.ts` (paleta simples, usada por Home/Serviços/detalhe do serviço/CarWashCard/Header/VehicleBar — as telas "do produto") e `theme.ts` (`Colors.light`/`Colors.dark` + `Spacing`, usado só pelo template starter do Expo: `explore.tsx`, `themed-text`/`themed-view`, `use-theme`, `app-tabs.tsx`). Não há dark mode nas telas do produto porque elas usam `colors.ts` (fixo), não `theme.ts` (com light/dark).~~ |
 | 6 | ~~`VehicleBar.js`, `FooterCart.js`~~ | ~~Chaves de cor inexistentes (`textGray`, `textDark`, `border`)~~ — **corrigido** no I21 parte 1 (`neutralGray`, `black`; `border: '#E5E7EB'` criada em `constants/colors.ts`). |
 | 7 | ~~`Header.js`, `VehicleBar.js`, `FooterCart.js`~~ | ~~Nomes de fonte com hífen (`'Poppins-Bold'` etc.) que não batem com os carregados~~ — **corrigido** no I21 parte 1 (`Poppins_700Bold`, `Poppins_500Medium`, `AlbertSans_400Regular`). |
-| 8 | ~~`src/app/(tabs)/explore.tsx`~~ | **Resolvido no I18**: a aba Explore (boilerplate do template) virou "Meus pedidos" (`(tabs)/pedidos.tsx`). Os restos do template (`ui/collapsible` e `web-badge` sem uso; `themed-*`, `external-link` e `theme.ts` só na tab bar) saem no I21 parte 2. |
+| 8 | ~~`src/app/(tabs)/explore.tsx`~~ | **Resolvido no I18**: a aba Explore (boilerplate do template) virou "Meus pedidos" (`(tabs)/pedidos.tsx`). Os restos do template (`ui/collapsible`, `web-badge`, `hint-row`, `themed-*`, `external-link`, `hooks/use-theme`, `theme.ts`) foram removidos no I21 parte 2. |
 | 9 | ~~Fluxo Serviços → Detalhe~~ | ~~`detail.tsx` sem parâmetro, serviço hardcoded~~ — **resolvido** no I21 parte 1: `servicos/[servicoId].tsx` recebe o id e usa dados reais. |
 | 10 | ~~`detail.tsx`~~ | ~~Mock local sem chamada de rede~~ — **resolvido**: `detail.tsx` e as páginas `lavagem-*`/`higienizacao-interna` foram removidos no I21 parte 1. |
 | 11 | ~~Tipagem mista~~ | ~~`Header.js`, `VehicleBar.js`, `FooterCart.js`, `FilterModal.js` eram `.js`~~ — `Header`/`VehicleBar` migrados para `.tsx` e os outros dois removidos no I21 parte 1. |
