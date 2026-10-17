@@ -5,18 +5,22 @@ import { prisma } from '../../config/prisma.js'
 import { estaAberto, listarAbertos } from '../horarios/disponibilidade.service.js'
 import { listarHorarios } from '../horarios/horarios.service.js'
 import { getIntercorrenciaAtiva } from '../intercorrencias/intercorrencias.service.js'
+import { ESCOPO_TROCAR_SENHA, VALIDADE_TOKEN_TROCAR_SENHA } from './senhas.service.js'
 
 // I17: não há mais senha fixa "admin" — a empresa define a própria senha no
 // onboarding (`SolicitacaoOnboarding.senhaHash`).
 
-export function omitSenha<T extends { senha: string }>(lavaRapido: T): Omit<T, 'senha'> {
-  const { senha: _senha, ...resto } = lavaRapido
+/** Sem a senha e sem a senha gerada (i17-senha-gerada) — nenhum hash sai da API. */
+export function omitSenha<T extends { senha: string; senhaGerada: string | null }>(lavaRapido: T): Omit<T, 'senha' | 'senhaGerada'> {
+  const { senha: _senha, senhaGerada: _senhaGerada, ...resto } = lavaRapido
   return resto
 }
 
-/** Dados das rotas públicas (listagem/busca): sem senha e sem o e-mail de acesso. */
-export function dadosPublicos<T extends { senha: string; email: string | null }>(lavaRapido: T): Omit<T, 'senha' | 'email'> {
-  const { senha: _senha, email: _email, ...resto } = lavaRapido
+/** Dados das rotas públicas (listagem/busca): sem senhas e sem o e-mail de acesso. */
+export function dadosPublicos<T extends { senha: string; senhaGerada: string | null; email: string | null }>(
+  lavaRapido: T,
+): Omit<T, 'senha' | 'senhaGerada' | 'email'> {
+  const { senha: _senha, senhaGerada: _senhaGerada, email: _email, ...resto } = lavaRapido
   return resto
 }
 
@@ -112,10 +116,26 @@ export async function criarLavaRapido(
   })
 }
 
-/** Empresa dona das credenciais, ou `null` (CNPJ inexistente ou senha errada — no mesmo tempo). */
+/**
+ * Login do painel (i17-senha-gerada):
+ * - senha própria → `modo: 'normal'` (e a senha gerada, se havia, é zerada);
+ * - senha gerada → `modo: 'trocarSenha'` (só pode definir a senha nova);
+ * - senão `null` (CNPJ inexistente ou senha errada — CNPJ inexistente gasta o
+ *   mesmo tempo de um `bcrypt.compare`).
+ */
 export async function autenticarLavaRapido(cnpj: string, senha: string) {
   const lavaRapido = await getLavaRapidoByCnpj(cnpj)
-  return (await conferirSenha(senha, lavaRapido?.senha)) ? lavaRapido : null
+
+  if (await conferirSenha(senha, lavaRapido?.senha)) {
+    if (lavaRapido!.senhaGerada) {
+      await prisma.lavaRapido.update({ where: { id: lavaRapido!.id }, data: { senhaGerada: null } })
+    }
+    return { lavaRapido: lavaRapido!, modo: 'normal' as const }
+  }
+  if (lavaRapido?.senhaGerada && (await conferirSenha(senha, lavaRapido.senhaGerada))) {
+    return { lavaRapido, modo: 'trocarSenha' as const }
+  }
+  return null
 }
 
 export function getLavaRapidoByEmail(email: string) {
@@ -123,15 +143,19 @@ export function getLavaRapidoByEmail(email: string) {
 }
 
 /**
- * Resposta de sessão do painel (login e aceite do contrato): token de
- * lava-rápido + a empresa como `GET /lavaRapidos/:id` devolve (com horários e
- * disponibilidade), sem a senha.
+ * Resposta de sessão do painel (login, aceite do contrato e troca de senha):
+ * token de lava-rápido + a empresa como `GET /lavaRapidos/:id` devolve (com
+ * horários e disponibilidade), sem a senha. Com `trocaDeSenhaObrigatoria`
+ * (login com a senha gerada), o token é de escopo `trocar-senha` e validade
+ * curta — só serve para `POST /auth/lava-rapido/trocar-senha`.
  */
-export async function sessaoDoLavaRapido(id: string) {
+export async function sessaoDoLavaRapido(id: string, { trocaDeSenhaObrigatoria = false } = {}) {
   const lavaRapido = await getLavaRapidoById(id)
   if (!lavaRapido) throw new Error(`Lava-rápido ${id} não encontrado ao abrir a sessão`)
-  const token = assinarToken({ id, tipo: 'lavaRapido' })
-  return { token, expiraEm: expiracaoDoToken(token), lavaRapido: omitSenha(lavaRapido) }
+  const token = trocaDeSenhaObrigatoria
+    ? assinarToken({ id, tipo: 'lavaRapido', escopo: ESCOPO_TROCAR_SENHA, validade: VALIDADE_TOKEN_TROCAR_SENHA })
+    : assinarToken({ id, tipo: 'lavaRapido' })
+  return { token, expiraEm: expiracaoDoToken(token), trocaDeSenhaObrigatoria, lavaRapido: omitSenha(lavaRapido) }
 }
 
 /** Consulta leve: a empresa ainda existe? (token de empresa já excluída não vale) */

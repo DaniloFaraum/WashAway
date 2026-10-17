@@ -301,8 +301,9 @@ const erroCadastroClienteSchema = {
 const loginLavaRapidoSchema = {
   type: 'object',
   properties: {
-    token: { type: 'string', description: 'JWT HS256 (tipo lavaRapido) — enviar como `Authorization: Bearer <token>` nas rotas de gestão.' },
-    expiraEm: { type: 'string', format: 'date-time', description: 'Fim da validade do token (JWT_EXPIRES_IN, padrão 7 dias).' },
+    token: { type: 'string', description: 'JWT HS256 (tipo lavaRapido) — enviar como `Authorization: Bearer <token>` nas rotas de gestão. Com `trocaDeSenhaObrigatoria`, é um token de escopo `trocar-senha` (15 min) que só serve para `POST /auth/lava-rapido/trocar-senha` (403 nas demais rotas).' },
+    expiraEm: { type: 'string', format: 'date-time', description: 'Fim da validade do token (JWT_EXPIRES_IN, padrão 7 dias; 15 min no token de troca de senha).' },
+    trocaDeSenhaObrigatoria: { type: 'boolean', description: 'true = entrou com a senha temporária enviada por e-mail (i17-senha-gerada): o painel precisa definir uma senha nova antes de qualquer outra coisa.' },
     lavaRapido: {
       allOf: [
         { $ref: '#/components/schemas/LavaRapidoComDisponibilidade' },
@@ -323,57 +324,12 @@ const respostaLimiteTentativas = {
 const segurancaPainel = [{ bearerAuth: [] }]
 const erroAutenticacaoPainel = {
   401: { description: 'Sem token, ou token inválido/expirado.', content: { 'application/json': { schema: { $ref: '#/components/schemas/Erro' } } } },
-  403: { description: 'Token válido, mas de outro tipo de usuário (ex.: cliente).', content: { 'application/json': { schema: { $ref: '#/components/schemas/Erro' } } } },
+  403: { description: 'Token válido, mas de outro tipo de usuário (ex.: cliente) ou de uso restrito (escopo `trocar-senha`).', content: { 'application/json': { schema: { $ref: '#/components/schemas/Erro' } } } },
 }
 
 const erroAutenticacao = {
   401: { description: 'Sem token, token inválido/expirado ou cliente inexistente.', content: { 'application/json': { schema: { $ref: '#/components/schemas/Erro' } } } },
   403: { description: 'Token válido, mas de outro tipo de usuário (ex.: lava-rápido).', content: { 'application/json': { schema: { $ref: '#/components/schemas/Erro' } } } },
-}
-
-// i17-interno-exclusao: usuário interno (equipe WashAway) e exclusão de empresa por solicitação.
-const usuarioInternoSchema = {
-  type: 'object',
-  properties: {
-    id: { type: 'string' },
-    nome: { type: 'string' },
-    email: { type: 'string', format: 'email' },
-    permissoes: { type: 'array', items: { type: 'string' }, example: ['admin'] },
-    criadoEm: { type: 'string', format: 'date-time' },
-  },
-}
-
-const loginInternoSchema = {
-  type: 'object',
-  properties: {
-    token: { type: 'string', description: 'JWT HS256 (tipo interno, com `permissoes`) — clicar em "Authorize" no Swagger e colar o token.' },
-    expiraEm: { type: 'string', format: 'date-time' },
-    interno: { $ref: '#/components/schemas/UsuarioInterno' },
-  },
-}
-
-const solicitacaoExclusaoSchema = {
-  type: 'object',
-  properties: {
-    id: { type: 'string' },
-    lavaRapidoId: { type: 'string', nullable: true, description: 'null depois que a exclusão é aprovada (a empresa não existe mais).' },
-    nome: { type: 'string', description: 'Snapshot do nome da empresa.' },
-    cnpj: { type: 'string', description: 'Snapshot do CNPJ.' },
-    email: { type: 'string', format: 'email', nullable: true, description: 'Snapshot do e-mail (null em empresas anteriores ao I17 — sem e-mail enfileirado).' },
-    motivo: { type: 'string', nullable: true },
-    status: { type: 'string', enum: ['pendente', 'aprovada', 'recusada', 'cancelada'] },
-    criadoEm: { type: 'string', format: 'date-time' },
-    decididoEm: { type: 'string', format: 'date-time', nullable: true, description: 'Quando foi aprovada, recusada ou cancelada.' },
-    decididoPorId: { type: 'string', nullable: true, description: 'Usuário interno que aprovou/recusou.' },
-    observacao: { type: 'string', nullable: true, description: 'Observação do interno ao recusar.' },
-  },
-}
-
-// Rotas internas: autenticar('interno') (401) + autorizar('admin') (403).
-const segurancaInterna = [{ bearerAuth: [] }]
-const erroAutenticacaoInterna = {
-  401: { description: 'Sem token, token inválido/expirado, ou interno que não existe mais.', content: { 'application/json': { schema: { $ref: '#/components/schemas/Erro' } } } },
-  403: { description: 'Token de outro tipo (lava-rápido, cliente) ou interno sem a permissão `admin`.', content: { 'application/json': { schema: { $ref: '#/components/schemas/Erro' } } } },
 }
 
 // i17-interno-exclusao: usuário interno (equipe WashAway) e exclusão de empresa por solicitação.
@@ -450,9 +406,6 @@ export const openApiDocument = {
       LoginLavaRapido: loginLavaRapidoSchema,
       VeiculoCliente: veiculoClienteSchema,
       ErroVeiculoCliente: erroVeiculoClienteSchema,
-      UsuarioInterno: usuarioInternoSchema,
-      LoginInterno: loginInternoSchema,
-      SolicitacaoExclusao: solicitacaoExclusaoSchema,
       UsuarioInterno: usuarioInternoSchema,
       LoginInterno: loginInternoSchema,
       SolicitacaoExclusao: solicitacaoExclusaoSchema,
@@ -604,116 +557,58 @@ export const openApiDocument = {
           },
         },
         responses: {
-          200: { description: 'Credenciais válidas: `{ token, expiraEm, lavaRapido }`.', content: { 'application/json': { schema: { $ref: '#/components/schemas/LoginLavaRapido' } } } },
+          200: { description: 'Credenciais válidas: `{ token, expiraEm, trocaDeSenhaObrigatoria, lavaRapido }`. Senha própria → token normal (e a senha temporária, se havia, é descartada); senha temporária → `trocaDeSenhaObrigatoria: true` + token de escopo `trocar-senha`.', content: { 'application/json': { schema: { $ref: '#/components/schemas/LoginLavaRapido' } } } },
           401: { description: 'cnpj ou senha inválidos.', content: { 'application/json': { schema: { $ref: '#/components/schemas/Erro' } } } },
           ...respostaLimiteTentativas,
         },
       },
     },
-    '/lavaRapidos/me/solicitacao-exclusao': {
+    '/auth/lava-rapido/trocar-senha': {
       post: {
-        tags: ['exclusao'],
-        summary: 'A empresa do token solicita a exclusão (painel)',
-        description: 'Só uma pendente por empresa: se já houver, devolve a existente (200). Enfileira o e-mail `exclusao_solicitada`. Quem exclui é um interno `admin`, ao aprovar.',
+        tags: ['lavaRapidos'],
+        summary: 'Define a senha nova do painel (troca obrigatória ou troca voluntária)',
+        description: 'Aceita o token de escopo `trocar-senha` (login com a senha temporária; basta `novaSenha`) ou o token normal (exige `senhaAtual`). Grava a senha nova, descarta a senha temporária e devolve uma sessão normal.',
         security: segurancaPainel,
-        requestBody: {
-          required: false,
-          content: { 'application/json': { schema: { type: 'object', properties: { motivo: { type: 'string', maxLength: 500, nullable: true } } } } },
-        },
-        responses: {
-          201: { description: 'Solicitação criada (pendente).', content: { 'application/json': { schema: { $ref: '#/components/schemas/SolicitacaoExclusao' } } } },
-          200: { description: 'Já havia uma pendente: devolve a mesma.', content: { 'application/json': { schema: { $ref: '#/components/schemas/SolicitacaoExclusao' } } } },
-          400: { description: 'motivo não é texto ou passa de 500 caracteres.', content: { 'application/json': { schema: { $ref: '#/components/schemas/Erro' } } } },
-          401: { description: 'Sem token, token inválido/expirado ou empresa que não existe mais.', content: { 'application/json': { schema: { $ref: '#/components/schemas/Erro' } } } },
-          403: { description: 'Token de outro tipo (cliente, interno).', content: { 'application/json': { schema: { $ref: '#/components/schemas/Erro' } } } },
-        },
-      },
-      get: {
-        tags: ['exclusao'],
-        summary: 'Solicitação de exclusão mais recente da empresa do token (qualquer status)',
-        security: segurancaPainel,
-        responses: {
-          200: { description: 'Encontrada.', content: { 'application/json': { schema: { $ref: '#/components/schemas/SolicitacaoExclusao' } } } },
-          404: { description: 'A empresa nunca solicitou.', content: { 'application/json': { schema: { $ref: '#/components/schemas/Erro' } } } },
-          ...erroAutenticacaoPainel,
-        },
-      },
-      delete: {
-        tags: ['exclusao'],
-        summary: 'Cancela a solicitação pendente da empresa do token',
-        security: segurancaPainel,
-        responses: {
-          200: { description: 'Cancelada (status cancelada).', content: { 'application/json': { schema: { $ref: '#/components/schemas/SolicitacaoExclusao' } } } },
-          404: { description: 'Não há solicitação pendente.', content: { 'application/json': { schema: { $ref: '#/components/schemas/Erro' } } } },
-          ...erroAutenticacaoPainel,
-        },
-      },
-    },
-    '/auth/interno/login': {
-      post: {
-        tags: ['interno'],
-        summary: 'Login da equipe WashAway (usuário interno)',
-        description: 'Internos só são criados por script/seed/demo (`npm run interno:criar`). Em dev, o `npm run prisma:demo` cria `dev@washaway.dev` / `demo1234` (admin).',
         requestBody: {
           required: true,
           content: {
             'application/json': {
-              schema: { type: 'object', required: ['email', 'senha'], properties: { email: { type: 'string', format: 'email' }, senha: { type: 'string' } } },
+              schema: {
+                type: 'object',
+                required: ['novaSenha'],
+                properties: {
+                  novaSenha: { type: 'string', minLength: 8, description: '8 a 72 bytes; diferente da senha temporária.' },
+                  senhaAtual: { type: 'string', description: 'Obrigatória só com o token normal.' },
+                },
+              },
             },
           },
         },
         responses: {
-          200: { description: 'Credenciais válidas: token tipo interno com as permissões.', content: { 'application/json': { schema: { $ref: '#/components/schemas/LoginInterno' } } } },
-          401: { description: '"E-mail ou senha incorretos" — mesma resposta para e-mail inexistente, senha errada ou body incompleto.', content: { 'application/json': { schema: { $ref: '#/components/schemas/Erro' } } } },
-          ...respostaLimiteTentativas,
+          200: { description: 'Senha trocada: sessão normal `{ token, expiraEm, trocaDeSenhaObrigatoria: false, lavaRapido }`.', content: { 'application/json': { schema: { $ref: '#/components/schemas/LoginLavaRapido' } } } },
+          400: { description: 'Nova senha fora de 8 a 72 bytes ou igual à senha temporária.', content: { 'application/json': { schema: { $ref: '#/components/schemas/Erro' } } } },
+          401: { description: 'Sem token, token inválido/expirado, empresa inexistente ou token de troca que já foi usado (não há mais senha temporária).', content: { 'application/json': { schema: { $ref: '#/components/schemas/Erro' } } } },
+          403: { description: 'Senha atual incorreta (token normal), token de outro tipo ou de outro escopo.', content: { 'application/json': { schema: { $ref: '#/components/schemas/Erro' } } } },
+          429: { description: 'Limite de tentativas (falhas) por IP.', content: { 'application/json': { schema: { $ref: '#/components/schemas/Erro' } } } },
         },
       },
     },
-    '/interno/solicitacoes-exclusao': {
-      get: {
-        tags: ['interno'],
-        summary: 'Lista as solicitações de exclusão (mais antigas primeiro) — admin',
-        security: segurancaInterna,
-        parameters: [{ name: 'status', in: 'query', required: false, schema: { type: 'string', enum: ['pendente', 'aprovada', 'recusada', 'cancelada'] } }],
-        responses: {
-          200: { description: 'Lista.', content: { 'application/json': { schema: { type: 'array', items: { $ref: '#/components/schemas/SolicitacaoExclusao' } } } } },
-          400: { description: 'status inválido.', content: { 'application/json': { schema: { $ref: '#/components/schemas/Erro' } } } },
-          ...erroAutenticacaoInterna,
-        },
-      },
-    },
-    '/interno/solicitacoes-exclusao/{id}/aprovar': {
+    '/auth/lava-rapido/esqueci-senha': {
       post: {
-        tags: ['interno'],
-        summary: 'Aprova a solicitação e EXCLUI a empresa — admin',
-        description: 'Numa transação: marca `aprovada`, enfileira o e-mail `exclusao_aprovada` e exclui o lava-rápido (pedidos, serviços, intercorrências e horários vão junto). O registro da solicitação continua, com o snapshot.',
-        security: segurancaInterna,
-        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
-        responses: {
-          200: { description: 'Aprovada (lavaRapidoId agora null).', content: { 'application/json': { schema: { $ref: '#/components/schemas/SolicitacaoExclusao' } } } },
-          404: { description: 'Solicitação não encontrada.', content: { 'application/json': { schema: { $ref: '#/components/schemas/Erro' } } } },
-          409: { description: 'Solicitação não está mais pendente (já aprovada, recusada ou cancelada).', content: { 'application/json': { schema: { $ref: '#/components/schemas/Erro' } } } },
-          ...erroAutenticacaoInterna,
-        },
-      },
-    },
-    '/interno/solicitacoes-exclusao/{id}/recusar': {
-      post: {
-        tags: ['interno'],
-        summary: 'Recusa a solicitação (a empresa continua) — admin',
-        description: 'Grava a observação e enfileira o e-mail `exclusao_recusada`.',
-        security: segurancaInterna,
-        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+        tags: ['lavaRapidos'],
+        summary: '"Esqueci minha senha" do painel (público)',
+        description: 'Se houver empresa com o e-mail, gera uma senha temporária nova (substitui a anterior; a senha própria continua valendo) e enfileira o e-mail `esqueci_senha`. A resposta é sempre a mesma, exista ou não o e-mail.',
         requestBody: {
-          required: false,
-          content: { 'application/json': { schema: { type: 'object', properties: { observacao: { type: 'string', maxLength: 500, nullable: true } } } } },
+          required: true,
+          content: { 'application/json': { schema: { type: 'object', required: ['email'], properties: { email: { type: 'string', format: 'email' } } } } },
         },
         responses: {
-          200: { description: 'Recusada.', content: { 'application/json': { schema: { $ref: '#/components/schemas/SolicitacaoExclusao' } } } },
-          400: { description: 'observacao não é texto ou passa de 500 caracteres.', content: { 'application/json': { schema: { $ref: '#/components/schemas/Erro' } } } },
-          404: { description: 'Solicitação não encontrada.', content: { 'application/json': { schema: { $ref: '#/components/schemas/Erro' } } } },
-          409: { description: 'Solicitação não está mais pendente.', content: { 'application/json': { schema: { $ref: '#/components/schemas/Erro' } } } },
-          ...erroAutenticacaoInterna,
+          200: {
+            description: 'Sempre `{ mensagem: "Se o e-mail estiver cadastrado, enviaremos uma senha temporária" }`.',
+            content: { 'application/json': { schema: { type: 'object', properties: { mensagem: { type: 'string' } } } } },
+          },
+          400: { description: 'E-mail ausente ou com formato inválido.', content: { 'application/json': { schema: { $ref: '#/components/schemas/Erro' } } } },
+          429: { description: 'Limite por IP + e-mail (toda tentativa conta; padrão 5 por hora, LIMITE_ESQUECI_SENHA / LIMITE_ESQUECI_SENHA_JANELA_MINUTOS).', content: { 'application/json': { schema: { $ref: '#/components/schemas/Erro' } } } },
         },
       },
     },
@@ -1110,7 +1005,7 @@ export const openApiDocument = {
         summary: 'Lista veículos distintos, derivados dos pedidos da empresa do token (painel)',
         security: segurancaPainel,
         responses: {
-          200: { description: 'Lista de veículos (deduplicados por placa).', content: { 'application/json': { schema: { type: 'array', items: { $ref: '#/components/schemas/Veiculo' } } } } },
+          200: { description: 'Veículos distintos dos pedidos da empresa (relação Pedido → Veiculo).', content: { 'application/json': { schema: { type: 'array', items: { $ref: '#/components/schemas/Veiculo' } } } } },
           ...erroAutenticacaoPainel,
         },
       },

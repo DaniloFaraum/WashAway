@@ -39,6 +39,13 @@ describe('assinarToken / verificarToken', () => {
     expect(Math.abs(new Date(expiracaoDoToken(token)).getTime() - (Date.now() + seteDias))).toBeLessThan(5_000)
   })
 
+  it('validade própria quando informada (token de troca de senha, i17-senha-gerada)', () => {
+    const token = assinarToken({ id: 'lr1', tipo: 'lavaRapido', escopo: 'trocar-senha', validade: '15m' })
+
+    const quinzeMinutos = 15 * 60 * 1000
+    expect(Math.abs(new Date(expiracaoDoToken(token)).getTime() - (Date.now() + quinzeMinutos))).toBeLessThan(5_000)
+  })
+
   it('token expirado lança erro', () => {
     const expirado = jwt.sign({ tipo: 'cliente' }, process.env.JWT_SECRET!, { subject: 'c1', expiresIn: -10 })
 

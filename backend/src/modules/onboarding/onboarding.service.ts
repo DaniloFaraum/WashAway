@@ -1,6 +1,7 @@
 import { conferirSenha, gerarHashSenha } from '../../auth/senha.js'
 import { prisma } from '../../config/prisma.js'
 import { criarLavaRapido, getLavaRapidoByCnpj, getLavaRapidoByEmail } from '../lava-rapidos/lavaRapidos.service.js'
+import { definirSenhaGerada } from '../lava-rapidos/senhas.service.js'
 import { getContratoVigente } from '../contratos/contratos.service.js'
 
 const INCLUDE_CONTRATO = {
@@ -109,6 +110,9 @@ export async function aceitarContrato(id: string): Promise<AceitarResultado> {
       where: { id },
       data: { status: 'concluida', aceitoEm: new Date(), lavaRapidoId: lavaRapido.id },
     })
+    // i17-senha-gerada: além da senha própria, a empresa recebe por e-mail uma
+    // senha temporária (entrar com ela leva à troca obrigatória).
+    await definirSenhaGerada(tx, lavaRapido, 'onboarding')
     return { tipo: 'aceita', lavaRapido }
   })
 }

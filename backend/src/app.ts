@@ -4,6 +4,7 @@ import express from 'express'
 import swaggerUi from 'swagger-ui-express'
 import { openApiDocument } from './docs/openapi.js'
 import {
+  configLimiteEsqueciSenhaDoAmbiente,
   configLimiteTentativasDoAmbiente,
   limiteTentativas,
   type ConfigLimiteTentativas,
@@ -16,6 +17,7 @@ import { authInternoRouter } from './modules/internos/internos.routes.js'
 import { intercorrenciasRouter } from './modules/intercorrencias/intercorrencias.routes.js'
 import { itensServicoRouter } from './modules/itens-servico/itensServico.routes.js'
 import { lavaRapidosRouter } from './modules/lava-rapidos/lavaRapidos.routes.js'
+import { authLavaRapidoRouter } from './modules/lava-rapidos/senhas.routes.js'
 import { onboardingRouter } from './modules/onboarding/onboarding.routes.js'
 import { pedidosRouter } from './modules/pedidos/pedidos.routes.js'
 import { servicosRouter } from './modules/servicos/servicos.routes.js'
@@ -24,9 +26,14 @@ import { veiculosRouter } from './modules/veiculos/veiculos.routes.js'
 export interface OpcoesApp {
   /** Limite de tentativas de login/cadastro; padrão: env (LIMITE_TENTATIVAS…). */
   limiteTentativas?: ConfigLimiteTentativas
+  /** Limite do "esqueci minha senha" do painel; padrão: env (LIMITE_ESQUECI_SENHA…). */
+  limiteEsqueciSenha?: ConfigLimiteTentativas
 }
 
-export function createApp({ limiteTentativas: configLimite = configLimiteTentativasDoAmbiente() }: OpcoesApp = {}) {
+export function createApp({
+  limiteTentativas: configLimite = configLimiteTentativasDoAmbiente(),
+  limiteEsqueciSenha: configLimiteEsqueciSenha = configLimiteEsqueciSenhaDoAmbiente(),
+}: OpcoesApp = {}) {
   const app = express()
 
   app.use(cors())
@@ -40,6 +47,12 @@ export function createApp({ limiteTentativas: configLimite = configLimiteTentati
   app.post('/auth/cliente/cadastro', limiteTentativas(configLimite, { identificador: 'email' }))
   // Retomar uma solicitação pendente confere e-mail + senha: mesmo limite do login.
   app.post('/onboarding/solicitacoes', limiteTentativas(configLimite, { identificador: 'cnpj', soFalhasContam: true }))
+  // i17-senha-gerada: o "esqueci" sempre responde 200 e envia e-mail — toda
+  // tentativa conta (não vira disparador de e-mails). A troca confere a
+  // `senhaAtual` (token normal): só falhas contam; a chave é só o IP (um campo
+  // qualquer no body não abre contador novo).
+  app.post('/auth/lava-rapido/esqueci-senha', limiteTentativas(configLimiteEsqueciSenha, { identificador: 'email' }))
+  app.post('/auth/lava-rapido/trocar-senha', limiteTentativas(configLimite, { identificador: 'nenhum', soFalhasContam: true }))
 
   app.get('/api-docs.json', (_req, res) => res.json(openApiDocument))
   app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(openApiDocument))
@@ -59,6 +72,8 @@ export function createApp({ limiteTentativas: configLimite = configLimiteTentati
   // Conta do cliente do app (I1/I2): cadastro/login públicos, /clientes/me com token.
   app.use('/auth/cliente', authClienteRouter)
   app.use('/clientes', clientesRouter)
+  // Senha do painel (i17-senha-gerada): troca obrigatória e "esqueci minha senha".
+  app.use('/auth/lava-rapido', authLavaRapidoRouter)
   // "BackEnd Onboard": fluxo de solicitação + contrato, separado da aplicação.
   app.use('/onboarding', onboardingRouter)
   app.use('/contratos', contratosRouter)

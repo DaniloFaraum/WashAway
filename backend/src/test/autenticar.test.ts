@@ -3,7 +3,7 @@ import express from 'express'
 import jwt from 'jsonwebtoken'
 import supertest from 'supertest'
 import { assinarToken } from '../auth/token.js'
-import { autenticar } from '../middlewares/autenticar.js'
+import { autenticar, autenticarAceitandoEscopo } from '../middlewares/autenticar.js'
 import { comToken } from './helpers/auth.js'
 
 // Contrato do middleware `autenticar(...tipos)` (I2), do qual o I17 depende:
@@ -98,5 +98,33 @@ describe('autenticar(...tipos)', () => {
 
   it('sem nenhum tipo: falha na montagem da rota', () => {
     expect(() => autenticar()).toThrow()
+  })
+})
+
+describe('autenticarAceitandoEscopo(escopo, ...tipos) (i17-senha-gerada)', () => {
+  const app = express()
+  app.post('/troca', autenticarAceitandoEscopo('trocar-senha', 'lavaRapido'), (req, res) => {
+    res.json(req.auth)
+  })
+
+  it('aceita o token do escopo e o token normal', async () => {
+    const comEscopo = assinarToken({ id: 'lr1', tipo: 'lavaRapido', escopo: 'trocar-senha' })
+    const normal = assinarToken({ id: 'lr1', tipo: 'lavaRapido' })
+
+    const respostaEscopo = await comToken(supertest(app).post('/troca'), comEscopo)
+    const respostaNormal = await comToken(supertest(app).post('/troca'), normal)
+
+    expect(respostaEscopo.status).toBe(200)
+    expect(respostaEscopo.body).toMatchObject({ id: 'lr1', escopo: 'trocar-senha' })
+    expect(respostaNormal.status).toBe(200)
+  })
+
+  it('outro escopo ou outro tipo: 403; sem token: 401', async () => {
+    const outroEscopo = assinarToken({ id: 'lr1', tipo: 'lavaRapido', escopo: 'outro' })
+    const cliente = assinarToken({ id: 'c1', tipo: 'cliente', escopo: 'trocar-senha' })
+
+    expect((await comToken(supertest(app).post('/troca'), outroEscopo)).status).toBe(403)
+    expect((await comToken(supertest(app).post('/troca'), cliente)).status).toBe(403)
+    expect((await supertest(app).post('/troca')).status).toBe(401)
   })
 })

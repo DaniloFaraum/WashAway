@@ -38,11 +38,30 @@ export function configLimiteTentativasDoAmbiente(): ConfigLimiteTentativas {
   }
 }
 
-/** Campo do body que identifica a conta na rota. */
-export type IdentificadorDaConta = 'email' | 'cnpj'
+// "Esqueci minha senha" do painel (i17-senha-gerada): 5 por hora por IP + e-mail.
+export const LIMITE_ESQUECI_SENHA_PADRAO = 5
+export const JANELA_ESQUECI_SENHA_MINUTOS_PADRAO = 60
+
+/** Configuração do limite do "esqueci minha senha" (LIMITE_ESQUECI_SENHA, LIMITE_ESQUECI_SENHA_JANELA_MINUTOS). */
+export function configLimiteEsqueciSenhaDoAmbiente(): ConfigLimiteTentativas {
+  return {
+    limite: inteiroPositivo(process.env.LIMITE_ESQUECI_SENHA, LIMITE_ESQUECI_SENHA_PADRAO),
+    janelaMinutos: inteiroPositivo(
+      process.env.LIMITE_ESQUECI_SENHA_JANELA_MINUTOS,
+      JANELA_ESQUECI_SENHA_MINUTOS_PADRAO,
+    ),
+  }
+}
+
+/**
+ * Campo do body que identifica a conta na rota. `'nenhum'` = rota autenticada
+ * sem campo de conta no body (ex.: troca de senha) — a chave é só o IP.
+ */
+export type IdentificadorDaConta = 'email' | 'cnpj' | 'nenhum'
 
 /** E-mail (normalizado) ou CNPJ (só dígitos) do body — só o campo da rota. */
 function identificadorDaConta(req: Request, campo: IdentificadorDaConta): string {
+  if (campo === 'nenhum') return ''
   const valor = ((req.body ?? {}) as Record<string, unknown>)[campo]
   if (typeof valor !== 'string' || valor.trim() === '') return ''
   return campo === 'email' ? `email:${normalizarEmail(valor)}` : `cnpj:${valor.replace(/\D/g, '')}`

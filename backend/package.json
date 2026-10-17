@@ -14,6 +14,7 @@
     "prisma:seed": "tsx prisma/seed.ts",
     "prisma:demo": "tsx prisma/demo.ts",
     "interno:criar": "tsx prisma/criarUsuarioInterno.ts",
+    "senhas:troca-em-massa": "tsx prisma/trocaSenhaEmMassa.ts",
     "test": "vitest run",
     "test:unit": "vitest run --project unit",
     "test:integracao": "vitest run --project integracao",

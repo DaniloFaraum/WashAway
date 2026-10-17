@@ -48,17 +48,19 @@ export interface DadosToken {
   tipo: TipoUsuario
   permissoes?: string[]
   escopo?: string
+  /** Validade própria (formato do jsonwebtoken, ex.: '15m'); padrão `JWT_EXPIRES_IN`. */
+  validade?: string
 }
 
-/** Assina um token de acesso para `id`/`tipo`, com validade `JWT_EXPIRES_IN` (padrão 7d). */
-export function assinarToken({ id, tipo, permissoes, escopo }: DadosToken): string {
+/** Assina um token de acesso para `id`/`tipo`, com validade `JWT_EXPIRES_IN` (padrão 7d) ou a `validade` informada. */
+export function assinarToken({ id, tipo, permissoes, escopo, validade: validadePropria }: DadosToken): string {
   const payload: Record<string, unknown> = { tipo }
   if (permissoes && permissoes.length > 0) payload.permissoes = permissoes
   if (escopo) payload.escopo = escopo
   return jwt.sign(payload, segredo(), {
     algorithm: ALGORITMO,
     subject: id,
-    expiresIn: validade() as jwt.SignOptions['expiresIn'],
+    expiresIn: (validadePropria ?? validade()) as jwt.SignOptions['expiresIn'],
   })
 }
 

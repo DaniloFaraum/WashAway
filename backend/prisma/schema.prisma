@@ -16,6 +16,9 @@ model LavaRapido {
   // por causa das empresas criadas antes do I17; o onboarding sempre preenche.
   email        String?  @unique
   senha        String
+  // Senha temporária enviada por e-mail (i17-senha-gerada), hash bcrypt. Quando
+  // existe, entrar com ela leva à troca obrigatória; entrar com a `senha` a zera.
+  senhaGerada  String?
   rating       Float    @default(0)
   reviewsCount Int      @default(0)
   distance     String
@@ -228,6 +231,9 @@ enum TipoEventoEmail {
   exclusao_solicitada
   exclusao_aprovada
   exclusao_recusada
+  // i17-senha-gerada
+  senha_gerada
+  esqueci_senha
 }
 
 model EventoEmail {

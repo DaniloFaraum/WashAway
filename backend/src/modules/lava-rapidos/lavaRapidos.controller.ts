@@ -26,7 +26,11 @@ export async function show(req: Request, res: Response) {
   res.json(dadosPublicos(lavaRapido))
 }
 
-/** POST /lavaRapidos/login → `{ token, expiraEm, lavaRapido }` (nunca logar o body: tem a senha). */
+/**
+ * POST /lavaRapidos/login → `{ token, expiraEm, trocaDeSenhaObrigatoria, lavaRapido }`
+ * (nunca logar o body: tem a senha). Com a senha gerada, `trocaDeSenhaObrigatoria: true`
+ * e o token só serve para trocar a senha (i17-senha-gerada).
+ */
 export async function login(req: Request, res: Response) {
   const { cnpj, senha } = req.body ?? {}
 
@@ -35,11 +39,15 @@ export async function login(req: Request, res: Response) {
     return
   }
 
-  const lavaRapido = await autenticarLavaRapido(cnpj, senha)
-  if (!lavaRapido) {
+  const autenticacao = await autenticarLavaRapido(cnpj, senha)
+  if (!autenticacao) {
     res.status(401).json({ error: 'cnpj ou senha inválidos' })
     return
   }
 
-  res.json(await sessaoDoLavaRapido(lavaRapido.id))
+  res.json(
+    await sessaoDoLavaRapido(autenticacao.lavaRapido.id, {
+      trocaDeSenhaObrigatoria: autenticacao.modo === 'trocarSenha',
+    }),
+  )
 }
