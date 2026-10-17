@@ -104,14 +104,67 @@ const lavaRapidoDetalheSchema = {
 
 const pedidoSchema = {
   type: 'object',
+  description: 'Pedido (I13): cliente e veículo do cadastro, serviços comprados com nome/preço/duração congelados no momento da compra; total e duração calculados no servidor.',
   properties: {
     id: { type: 'string' },
     lavaRapidoId: { type: 'string' },
-    veiculo: { type: 'object' },
-    servico: { type: 'string' },
-    horario: { type: 'string', format: 'date-time' },
+    clienteId: { type: 'string' },
+    veiculoId: { type: 'string' },
+    horario: { type: 'string', format: 'date-time', description: 'Início do atendimento (UTC).' },
     status: { type: 'string', enum: ['pendente', 'em_andamento', 'concluido'] },
     fotos: { type: 'array', items: { type: 'string' } },
+    precoTotal: { type: 'number', description: 'Soma dos preços dos serviços, calculada no servidor.' },
+    duracaoMinutos: { type: 'integer', description: 'Soma das durações dos serviços, calculada no servidor.' },
+    criadoEm: { type: 'string', format: 'date-time' },
+    cliente: { type: 'object', properties: { id: { type: 'string' }, nome: { type: 'string' } } },
+    veiculo: {
+      type: 'object',
+      properties: {
+        id: { type: 'string' },
+        marca: { type: 'string', nullable: true },
+        modelo: { type: 'string' },
+        cor: { type: 'string' },
+        placa: { type: 'string' },
+      },
+    },
+    servicos: {
+      type: 'array',
+      description: 'Serviços comprados, na ordem da escolha (snapshot: mudar o serviço depois não altera o pedido).',
+      items: {
+        type: 'object',
+        properties: {
+          id: { type: 'string' },
+          servicoId: { type: 'string', nullable: true, description: 'Serviço de origem (null se ele foi apagado).' },
+          nome: { type: 'string' },
+          preco: { type: 'number' },
+          duracaoMinutos: { type: 'integer' },
+        },
+      },
+    },
+  },
+}
+
+const novoPedidoSchema = {
+  type: 'object',
+  required: ['lavaRapidoId', 'veiculoId', 'servicoIds', 'horario'],
+  description: 'O cliente vem do token. Qualquer outro campo (preço, duração, status, clienteId…) é ignorado.',
+  properties: {
+    lavaRapidoId: { type: 'string' },
+    veiculoId: { type: 'string', description: 'Veículo do próprio cliente (/clientes/me/veiculos).' },
+    servicoIds: { type: 'array', minItems: 1, maxItems: 20, uniqueItems: true, items: { type: 'string' } },
+    horario: { type: 'string', format: 'date-time', example: '2026-10-20T10:00:00-03:00', description: 'ISO 8601 com fuso (Z ou ±HH:mm), no futuro.' },
+  },
+}
+
+const erroPedidoSchema = {
+  type: 'object',
+  properties: {
+    error: { type: 'string' },
+    codigo: {
+      type: 'string',
+      enum: ['DADOS_INVALIDOS', 'HORARIO_PASSADO', 'SERVICO_INVALIDO', 'LAVA_RAPIDO_NAO_ENCONTRADO', 'VEICULO_NAO_ENCONTRADO'],
+    },
+    servicoIdsInvalidos: { type: 'array', items: { type: 'string' }, description: 'Só em SERVICO_INVALIDO.' },
   },
 }
 
@@ -155,9 +208,12 @@ const dadosServicoProperties = {
 
 const veiculoSchema = {
   type: 'object',
+  description: 'Veículo de um pedido da empresa (painel, I13).',
   properties: {
-    id: { type: 'string', description: 'A placa do veículo.' },
+    id: { type: 'string' },
+    marca: { type: 'string', nullable: true },
     modelo: { type: 'string' },
+    cor: { type: 'string' },
     placa: { type: 'string' },
   },
 }
@@ -335,6 +391,8 @@ export const openApiDocument = {
       LavaRapidoComDisponibilidade: lavaRapidoDetalheSchema,
       HorarioDia: horarioDiaSchema,
       Pedido: pedidoSchema,
+      NovoPedido: novoPedidoSchema,
+      ErroPedido: erroPedidoSchema,
       Servico: servicoSchema,
       ItemServico: itemServicoSchema,
       Intercorrencia: intercorrenciaSchema,
@@ -464,6 +522,7 @@ export const openApiDocument = {
         responses: {
           204: { description: 'Removido.' },
           404: { description: 'Veículo inexistente ou de outro cliente (nunca 403).', content: { 'application/json': { schema: { $ref: '#/components/schemas/Erro' } } } },
+          409: { description: 'Veículo com pedidos não pode ser removido (I13).', content: { 'application/json': { schema: { $ref: '#/components/schemas/Erro' } } } },
           ...erroAutenticacao,
         },
       },
@@ -661,8 +720,8 @@ export const openApiDocument = {
                       properties: {
                         diaSemana: { type: 'integer', minimum: 0, maximum: 6, description: '0 = domingo … 6 = sábado; cada dia uma vez.' },
                         fechado: { type: 'boolean' },
-                        abertura: { type: 'string', example: '08:00', description: '"HH:mm" (00:00–23:59); obrigatório num dia aberto, proibido num dia fechado.' },
-                        fechamento: { type: 'string', example: '18:00', description: '"HH:mm", depois da abertura; obrigatório num dia aberto, proibido num dia fechado.' },
+                        abertura: { type: 'string', nullable: true, example: '08:00', description: '"HH:mm" (00:00–23:59); obrigatório num dia aberto, proibido num dia fechado.' },
+                        fechamento: { type: 'string', nullable: true, example: '18:00', description: '"HH:mm", depois da abertura; obrigatório num dia aberto, proibido num dia fechado.' },
                       },
                     },
                   },
@@ -684,6 +743,27 @@ export const openApiDocument = {
       },
     },
     '/pedidos': {
+      post: {
+        tags: ['pedidos'],
+        summary: 'Cria um pedido do cliente logado (app, I13)',
+        description:
+          'Exige token de cliente; o cliente vem do token. Preço total e duração são calculados no servidor a partir dos serviços (ativos e do lava-rápido informado), e cada serviço é congelado no pedido. Nasce `pendente`.',
+        security: [{ bearerAuth: [] }],
+        requestBody: { required: true, content: { 'application/json': { schema: { $ref: '#/components/schemas/NovoPedido' } } } },
+        responses: {
+          201: { description: 'Pedido criado.', content: { 'application/json': { schema: { $ref: '#/components/schemas/Pedido' } } } },
+          400: {
+            description: 'DADOS_INVALIDOS (campos/lista de serviços/horário mal formados), HORARIO_PASSADO ou SERVICO_INVALIDO (inexistente, inativo ou de outro lava-rápido).',
+            content: { 'application/json': { schema: { $ref: '#/components/schemas/ErroPedido' } } },
+          },
+          401: { description: 'Sem token, ou token inválido/expirado.', content: { 'application/json': { schema: { $ref: '#/components/schemas/Erro' } } } },
+          403: { description: 'Token de outro tipo de usuário (ex.: lava-rápido).', content: { 'application/json': { schema: { $ref: '#/components/schemas/Erro' } } } },
+          404: {
+            description: 'LAVA_RAPIDO_NAO_ENCONTRADO ou VEICULO_NAO_ENCONTRADO (inexistente ou de outro cliente).',
+            content: { 'application/json': { schema: { $ref: '#/components/schemas/ErroPedido' } } },
+          },
+        },
+      },
       get: {
         tags: ['pedidos'],
         summary: 'Lista os pedidos da empresa do token, mais recentes primeiro (painel)',

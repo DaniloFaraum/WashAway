@@ -37,15 +37,48 @@ enum PedidoStatus {
   concluido
 }
 
+// Pedido (I13): criado pelo cliente do app (`POST /pedidos`). Cliente e veículo
+// são do cadastro (I1/I3); os serviços comprados ficam em `PedidoServico` com
+// nome/preço/duração congelados, e `precoTotal`/`duracaoMinutos` são calculados
+// no servidor. Cliente/veículo com pedido não podem ser apagados (Restrict):
+// o histórico do lava-rápido não some. Os pedidos anteriores ao I13 (veículo em
+// JSON + serviço em texto) foram convertidos pela migration
+// `20261017120000_pedido_cliente_servicos`.
 model Pedido {
-  id           String       @id @default(cuid())
-  lavaRapidoId String
-  lavaRapido   LavaRapido   @relation(fields: [lavaRapidoId], references: [id], onDelete: Cascade)
-  veiculo      Json
-  servico      String
-  horario      DateTime
-  status       PedidoStatus @default(pendente)
-  fotos        String[]     @default([])
+  id             String          @id @default(cuid())
+  lavaRapidoId   String
+  lavaRapido     LavaRapido      @relation(fields: [lavaRapidoId], references: [id], onDelete: Cascade)
+  clienteId      String
+  cliente        Cliente         @relation(fields: [clienteId], references: [id], onDelete: Restrict)
+  veiculoId      String
+  veiculo        Veiculo         @relation(fields: [veiculoId], references: [id], onDelete: Restrict)
+  horario        DateTime
+  status         PedidoStatus    @default(pendente)
+  fotos          String[]        @default([])
+  precoTotal     Float
+  duracaoMinutos Int
+  criadoEm       DateTime        @default(now())
+  servicos       PedidoServico[]
+
+  @@index([lavaRapidoId, horario])
+  @@index([clienteId])
+}
+
+// Serviço comprado num pedido (I13): snapshot do `Servico` no momento da compra —
+// mudar o preço/nome do serviço depois não altera pedidos já feitos.
+model PedidoServico {
+  id             String   @id @default(cuid())
+  pedidoId       String
+  pedido         Pedido   @relation(fields: [pedidoId], references: [id], onDelete: Cascade)
+  // Referência informativa; vira null se o serviço for apagado.
+  servicoId      String?
+  servico        Servico? @relation(fields: [servicoId], references: [id], onDelete: SetNull)
+  nome           String
+  preco          Float
+  duracaoMinutos Int
+  ordem          Int      @default(0)
+
+  @@index([pedidoId])
 }
 
 model Servico {
@@ -56,6 +89,7 @@ model Servico {
   preco        Float
   ativo        Boolean    @default(true)
   itens        ServicoItem[]
+  pedidoServicos PedidoServico[]
 }
 
 // Catálogo global de itens (serviços "atômicos" de lava-rápido), mantido só via
@@ -105,12 +139,13 @@ model Cliente {
   senha    String
   criadoEm DateTime @default(now())
   veiculos Veiculo[]
+  pedidos  Pedido[]
 }
 
 // Veículo do cliente do app (I3). Placa gravada normalizada (sem hífen/espaços,
 // maiúsculas — src/modules/veiculos-cliente/placa.ts) e única por cliente; a
-// mesma placa pode existir em clientes diferentes. Não confundir com o
-// `GET /veiculos` do painel, que deriva de `Pedido.veiculo` (JSON).
+// mesma placa pode existir em clientes diferentes. O `GET /veiculos` do painel
+// lista os veículos dos pedidos da empresa (relação `Pedido.veiculo`, I13).
 model Veiculo {
   id        String   @id @default(cuid())
   clienteId String
@@ -120,6 +155,7 @@ model Veiculo {
   cor       String
   placa     String
   criadoEm  DateTime @default(now())
+  pedidos   Pedido[]
 
   @@unique([clienteId, placa])
 }

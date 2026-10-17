@@ -96,19 +96,31 @@ export async function criarServicoTeste(lavaRapidoId: string, overrides: Servico
   return servico
 }
 
+/**
+ * Pedido no formato do I13. Sem `clienteId`/`veiculoId`, cria um cliente e um
+ * veículo de teste (registrados para limpeza); sem `servicos`, grava um item
+ * "Lavagem de teste" (R$ 50, 30 min) com total/duração coerentes.
+ */
 export async function criarPedidoTeste(
   lavaRapidoId: string,
   overrides: Partial<Omit<Prisma.PedidoUncheckedCreateInput, 'lavaRapidoId'>> = {},
 ) {
+  let { clienteId, veiculoId } = overrides
+  if (!clienteId) clienteId = (await criarClienteTeste()).id
+  if (!veiculoId) veiculoId = (await criarVeiculoTeste(clienteId)).id
+
   const pedido = await prisma.pedido.create({
     data: {
       lavaRapidoId,
-      veiculo: { modelo: 'Carro de Teste', placa: placaUnica() },
-      servico: 'Lavagem de teste',
       horario: new Date('2026-01-01T10:00:00.000Z'),
       status: 'pendente',
       fotos: [],
+      precoTotal: 50,
+      duracaoMinutos: 30,
+      servicos: { create: [{ nome: 'Lavagem de teste', preco: 50, duracaoMinutos: 30 }] },
       ...overrides,
+      clienteId,
+      veiculoId,
     },
   })
   registrarParaLimpeza('pedido', pedido.id)

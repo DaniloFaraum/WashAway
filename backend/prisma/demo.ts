@@ -2,6 +2,7 @@ import 'dotenv/config'
 import { PrismaClient, type PedidoStatus } from '@prisma/client'
 import bcrypt from 'bcryptjs'
 import { criarHorariosSeNaoTiver, HORARIO_ESTENDIDO, HORARIO_PADRAO, HORARIO_TODOS_OS_DIAS, type DiaExemplo } from './horariosExemplo.js'
+import { criarPedidoExemplo, garantirClienteExemplo, type ClienteExemplo } from './pedidosExemplo.js'
 
 // Dados de demonstração para apresentação. Diferente do seed.ts, este script
 // NUNCA apaga nada: só insere, e pula toda empresa cujo CNPJ já existe — pode
@@ -29,7 +30,9 @@ function emailDemo(nome: string) {
 }
 
 type Combo = { nome: string; preco: number; ativo?: boolean; itens: string[] }
-type PedidoDemo = { modelo: string; placa: string; servico: string; horario: string; status: PedidoStatus; fotos?: number }
+// Pedido (I13): o cliente/veículo vem da placa (CLIENTES_DEMO); `servicos` são
+// nomes de combos da própria empresa, congelados no pedido.
+type PedidoDemo = { placa: string; servicos: string[]; horario: string; status: PedidoStatus; fotos?: number }
 type IntercorrenciaDemo = { data: string; motivo: string; horaInicio?: string; horaFim?: string }
 
 type EmpresaDemo = {
@@ -87,16 +90,16 @@ const empresas: EmpresaDemo[] = [
       { nome: 'Polimento técnico', preco: 350, itens: ['Lavagem externa', 'Descontaminação de pintura', 'Secagem', 'Polimento'] },
     ],
     pedidos: [
-      { modelo: 'Jeep Compass', placa: 'FTR4B21', servico: 'Completa + cera', horario: '2026-10-03T08:30:00-03:00', status: 'concluido', fotos: 2 },
-      { modelo: 'Fiat Argo', placa: 'QWE2C45', servico: 'Lavagem express', horario: '2026-10-03T09:15:00-03:00', status: 'concluido', fotos: 1 },
-      { modelo: 'Toyota Corolla', placa: 'BRA2E19', servico: 'Lavagem completa', horario: '2026-10-03T10:00:00-03:00', status: 'em_andamento', fotos: 2 },
-      { modelo: 'Honda HR-V', placa: 'GHI7J88', servico: 'Higienização interna', horario: '2026-10-03T10:30:00-03:00', status: 'em_andamento', fotos: 3 },
-      { modelo: 'VW T-Cross', placa: 'RTY5K32', servico: 'Lavagem completa', horario: '2026-10-03T13:00:00-03:00', status: 'pendente', fotos: 2 },
-      { modelo: 'Hyundai HB20', placa: 'MNO3P71', servico: 'Lavagem express', horario: '2026-10-03T14:30:00-03:00', status: 'pendente', fotos: 1 },
-      { modelo: 'Chevrolet Tracker', placa: 'UVW8X14', servico: 'Polimento técnico', horario: '2026-10-03T15:00:00-03:00', status: 'pendente', fotos: 3 },
-      { modelo: 'Renault Kwid', placa: 'KLM1N66', servico: 'Lavagem express', horario: '2026-10-04T09:00:00-03:00', status: 'pendente', fotos: 1 },
-      { modelo: 'Jeep Compass', placa: 'FTR4B21', servico: 'Lavagem completa', horario: '2026-09-26T11:00:00-03:00', status: 'concluido', fotos: 2 },
-      { modelo: 'Nissan Kicks', placa: 'PQR6S09', servico: 'Completa + cera', horario: '2026-10-02T16:00:00-03:00', status: 'concluido', fotos: 2 },
+      { placa: 'FTR4B21', servicos: ['Completa + cera'], horario: '2026-10-03T08:30:00-03:00', status: 'concluido', fotos: 2 },
+      { placa: 'QWE2C45', servicos: ['Lavagem express'], horario: '2026-10-03T09:15:00-03:00', status: 'concluido', fotos: 1 },
+      { placa: 'BRA2E19', servicos: ['Lavagem completa'], horario: '2026-10-03T10:00:00-03:00', status: 'em_andamento', fotos: 2 },
+      { placa: 'GHI7J88', servicos: ['Higienização interna'], horario: '2026-10-03T10:30:00-03:00', status: 'em_andamento', fotos: 3 },
+      { placa: 'RTY5K32', servicos: ['Lavagem completa', 'Higienização interna'], horario: '2026-10-03T13:00:00-03:00', status: 'pendente', fotos: 2 },
+      { placa: 'MNO3P71', servicos: ['Lavagem express'], horario: '2026-10-03T14:30:00-03:00', status: 'pendente', fotos: 1 },
+      { placa: 'UVW8X14', servicos: ['Polimento técnico'], horario: '2026-10-03T15:00:00-03:00', status: 'pendente', fotos: 3 },
+      { placa: 'KLM1N66', servicos: ['Lavagem express', 'Completa + cera'], horario: '2026-10-04T09:00:00-03:00', status: 'pendente', fotos: 1 },
+      { placa: 'FTR4B21', servicos: ['Lavagem completa'], horario: '2026-09-26T11:00:00-03:00', status: 'concluido', fotos: 2 },
+      { placa: 'PQR6S09', servicos: ['Completa + cera'], horario: '2026-10-02T16:00:00-03:00', status: 'concluido', fotos: 2 },
     ],
     intercorrencias: [...FERIADOS, { data: '2026-10-08', motivo: 'Manutenção da lavadora de alta pressão', horaInicio: '14:00', horaFim: '17:00' }],
     horarios: HORARIO_ESTENDIDO,
@@ -123,9 +126,9 @@ const empresas: EmpresaDemo[] = [
       { nome: 'Lavagem de motor', preco: 90, ativo: false, itens: ['Lavagem do motor', 'Secagem'] },
     ],
     pedidos: [
-      { modelo: 'BMW 320i', placa: 'BMW3A20', servico: 'Spa completo', horario: '2026-10-03T09:00:00-03:00', status: 'em_andamento', fotos: 3 },
-      { modelo: 'Audi Q3', placa: 'AUD1Q33', servico: 'Cristalização de pintura', horario: '2026-10-03T11:00:00-03:00', status: 'pendente', fotos: 2 },
-      { modelo: 'Toyota SW4', placa: 'SWF4T44', servico: 'Lavagem tradicional', horario: '2026-10-02T15:30:00-03:00', status: 'concluido', fotos: 2 },
+      { placa: 'BMW3A20', servicos: ['Spa completo'], horario: '2026-10-03T09:00:00-03:00', status: 'em_andamento', fotos: 3 },
+      { placa: 'AUD1Q33', servicos: ['Lavagem tradicional', 'Cristalização de pintura'], horario: '2026-10-03T11:00:00-03:00', status: 'pendente', fotos: 2 },
+      { placa: 'SWF4T44', servicos: ['Lavagem tradicional'], horario: '2026-10-02T15:30:00-03:00', status: 'concluido', fotos: 2 },
     ],
     intercorrencias: [...FERIADOS],
   },
@@ -145,8 +148,8 @@ const empresas: EmpresaDemo[] = [
       { nome: 'Lavagem por baixo', preco: 70, itens: ['Lavagem externa', 'Lavagem de chassi', 'Lavagem de rodas', 'Secagem'] },
     ],
     pedidos: [
-      { modelo: 'VW Polo', placa: 'POL0V12', servico: 'Ducha rápida', horario: '2026-10-03T12:00:00-03:00', status: 'pendente', fotos: 1 },
-      { modelo: 'Fiat Toro', placa: 'TOR0F55', servico: 'Lavagem por baixo', horario: '2026-10-03T08:00:00-03:00', status: 'concluido', fotos: 2 },
+      { placa: 'POL0V12', servicos: ['Ducha rápida'], horario: '2026-10-03T12:00:00-03:00', status: 'pendente', fotos: 1 },
+      { placa: 'TOR0F55', servicos: ['Lavagem por baixo'], horario: '2026-10-03T08:00:00-03:00', status: 'concluido', fotos: 2 },
     ],
     intercorrencias: [...FERIADOS],
   },
@@ -166,7 +169,7 @@ const empresas: EmpresaDemo[] = [
       { nome: 'Sanitização de cabine', preco: 120, itens: ['Aspiração', 'Limpeza de painel', 'Oxi-sanitização'] },
     ],
     pedidos: [
-      { modelo: 'Chevrolet Onix', placa: 'ONX2C77', servico: 'Eco completa', horario: '2026-10-02T10:00:00-03:00', status: 'concluido', fotos: 2 },
+      { placa: 'ONX2C77', servicos: ['Eco completa'], horario: '2026-10-02T10:00:00-03:00', status: 'concluido', fotos: 2 },
     ],
     // Fechada hoje (dia inteiro) — mostra o estado "FECHADO" no app.
     intercorrencias: [...FERIADOS, { data: '2026-10-03', motivo: 'Manutenção do sistema de reúso de água' }],
@@ -187,8 +190,8 @@ const empresas: EmpresaDemo[] = [
       { nome: 'Detail completo', preco: 650, itens: ['Lavagem externa', 'Lavagem do motor', 'Descontaminação de pintura', 'Secagem', 'Polimento', 'Cristalização', 'Hidratação de couro'] },
     ],
     pedidos: [
-      { modelo: 'Mitsubishi L200', placa: 'LDU2M00', servico: 'Lavagem detalhada', horario: '2026-10-03T10:00:00-03:00', status: 'em_andamento', fotos: 2 },
-      { modelo: 'Ford Ranger', placa: 'RNG3F21', servico: 'Couro renovado', horario: '2026-10-04T10:00:00-03:00', status: 'pendente', fotos: 2 },
+      { placa: 'LDU2M00', servicos: ['Lavagem detalhada'], horario: '2026-10-03T10:00:00-03:00', status: 'em_andamento', fotos: 2 },
+      { placa: 'RNG3F21', servicos: ['Couro renovado'], horario: '2026-10-04T10:00:00-03:00', status: 'pendente', fotos: 2 },
     ],
     intercorrencias: [...FERIADOS],
   },
@@ -207,7 +210,7 @@ const empresas: EmpresaDemo[] = [
       { nome: 'Lavagem + aspiração', preco: 50, itens: ['Lavagem externa', 'Aspiração', 'Secagem'] },
     ],
     pedidos: [
-      { modelo: 'Renault Sandero', placa: 'SND1R40', servico: 'Lavagem + aspiração', horario: '2026-10-03T16:00:00-03:00', status: 'pendente', fotos: 1 },
+      { placa: 'SND1R40', servicos: ['Lavagem + aspiração'], horario: '2026-10-03T16:00:00-03:00', status: 'pendente', fotos: 1 },
     ],
     intercorrencias: [...FERIADOS],
     // Aberto também aos domingos.
@@ -223,13 +226,74 @@ const SOLICITACAO_PENDENTE = {
   address: 'Av. Vital Brasil, 1100 - Butantã, São Paulo - SP, CEP 05503001',
 }
 
-// Cliente de exemplo do app (I2) — senha conhecida SÓ para desenvolvimento/demo.
-const CLIENTE_DEMO = { nome: 'Mariana Souza', email: 'mariana@exemplo.com', senha: '123456' }
-
-// Veículos da cliente de exemplo (I3). Placa já normalizada (sem hífen, maiúsculas).
-const VEICULOS_CLIENTE_DEMO = [
-  { marca: 'Chevrolet', modelo: 'Onix', cor: 'Prata', placa: 'RIO2A18' },
-  { marca: 'Honda', modelo: 'Fit', cor: 'Preto', placa: 'FGH4521' },
+// Clientes de exemplo do app (I2/I3/I13) — senha conhecida SÓ para
+// desenvolvimento/demo: "123456" para todos. Cada placa dos pedidos acima é de
+// um destes veículos (placa já normalizada, sem hífen, maiúsculas). Criados ou
+// reaproveitados por e-mail/placa — nada é apagado.
+const SENHA_DEMO_CLIENTE = '123456'
+const CLIENTES_DEMO: ClienteExemplo[] = [
+  {
+    nome: 'Mariana Souza',
+    email: 'mariana@exemplo.com',
+    veiculos: [
+      { marca: 'Chevrolet', modelo: 'Onix', cor: 'Prata', placa: 'RIO2A18' },
+      { marca: 'Honda', modelo: 'Fit', cor: 'Preto', placa: 'FGH4521' },
+      { marca: 'Jeep', modelo: 'Compass', cor: 'Cinza', placa: 'FTR4B21' },
+    ],
+  },
+  {
+    nome: 'Carlos Andrade',
+    email: 'carlos@exemplo.com',
+    veiculos: [
+      { marca: 'Fiat', modelo: 'Argo', cor: 'Branco', placa: 'QWE2C45' },
+      { marca: 'Toyota', modelo: 'Corolla', cor: 'Preto', placa: 'BRA2E19' },
+    ],
+  },
+  {
+    nome: 'Juliana Prado',
+    email: 'juliana@exemplo.com',
+    veiculos: [
+      { marca: 'Honda', modelo: 'HR-V', cor: 'Azul', placa: 'GHI7J88' },
+      { marca: 'Volkswagen', modelo: 'T-Cross', cor: 'Branco', placa: 'RTY5K32' },
+    ],
+  },
+  {
+    nome: 'Rafael Moreira',
+    email: 'rafael@exemplo.com',
+    veiculos: [
+      { marca: 'Hyundai', modelo: 'HB20', cor: 'Prata', placa: 'MNO3P71' },
+      { marca: 'Chevrolet', modelo: 'Tracker', cor: 'Vermelho', placa: 'UVW8X14' },
+      { marca: 'Renault', modelo: 'Kwid', cor: 'Laranja', placa: 'KLM1N66' },
+    ],
+  },
+  {
+    nome: 'Beatriz Santos',
+    email: 'beatriz@exemplo.com',
+    veiculos: [
+      { marca: 'Nissan', modelo: 'Kicks', cor: 'Cinza', placa: 'PQR6S09' },
+      { marca: 'BMW', modelo: '320i', cor: 'Preto', placa: 'BMW3A20' },
+      { marca: 'Audi', modelo: 'Q3', cor: 'Branco', placa: 'AUD1Q33' },
+    ],
+  },
+  {
+    nome: 'Pedro Henrique Lima',
+    email: 'pedro@exemplo.com',
+    veiculos: [
+      { marca: 'Toyota', modelo: 'SW4', cor: 'Prata', placa: 'SWF4T44' },
+      { marca: 'Volkswagen', modelo: 'Polo', cor: 'Azul', placa: 'POL0V12' },
+      { marca: 'Fiat', modelo: 'Toro', cor: 'Vermelho', placa: 'TOR0F55' },
+    ],
+  },
+  {
+    nome: 'Fernanda Costa',
+    email: 'fernanda@exemplo.com',
+    veiculos: [
+      { marca: 'Chevrolet', modelo: 'Onix', cor: 'Branco', placa: 'ONX2C77' },
+      { marca: 'Mitsubishi', modelo: 'L200', cor: 'Prata', placa: 'LDU2M00' },
+      { marca: 'Ford', modelo: 'Ranger', cor: 'Preto', placa: 'RNG3F21' },
+      { marca: 'Renault', modelo: 'Sandero', cor: 'Cinza', placa: 'SND1R40' },
+    ],
+  },
 ]
 
 function fotos(placa: string, quantidade = 0) {
@@ -240,6 +304,20 @@ async function main() {
   const itens = await prisma.itemServico.findMany({ select: { id: true, nome: true } })
   const itemIdPorNome = new Map(itens.map((item) => [item.nome, item.id]))
   if (itemIdPorNome.size === 0) throw new Error('Catálogo de itens vazio — rode o seed (npm run prisma:seed) antes.')
+
+  // Clientes e veículos do app primeiro: os pedidos das empresas apontam para eles (I13).
+  const senhaClienteHash = bcrypt.hashSync(SENHA_DEMO_CLIENTE, 10)
+  const donoDaPlaca = new Map<string, { clienteId: string; veiculoId: string }>()
+  for (const cliente of CLIENTES_DEMO) {
+    const { clienteId, clienteNovo, veiculosNovos, veiculoIdPorPlaca } = await garantirClienteExemplo(
+      prisma,
+      cliente,
+      senhaClienteHash,
+    )
+    if (clienteNovo) console.log(`+ Cliente do app: ${cliente.email} / senha "${SENHA_DEMO_CLIENTE}"`)
+    if (veiculosNovos > 0) console.log(`+ ${veiculosNovos} veículo(s) de ${cliente.email}`)
+    for (const [placa, veiculoId] of veiculoIdPorPlaca) donoDaPlaca.set(placa, { clienteId, veiculoId })
+  }
 
   let criadas = 0
   for (const empresa of empresas) {
@@ -287,16 +365,19 @@ async function main() {
       })
     }
 
-    await prisma.pedido.createMany({
-      data: empresa.pedidos.map((pedido) => ({
+    for (const pedido of empresa.pedidos) {
+      const dono = donoDaPlaca.get(pedido.placa)
+      if (!dono) throw new Error(`Placa ${pedido.placa} não é de nenhum cliente de CLIENTES_DEMO`)
+      await criarPedidoExemplo(prisma, {
         lavaRapidoId: lavaRapido.id,
-        veiculo: { modelo: pedido.modelo, placa: pedido.placa },
-        servico: pedido.servico,
+        clienteId: dono.clienteId,
+        veiculoId: dono.veiculoId,
+        servicos: pedido.servicos,
         horario: new Date(pedido.horario),
         status: pedido.status,
         fotos: fotos(pedido.placa, pedido.fotos),
-      })),
-    })
+      })
+    }
 
     await prisma.intercorrencia.createMany({
       data: empresa.intercorrencias.map((intercorrencia) => ({
@@ -327,24 +408,6 @@ async function main() {
       },
     })
     console.log(`+ Solicitação pendente: ${SOLICITACAO_PENDENTE.name} (CNPJ ${SOLICITACAO_PENDENTE.cnpj})`)
-  }
-
-  let clienteDemo = await prisma.cliente.findUnique({ where: { email: CLIENTE_DEMO.email } })
-  if (!clienteDemo) {
-    clienteDemo = await prisma.cliente.create({
-      data: { nome: CLIENTE_DEMO.nome, email: CLIENTE_DEMO.email, senha: bcrypt.hashSync(CLIENTE_DEMO.senha, 10) },
-    })
-    console.log(`+ Cliente do app: ${CLIENTE_DEMO.email} / senha "${CLIENTE_DEMO.senha}"`)
-  }
-
-  // Veículos do cliente de exemplo (I3) — por placa, sem duplicar.
-  for (const veiculo of VEICULOS_CLIENTE_DEMO) {
-    const existe = await prisma.veiculo.findUnique({
-      where: { clienteId_placa: { clienteId: clienteDemo.id, placa: veiculo.placa } },
-    })
-    if (existe) continue
-    await prisma.veiculo.create({ data: { ...veiculo, clienteId: clienteDemo.id } })
-    console.log(`+ Veículo de ${CLIENTE_DEMO.email}: ${veiculo.modelo} (${veiculo.placa})`)
   }
 
   console.log(

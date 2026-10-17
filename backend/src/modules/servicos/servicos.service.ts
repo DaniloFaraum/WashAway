@@ -10,13 +10,20 @@ function findServicoComItens(id: string) {
   return prisma.servico.findUnique({ where: { id }, include: includeItens })
 }
 
+/**
+ * Duração do combo = soma das durações dos seus itens (o combo não guarda
+ * coluna própria). Usada na resposta da API e no cálculo do pedido (I13).
+ */
+export function duracaoDoServico(itens: { duracaoMinutos: number }[]): number {
+  return itens.reduce((total, item) => total + item.duracaoMinutos, 0)
+}
+
 // Achata a tabela de ligação em `itens` e deriva dos itens as `categorias`
 // (distintas) e a `duracaoMinutos` (soma) — o combo não guarda nenhuma das duas.
 function toServicoResponse({ itens, ...servico }: ServicoComItens) {
   const itensPlanos = itens.map(({ item }) => item)
   const categorias = [...new Set(itensPlanos.map((item) => item.categoria))]
-  const duracaoMinutos = itensPlanos.reduce((total, item) => total + item.duracaoMinutos, 0)
-  return { ...servico, itens: itensPlanos, categorias, duracaoMinutos }
+  return { ...servico, itens: itensPlanos, categorias, duracaoMinutos: duracaoDoServico(itensPlanos) }
 }
 
 export async function listServicos(lavaRapidoId?: string) {

@@ -2,6 +2,7 @@ import 'dotenv/config'
 import { PrismaClient } from '@prisma/client'
 import bcrypt from 'bcryptjs'
 import { criarHorariosSeNaoTiver, HORARIO_PADRAO, HORARIO_TODOS_OS_DIAS } from './horariosExemplo.js'
+import { criarPedidoExemplo, garantirClienteExemplo, type ClienteExemplo } from './pedidosExemplo.js'
 
 const prisma = new PrismaClient()
 
@@ -144,58 +145,41 @@ const combosData = [
   { nome: 'Polimento', preco: 120, ativo: false, itens: ['Lavagem externa', 'Secagem', 'Polimento'] },
 ]
 
+// Clientes do app de exemplo (I13) — SENHA SÓ PARA DESENVOLVIMENTO: "123456".
+// Reaproveitados pelo e-mail (o seed não apaga clientes, só os pedidos).
+const SENHA_DEMO_CLIENTE = '123456'
+const clientesData: ClienteExemplo[] = [
+  {
+    nome: 'Ana Ribeiro',
+    email: 'ana@exemplo.com',
+    veiculos: [{ marca: 'Fiat', modelo: 'Argo', cor: 'Branco', placa: 'ABC1D23' }],
+  },
+  {
+    nome: 'Bruno Carvalho',
+    email: 'bruno@exemplo.com',
+    veiculos: [
+      { marca: 'Volkswagen', modelo: 'Gol', cor: 'Prata', placa: 'XYZ9E88' },
+      { marca: 'Chevrolet', modelo: 'Onix', cor: 'Vermelho', placa: 'JKL4F56' },
+    ],
+  },
+]
+
 async function main() {
   // Onboarding: solicitações referenciam Contrato, então saem antes dele.
   await prisma.solicitacaoOnboarding.deleteMany()
   await prisma.contrato.deleteMany()
   await prisma.contrato.create({ data: CONTRATO_MOCK })
 
+  // Pedidos antes dos serviços/clientes (PedidoServico sai junto, cascade).
+  await prisma.pedido.deleteMany()
   await prisma.intercorrencia.deleteMany()
   await prisma.servico.deleteMany()
   await prisma.itemServico.deleteMany()
-  await prisma.pedido.deleteMany()
   await prisma.lavaRapido.deleteMany()
 
   const lavaRapidos = []
   for (const data of lavaRapidosData) {
     lavaRapidos.push(await prisma.lavaRapido.create({ data }))
-  }
-
-  const pedidosData = [
-    {
-      lavaRapidoId: lavaRapidos[0].id,
-      veiculo: { modelo: 'Fiat Argo', placa: 'ABC1D23' },
-      servico: 'Lavagem completa',
-      horario: new Date('2026-09-16T09:00:00.000Z'),
-      status: 'pendente' as const,
-      fotos: [
-        'https://placehold.co/400x300?text=Antes+1',
-        'https://placehold.co/400x300?text=Antes+2',
-      ],
-    },
-    {
-      lavaRapidoId: lavaRapidos[1].id,
-      veiculo: { modelo: 'VW Gol', placa: 'XYZ9E88' },
-      servico: 'Lavagem simples',
-      horario: new Date('2026-09-16T10:30:00.000Z'),
-      status: 'em_andamento' as const,
-      fotos: ['https://placehold.co/400x300?text=Antes+1'],
-    },
-    {
-      lavaRapidoId: lavaRapidos[2].id,
-      veiculo: { modelo: 'Chevrolet Onix', placa: 'JKL4F56' },
-      servico: 'Lavagem completa + polimento',
-      horario: new Date('2026-09-15T15:00:00.000Z'),
-      status: 'concluido' as const,
-      fotos: [
-        'https://placehold.co/400x300?text=Antes+1',
-        'https://placehold.co/400x300?text=Depois+1',
-      ],
-    },
-  ]
-
-  for (const data of pedidosData) {
-    await prisma.pedido.create({ data })
   }
 
   const itemIdPorNome = new Map<string, string>()
@@ -243,8 +227,55 @@ async function main() {
     await criarHorariosSeNaoTiver(prisma, lavaRapido.id, ultimo ? HORARIO_TODOS_OS_DIAS : HORARIO_PADRAO)
   }
 
+  // Pedidos no formato do I13: cliente + veículo do cadastro e serviços
+  // congelados (nome/preço/duração), total e duração somados.
+  const senhaClienteHash = bcrypt.hashSync(SENHA_DEMO_CLIENTE, 10)
+  const [ana, bruno] = await Promise.all(
+    clientesData.map((cliente) => garantirClienteExemplo(prisma, cliente, senhaClienteHash)),
+  )
+  const pedidosData = [
+    {
+      lavaRapidoId: lavaRapidos[0].id,
+      clienteId: ana.clienteId,
+      veiculoId: ana.veiculoIdPorPlaca.get('ABC1D23')!,
+      servicos: ['Lavagem completa'],
+      horario: new Date('2026-09-16T09:00:00.000Z'),
+      status: 'pendente' as const,
+      fotos: [
+        'https://placehold.co/400x300?text=Antes+1',
+        'https://placehold.co/400x300?text=Antes+2',
+      ],
+    },
+    {
+      lavaRapidoId: lavaRapidos[1].id,
+      clienteId: bruno.clienteId,
+      veiculoId: bruno.veiculoIdPorPlaca.get('XYZ9E88')!,
+      servicos: ['Lavagem simples'],
+      horario: new Date('2026-09-16T10:30:00.000Z'),
+      status: 'em_andamento' as const,
+      fotos: ['https://placehold.co/400x300?text=Antes+1'],
+    },
+    {
+      lavaRapidoId: lavaRapidos[2].id,
+      clienteId: bruno.clienteId,
+      veiculoId: bruno.veiculoIdPorPlaca.get('JKL4F56')!,
+      // Serviço inativo também pode estar num pedido antigo (era ativo na compra).
+      servicos: ['Lavagem completa', 'Polimento'],
+      horario: new Date('2026-09-15T15:00:00.000Z'),
+      status: 'concluido' as const,
+      fotos: [
+        'https://placehold.co/400x300?text=Antes+1',
+        'https://placehold.co/400x300?text=Depois+1',
+      ],
+    },
+  ]
+  for (const pedido of pedidosData) {
+    await criarPedidoExemplo(prisma, pedido)
+  }
+
   console.log(
-    `Seed concluído: ${lavaRapidos.length} lava-rápidos, ${pedidosData.length} pedidos, ${servicosCount} serviços, ${intercorrenciasCount} intercorrências.`,
+    `Seed concluído: ${lavaRapidos.length} lava-rápidos, ${pedidosData.length} pedidos, ${servicosCount} serviços, ${intercorrenciasCount} intercorrências, ` +
+      `${clientesData.length} clientes (senha "${SENHA_DEMO_CLIENTE}").`,
   )
 }
 

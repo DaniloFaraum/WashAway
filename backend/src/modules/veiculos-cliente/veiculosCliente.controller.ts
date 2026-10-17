@@ -1,5 +1,5 @@
 import type { Request, Response } from 'express'
-import { isViolacaoDeUnicidade } from '../../utils/prismaErros.js'
+import { isViolacaoDeChaveEstrangeira, isViolacaoDeUnicidade } from '../../utils/prismaErros.js'
 import {
   atualizarVeiculoDoCliente,
   criarVeiculoDoCliente,
@@ -13,6 +13,7 @@ import { validarVeiculo, type DadosVeiculo } from './veiculosCliente.validation.
 
 const NAO_ENCONTRADO = 'Veículo não encontrado'
 const PLACA_REPETIDA = 'Você já cadastrou um veículo com essa placa'
+const VEICULO_COM_PEDIDOS = 'Este veículo já tem pedidos e não pode ser removido'
 
 /** Dados limpos do body, ou `undefined` depois de responder `400 { error, campos }`. */
 function dadosValidosOu400(req: Request, res: Response): DadosVeiculo | undefined {
@@ -64,7 +65,18 @@ export async function atualizar(req: Request, res: Response) {
 
 /** DELETE /clientes/me/veiculos/:id */
 export async function remover(req: Request, res: Response) {
-  if (!(await removerVeiculoDoCliente(req.auth!.id, req.params.id))) {
+  let removido: boolean
+  try {
+    removido = await removerVeiculoDoCliente(req.auth!.id, req.params.id)
+  } catch (error) {
+    // I13: veículo com pedido não pode ser apagado (o pedido referencia o veículo).
+    if (isViolacaoDeChaveEstrangeira(error)) {
+      res.status(409).json({ error: VEICULO_COM_PEDIDOS })
+      return
+    }
+    throw error
+  }
+  if (!removido) {
     res.status(404).json({ error: NAO_ENCONTRADO })
     return
   }

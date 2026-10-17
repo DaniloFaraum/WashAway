@@ -4,99 +4,68 @@ import { createApp } from '../app.js'
 import { prisma } from '../config/prisma.js'
 import * as veiculosService from '../modules/veiculos/veiculos.service.js'
 import { comToken, tokenDeLavaRapido } from './helpers/auth.js'
-import { criarLavaRapidoTeste, criarPedidoTeste } from './helpers/factories.js'
+import { criarClienteTeste, criarLavaRapidoTeste, criarPedidoTeste, criarVeiculoTeste } from './helpers/factories.js'
 import { limparDadosDeTeste } from './helpers/limpeza.js'
 
 const app = createApp()
 
+// GET /veiculos do painel (I13): veículos distintos dos pedidos da empresa,
+// pela relação Pedido → Veiculo (não mais o JSON antigo do pedido).
 describe('/veiculos', () => {
-  let lavaRapidoId: string
   let token: string
   let outroLavaRapidoId: string
-  const pedidoIds: string[] = []
+  let argoId: string
+  let golId: string
+  let veiculoDeOutraEmpresaId: string
+  let veiculoSemPedidoId: string
 
   beforeAll(async () => {
-    const lavaRapido = await prisma.lavaRapido.create({
-      data: {
-        name: 'Lava-rápido do veículo de teste',
-        cnpj: '55555555000166',
-        senha: 'hash-fake-nao-usado-nestes-testes',
-        rating: 4.5,
-        reviewsCount: 10,
-        distance: '1 km',
-        time: '5 min',
-        price: 50,
-        isOpen: true,
-        image: 'https://placehold.co/300x300?text=Teste',
-        latitude: 0,
-        longitude: 0,
-      },
-    })
-    lavaRapidoId = lavaRapido.id
+    const lavaRapido = await criarLavaRapidoTeste()
     token = tokenDeLavaRapido(lavaRapido)
 
     const outro = await criarLavaRapidoTeste()
     outroLavaRapidoId = outro.id
-    await criarPedidoTeste(outroLavaRapidoId, { veiculo: { modelo: 'Carro de outra empresa', placa: 'OUT9R99' } })
 
-    // Duas visitas do mesmo carro (mesma placa) — deve deduplicar.
-    const pedido1 = await prisma.pedido.create({
-      data: {
-        lavaRapidoId,
-        veiculo: { modelo: 'Fiat Argo', placa: 'VEI1T23' },
-        servico: 'Lavagem simples',
-        horario: new Date('2026-01-01T10:00:00.000Z'),
-        status: 'concluido',
-        fotos: [],
-      },
-    })
-    const pedido2 = await prisma.pedido.create({
-      data: {
-        lavaRapidoId,
-        veiculo: { modelo: 'Fiat Argo', placa: 'VEI1T23' },
-        servico: 'Lavagem completa',
-        horario: new Date('2026-01-02T10:00:00.000Z'),
-        status: 'pendente',
-        fotos: [],
-      },
-    })
-    const pedido3 = await prisma.pedido.create({
-      data: {
-        lavaRapidoId,
-        veiculo: { modelo: 'VW Gol', placa: 'VEI2T45' },
-        servico: 'Lavagem simples',
-        horario: new Date('2026-01-03T10:00:00.000Z'),
-        status: 'pendente',
-        fotos: [],
-      },
-    })
-    pedidoIds.push(pedido1.id, pedido2.id, pedido3.id)
+    const cliente = await criarClienteTeste()
+    const argo = await criarVeiculoTeste(cliente.id, { modelo: 'Argo', marca: 'Fiat' })
+    const gol = await criarVeiculoTeste(cliente.id, { modelo: 'Gol', marca: 'VW' })
+    const semPedido = await criarVeiculoTeste(cliente.id)
+    argoId = argo.id
+    golId = gol.id
+    veiculoSemPedidoId = semPedido.id
+
+    // Duas visitas do mesmo carro — deve aparecer uma vez só.
+    await criarPedidoTeste(lavaRapido.id, { clienteId: cliente.id, veiculoId: argo.id })
+    await criarPedidoTeste(lavaRapido.id, { clienteId: cliente.id, veiculoId: argo.id })
+    await criarPedidoTeste(lavaRapido.id, { clienteId: cliente.id, veiculoId: gol.id })
+
+    const pedidoDeOutra = await criarPedidoTeste(outroLavaRapidoId)
+    veiculoDeOutraEmpresaId = pedidoDeOutra.veiculoId
   })
 
   afterAll(async () => {
-    await prisma.pedido.deleteMany({ where: { id: { in: pedidoIds } } })
-    await prisma.lavaRapido.deleteMany({ where: { id: lavaRapidoId } })
     await limparDadosDeTeste()
     await prisma.$disconnect()
   })
 
-  it('GET /veiculos deriva veículos distintos dos pedidos da empresa do token, sem duplicar por placa', async () => {
+  it('GET /veiculos lista os veículos distintos dos pedidos da empresa do token', async () => {
     const response = await comToken(supertest(app).get('/veiculos'), token)
 
     expect(response.status).toBe(200)
-    const placas = response.body.map((v: { placa: string }) => v.placa)
-    expect(placas.filter((p: string) => p === 'VEI1T23')).toHaveLength(1)
-    expect(placas).toContain('VEI2T45')
-    expect(response.body).toContainEqual({ id: 'VEI1T23', modelo: 'Fiat Argo', placa: 'VEI1T23' })
+    const ids = response.body.map((v: { id: string }) => v.id)
+    expect(ids.filter((id: string) => id === argoId)).toHaveLength(1)
+    expect(ids).toContain(golId)
+    expect(ids).not.toContain(veiculoSemPedidoId)
+    expect(response.body.find((v: { id: string }) => v.id === argoId)).toMatchObject({ modelo: 'Argo', marca: 'Fiat' })
   })
 
   it('GET /veiculos ignora ?lavaRapidoId= e não traz veículos de outra empresa', async () => {
     const response = await comToken(supertest(app).get('/veiculos').query({ lavaRapidoId: outroLavaRapidoId }), token)
 
     expect(response.status).toBe(200)
-    const placas = response.body.map((v: { placa: string }) => v.placa)
-    expect(placas).toContain('VEI1T23')
-    expect(placas).not.toContain('OUT9R99')
+    const ids = response.body.map((v: { id: string }) => v.id)
+    expect(ids).toContain(argoId)
+    expect(ids).not.toContain(veiculoDeOutraEmpresaId)
   })
 
   describe('erro inesperado', () => {

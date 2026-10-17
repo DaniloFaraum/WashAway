@@ -5,7 +5,7 @@ import { prisma } from '../config/prisma.js'
 import { partesLocais } from '../utils/fusoHorario.js'
 import jwt from 'jsonwebtoken'
 import { comToken, tokenDeLavaRapido } from './helpers/auth.js'
-import { criarLavaRapidoTeste } from './helpers/factories.js'
+import { criarLavaRapidoTeste, criarPedidoTeste } from './helpers/factories.js'
 import { limparDadosDeTeste } from './helpers/limpeza.js'
 
 const app = createApp()
@@ -127,14 +127,7 @@ describe('exclusão de lava-rápido no banco (cascade)', () => {
       },
     })
 
-    const pedido = await prisma.pedido.create({
-      data: {
-        lavaRapidoId: lavaRapido.id,
-        veiculo: { modelo: 'Onix', placa: 'ABC1234' },
-        servico: 'Lavagem simples',
-        horario: new Date(),
-      },
-    })
+    const pedido = await criarPedidoTeste(lavaRapido.id)
     const servico = await prisma.servico.create({
       data: { lavaRapidoId: lavaRapido.id, nome: 'Lavagem', preco: 40 },
     })

@@ -1,22 +1,14 @@
 import { prisma } from '../../config/prisma.js'
 
-interface VeiculoJson {
-  modelo?: string
-  placa?: string
-}
-
+/**
+ * Veículos atendidos pela empresa (painel): os veículos distintos dos pedidos
+ * do lava-rápido, pela relação `Pedido → Veiculo` (I13), por modelo e placa.
+ */
 export async function listVeiculos(lavaRapidoId: string) {
-  const pedidos = await prisma.pedido.findMany({
-    where: { lavaRapidoId },
-    select: { veiculo: true },
+  const veiculos = await prisma.veiculo.findMany({
+    where: { pedidos: { some: { lavaRapidoId } } },
+    select: { id: true, marca: true, modelo: true, cor: true, placa: true },
+    orderBy: [{ modelo: 'asc' }, { placa: 'asc' }],
   })
-
-  const veiculosPorPlaca = new Map<string, { id: string; modelo: string; placa: string }>()
-  for (const { veiculo } of pedidos) {
-    const { modelo, placa } = (veiculo ?? {}) as VeiculoJson
-    if (!placa || veiculosPorPlaca.has(placa)) continue
-    veiculosPorPlaca.set(placa, { id: placa, modelo: modelo ?? '', placa })
-  }
-
-  return Array.from(veiculosPorPlaca.values())
+  return veiculos
 }
