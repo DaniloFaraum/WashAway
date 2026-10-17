@@ -224,7 +224,7 @@ Regra de placa (`modules/veiculos-cliente/placa.ts`): `normalizarPlaca` remove h
 | `/onboarding/solicitacoes/:id` | `GET` | Status + contrato da solicitação; `404` se não existir. |
 | `/onboarding/solicitacoes/:id/aceite` | `POST` | Body `{ aceite: "eu aceito" }` (trim, case-insensitive; senão `400`). Numa transação: cria o `LavaRapido` com o `email` e o `senhaHash` da solicitação e marca a solicitação `concluida` + `aceitoEm` + `lavaRapidoId`. `201 { token, expiraEm, lavaRapido }` (mesma sessão do login — o painel já entra); `404` se não existir; `409` se já concluída, se a solicitação é anterior ao I17 (sem e-mail/senha — reenviar o cadastro completa a mesma solicitação) ou se o CNPJ/e-mail foi cadastrado por outro caminho nesse meio-tempo. |
 
-**`POST /lavaRapidos` e `DELETE /lavaRapidos/:id` foram removidos no I17** (respondem `404`): empresa nova só pelo fluxo `/onboarding`; a exclusão passa a ser por solicitação, processada por interno com permissão (`i17-interno-exclusao`). O cascade do banco (`onDelete: Cascade` em `Pedido`/`Servico`/`Intercorrencia`/`HorarioFuncionamento`) continua.
+**`POST /lavaRapidos` e `DELETE /lavaRapidos/:id` foram removidos no I17** (respondem `404`): empresa nova só pelo fluxo `/onboarding`; a exclusão passa a ser por solicitação, processada por interno com permissão `admin` (seção 5.4). O cascade do banco (`onDelete: Cascade` em `Pedido`/`Servico`/`Intercorrencia`/`HorarioFuncionamento`) continua.
 
 **Desvio da decisão original do plano**: o plano previa uma rota específica `PATCH /pedidos/:id/status`. Na implementação, isso quebraria com o `pedidos.routes.js` do admin-front (que já usa `PATCH /pedidos/:id` genérico) e com o `json-server` de fallback (que não suporta sub-rotas customizadas — não tem `--routes`/rewrite nessa versão). Mantida `PATCH /pedidos/:id`, com a mesma segurança pretendida (só `status` é aceito, qualquer outro campo no body é ignorado) garantida na validação do controller, não na URL. Isso preserva o critério "zero mudança de código além da `BASE_URL`" nos dois front-ends.
 
@@ -280,14 +280,14 @@ Planos `docs/plan/i2-login-cliente/` (infra + cliente) e `i17-*` (lava-rápido, 
   - token com `escopo` (uso restrito) → **`403 { error }`** — o i17-senha-gerada libera o escopo `trocar-senha` só na rota de troca;
   - ok → `req.auth = { id, tipo, permissoes, escopo? }` e `next()`.
   - Chamar sem nenhum tipo lança erro na montagem da rota. Uso: `router.get('/me', autenticar('cliente'), asyncHandler(me))`; o I17 usa `autenticar('lavaRapido')` e `autenticar('interno')`.
-- **Permissão** fica separada: `autorizar(...permissoes)` (`src/middlewares/autorizar.ts`, i17-interno-exclusao) depois de `autenticar`, `403` se faltar a permissão.
+- **Permissão** fica separada (**autorização**: o que pode): `autorizar(...permissoes)` (`src/middlewares/autorizar.ts`, i17-interno-exclusao), montado **depois** de `autenticar`. Confere `req.auth.permissoes` (vindas do token): falta alguma das permissões pedidas (todas são exigidas) → **`403 { error: 'Permissão insuficiente para esta ação' }`**; sem `req.auth` (rota montada sem `autenticar` antes) → `401`. Chamar sem nenhuma permissão lança erro na montagem. Uso: `router.use(autenticar('interno'), autorizar('admin'))`. Ver seção 5.4.
 - **Painel (I17, `docs/plan/i17-acesso-seguro-painel/`)**: `POST /lavaRapidos/login` e o aceite do onboarding devolvem `{ token, expiraEm, lavaRapido }` com token `tipo: 'lavaRapido'`. Rotas de gestão com `autenticar('lavaRapido')`: `GET /pedidos`, `PATCH /pedidos/:id`, `POST /servicos`, `PUT/PATCH /servicos/:id`, `POST /intercorrencias`, `PATCH /intercorrencias/:id`, `GET /veiculos` — `PUT /lavaRapidos/:id/horarios` (I19 parte 2; `:id` tem de ser a empresa do token) e toda rota de gestão nova. **A empresa vem do token** (`req.auth.id`); `?lavaRapidoId=`/`body.lavaRapidoId` são ignorados. **Isolamento:** os services filtram por `{ id, lavaRapidoId }` — recurso de outra empresa = `404` (nunca `403`, pra não confirmar que existe). Token de cliente no painel = `403`; token de lava-rápido em rota de cliente = `403`.
-- **Rotas públicas (sem token):** `GET /lavaRapidos`, `GET /lavaRapidos/:id`, `GET /lavaRapidos/:id/horarios`, `POST /lavaRapidos/login`, `GET /servicos?lavaRapidoId=`, `GET /itensServico`, `GET /intercorrencias?lavaRapidoId=` (leituras do app do cliente), `/auth/cliente/cadastro`, `/auth/cliente/login`, `/onboarding/*`, `GET /contratos/vigente`, `/api-docs`.
+- **Rotas públicas (sem token):** `GET /lavaRapidos`, `GET /lavaRapidos/:id`, `GET /lavaRapidos/:id/horarios`, `POST /lavaRapidos/login`, `GET /servicos?lavaRapidoId=`, `GET /itensServico`, `GET /intercorrencias?lavaRapidoId=` (leituras do app do cliente), `/auth/cliente/cadastro`, `/auth/cliente/login`, `POST /auth/interno/login`, `/onboarding/*`, `GET /contratos/vigente`, `/api-docs`.
 - Testes: `src/test/authPainel.test.ts` (sem token, token de cliente, token de outra empresa, rotas públicas); helper `tokenDeLavaRapido(lavaRapido)`.
 
 ## 5.3 Limite de tentativas (login e cadastro)
 
-Decisão de 2026-10-10 (I17). `src/middlewares/limiteTentativas.ts` (`express-rate-limit`), registrado em `app.ts` antes dos routers, um contador por rota: `POST /auth/cliente/login`, `POST /lavaRapidos/login`, `POST /auth/cliente/cadastro` e `POST /onboarding/solicitacoes` (retomar uma solicitação pendente confere e-mail + senha).
+Decisão de 2026-10-10 (I17). `src/middlewares/limiteTentativas.ts` (`express-rate-limit`), registrado em `app.ts` antes dos routers, um contador por rota: `POST /auth/cliente/login`, `POST /lavaRapidos/login`, `POST /auth/cliente/cadastro`, `POST /onboarding/solicitacoes` (retomar uma solicitação pendente confere e-mail + senha) e `POST /auth/interno/login` (i17-interno-exclusao, chave por e-mail, só falhas contam).
 
 - **Chave** = IP + o campo do body que identifica a conta **naquela rota** (`identificador`: `email` — normalizado com `utils/email.ts#normalizarEmail` — nos logins/cadastro do cliente; `cnpj` só com dígitos no login do lava-rápido e no onboarding); sem o campo, só o IP. Só o campo da rota entra na chave: um `email` extra no login por CNPJ não abre um contador novo. Estourar o limite de um e-mail/CNPJ não bloqueia outro.
 - **Logins/onboarding: só as falhas contam** (`soFalhasContam`); no cadastro do cliente, toda tentativa conta.
@@ -295,6 +295,51 @@ Decisão de 2026-10-10 (I17). `src/middlewares/limiteTentativas.ts` (`express-ra
 - **Estourou** → `429 { error: 'Muitas tentativas. Aguarde 15 minutos e tente de novo.' }` + header `Retry-After` (cabeçalhos `RateLimit` draft-7). O painel e o app mostram a mensagem do `error`.
 - **Limitações**: contagem **em memória** — vale por instância do backend (várias instâncias = contadores separados; reinício zera). Sem `trust proxy`: atrás de proxy reverso o IP visto seria o do proxy (configurar `app.set('trust proxy', …)` no deploy).
 - **Testes**: `vitest.config.ts` define `LIMITE_TENTATIVAS=10000` pra não interferir nos outros testes; `src/test/limiteTentativas.test.ts` cria o app com `createApp({ limiteTentativas: { limite: 3, janelaMinutos: 15 } })` e estoura o limite.
+
+## 5.4 Usuários internos e exclusão de empresa por solicitação
+
+Plano `docs/plan/i17-interno-exclusao/`. **A empresa só solicita a exclusão; quem exclui é um usuário interno (equipe WashAway) com a permissão `admin`, ao aprovar** — com registro e decisão humana, como o onboarding.
+
+**Modelos** (migration `20261017140000_interno_exclusao`):
+- `UsuarioInterno { id, nome, email @unique (normalizado), senha (hash bcrypt), permissoes String[], criadoEm }`. Criado **só** por script/seed/demo — não há rota de cadastro.
+- `SolicitacaoExclusao { id, lavaRapidoId?, nome, cnpj, email?, motivo?, status: pendente | aprovada | recusada | cancelada, criadoEm, decididoEm?, decididoPorId?, observacao? }`. `nome`/`cnpj`/`email` são **snapshot** da empresa: o registro sobrevive à exclusão (`lavaRapidoId` vira `null`, `onDelete: SetNull`). `decididoPorId` → `UsuarioInterno` (`SetNull`).
+- `TipoEventoEmail` + `exclusao_solicitada`, `exclusao_aprovada`, `exclusao_recusada`.
+
+**Rotas** (`src/modules/internos/`, `src/modules/exclusoes/`):
+
+| Rota | Método | Descrição |
+|---|---|---|
+| `/auth/interno/login` | `POST` | Público, com limite de tentativas (5.3). Body `{ email, senha }`. `200 { token, expiraEm, interno }` — token `tipo: 'interno'` com as `permissoes` do banco no momento do login; `401 { error: 'E-mail ou senha incorretos' }` igual para e-mail inexistente, senha errada ou body incompleto (mesmo tempo de resposta). |
+| `/lavaRapidos/me/solicitacao-exclusao` | `POST` | `autenticar('lavaRapido')`. Body `{ motivo? }` (texto até 500, aparado; vazio = `null`; outro tipo/longo → `400`). Cria a pendente (`201`) com o snapshot e enfileira `exclusao_solicitada`; se já houver uma pendente, devolve a mesma (`200`, sem novo e-mail). A checagem trava a linha do `LavaRapido` (`SELECT … FOR UPDATE`), então requisições simultâneas não criam duas pendentes. `401` se a empresa do token não existir mais. |
+| `/lavaRapidos/me/solicitacao-exclusao` | `GET` | `autenticar('lavaRapido')`. A solicitação **mais recente** da empresa, em qualquer status (o painel mostra pendente, recusada ou cancelada); `404` se nunca houve. |
+| `/lavaRapidos/me/solicitacao-exclusao` | `DELETE` | `autenticar('lavaRapido')`. Cancela a pendente → `200` com `status: cancelada` (+ `decididoEm`); `404` se não houver pendente. Cancelar não gera e-mail. |
+| `/interno/solicitacoes-exclusao` | `GET` | `autenticar('interno')` + `autorizar('admin')`. Lista, mais antigas primeiro; `?status=` opcional (`400` se inválido). |
+| `/interno/solicitacoes-exclusao/:id/aprovar` | `POST` | Interno `admin`. Numa transação: `pendente` → `aprovada` (`decididoEm`, `decididoPorId`), enfileira `exclusao_aprovada` e **exclui o `LavaRapido`** (a cascata apaga pedidos, serviços, intercorrências e horários). `200` com a solicitação (`lavaRapidoId: null`). `404` inexistente; `409` se não estiver mais pendente (decisão dupla ou concorrente — a troca de status é um `updateMany where status = pendente`). |
+| `/interno/solicitacoes-exclusao/:id/recusar` | `POST` | Interno `admin`. Body `{ observacao? }` (mesmas regras do `motivo`). `pendente` → `recusada`, grava a observação e enfileira `exclusao_recusada`; a empresa continua e pode solicitar de novo. `404`/`409` como no aprovar. |
+
+- **401 × 403 nas rotas internas:** sem token ou token inválido → `401`; token de lava-rápido ou cliente → `403` (tipo errado, `autenticar`); interno sem `admin` → `403` (`autorizar`). Aprovar/recusar com token de um interno que não existe mais → `401 "Sessão inválida"` (é ele quem vai em `decididoPorId`). As permissões valem pelo que estava no token: tirar a permissão no banco só vale no próximo login (o token dura `JWT_EXPIRES_IN`).
+- **E-mails** (via `enfileirarEmail`, mesma transação): para o `email` do snapshot. Empresa sem e-mail (anterior ao I17) segue o fluxo sem e-mail.
+- **Criar um interno:** `npm run interno:criar -- --email ana@washaway.dev --permissoes admin [--nome "Ana"] [--senha "..."]` (`prisma/criarUsuarioInterno.ts`). Sem `--senha`, gera uma aleatória e mostra uma vez; e-mail já cadastrado → recusa. Em dev, `npm run prisma:demo` (e o `seed.ts`) criam **`dev@washaway.dev` / `demo1234`** com `admin` (`prisma/internoExemplo.ts`, só se não existir) — credencial só de desenvolvimento.
+- **Operar pelo Swagger (sem tela interna nesta sprint):**
+  1. Abrir `http://localhost:4000/api-docs` → `POST /auth/interno/login` → "Try it out" com `{ "email": "dev@washaway.dev", "senha": "demo1234" }` → copiar o `token`.
+  2. Botão **Authorize** (cadeado) → colar o token (sem o prefixo `Bearer`).
+  3. `GET /interno/solicitacoes-exclusao?status=pendente` → anotar o `id`.
+  4. `POST /interno/solicitacoes-exclusao/{id}/aprovar` (exclui a empresa de vez) ou `/recusar` com `{ "observacao": "..." }`.
+- **Testes:** `src/test/internos.test.ts` (login, `401` genérico, sem rota de cadastro, `autorizar`) e `src/test/exclusoes.test.ts` (401/403 em todas as rotas, uma pendente só — inclusive em paralelo, cancelar, aprovar exclui com cascata e mantém o snapshot, recusar mantém a empresa, e-mails de cada etapa, rotas legadas `404`). Helpers `tokenDeInterno(permissoes, interno?)` e `criarUsuarioInternoTeste()`.
+
+## 5.5 Senha gerada, troca obrigatória e "esqueci minha senha"
+
+Plano `docs/plan/i17-senha-gerada/`. Um mecanismo só — **senha temporária por e-mail + troca obrigatória** — para o onboarding, a recuperação de senha e a troca em massa. Código em `src/modules/lava-rapidos/senhas.{service,controller,routes}.ts`.
+
+- **`LavaRapido.senhaGerada`** (hash bcrypt, `null` = sem senha temporária). A senha temporária tem 10 caracteres (`crypto.randomInt`, sem `0/O/o/1/l/I`) e só existe em texto puro no corpo do e-mail (o worker mascara depois de enviar; seção 5.1).
+- **Login** (`autenticarLavaRapido`): compara primeiro com a `senha` (certa → login normal e `senhaGerada = null`), depois com a `senhaGerada` (certa → `trocaDeSenhaObrigatoria: true` + token de escopo **`trocar-senha`** com validade de **15 min**). O token de troca leva `403` em qualquer outra rota (`autenticar`), e só vale enquanto a `senhaGerada` existir (depois da troca → `401`).
+- **Quando se gera** (`definirSenhaGerada(tx, empresa, motivo)`, sempre na mesma transação que enfileira o e-mail):
+  1. **aceite do onboarding** (`onboarding.service#aceitarContrato`) — e-mail `senha_gerada`; a empresa entra com a senha própria **ou** com a gerada;
+  2. **"esqueci minha senha"** (`POST /auth/lava-rapido/esqueci-senha`) — e-mail `esqueci_senha`; substitui a gerada anterior, não mexe na senha própria; resposta sempre igual;
+  3. **troca em massa** (`gerarSenhasEmMassa(filtro, { invalidarSenhaAtual })`) — e-mail `senha_gerada`, uma transação por empresa; empresa sem e-mail recebe em `cnpj-<cnpj>@washaway.dev` (**só dev**, não é gravado em `LavaRapido.email`). Nesta sprint só o script chama.
+- **Script** `prisma/trocaSenhaEmMassa.ts` (`npm run senhas:troca-em-massa`, função `trocarSenhasPadraoAdmin`): para cada empresa cuja `senha` ainda confere com `"admin"`, troca a `senha` por um hash aleatório (ninguém conhece), gera a `senhaGerada` e enfileira o e-mail. **Rodar uma vez** no banco de dev depois do deploy do I17 (e subir o worker para os e-mails irem para `.emails/`). Idempotente (quem já não tem `admin` fica de fora), não apaga nada, só mexe nas colunas de senha.
+- **Tipos de e-mail**: `TipoEventoEmail.senha_gerada` e `esqueci_senha`.
+- **Testes**: `src/test/senhas.test.ts` (login com senha própria zera a gerada; login com a gerada → troca obrigatória e `403` nas rotas de gestão; troca zera a gerada e a senha antiga deixa de valer; token de troca não serve duas vezes; esqueci com e-mail existente/inexistente; `429`; aceite do onboarding; troca em massa idempotente), `autenticar.test.ts` (`autenticarAceitandoEscopo`).
 
 ## 6. Organização de pastas
 
@@ -423,7 +468,7 @@ Usuario
 
 `Servico` e `Veiculo` (que apareciam aqui antes) já existem — `Servico` como model Prisma real; `Veiculo` como model do **cliente do app** (I3), enquanto o painel ainda deriva os veículos de `Pedido.veiculo` (ver seção 4/5) até o I13 ligar o pedido ao veículo.
 
-- **Autenticação**: token (JWT) do cliente e do lava-rápido e rotas de gestão protegidas existem (seções 5.2 e 5.3). Faltam: senha gerada/troca obrigatória/"esqueci minha senha" e a troca em massa das empresas antigas que ainda usam "admin" (`i17-senha-gerada`), usuários internos e exclusão por solicitação (`i17-interno-exclusao`), refresh token/revogação.
+- **Autenticação**: token (JWT) do cliente e do lava-rápido e rotas de gestão protegidas existem (seções 5.2 e 5.3). Faltam: senha gerada/troca obrigatória/"esqueci minha senha" e a troca em massa das empresas antigas que ainda usam "admin" (`i17-senha-gerada`), refresh token/revogação. Usuários internos e exclusão por solicitação existem (seção 5.4); falta tela interna (hoje só pelo Swagger) e gestão de internos fora do script.
 - **Upload de fotos do veículo**: `Pedido.fotos` continua array de URLs estáticas — sem endpoint de upload nem storage.
 - **Divergência `Pedido.servico` (string) vs. seleção múltipla** (`app_mobile/servicos.tsx` deixa marcar vários serviços): não resolvida — `Pedido.servico` no banco continua um `String` só, copiando o que `admin-front/pedidos.model.js` já fazia.
 - **`POST /pedidos`**: nenhum front cria pedido pela UI ainda; não implementado.

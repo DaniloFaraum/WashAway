@@ -12,6 +12,7 @@ import ReceiptLongIcon from '@mui/icons-material/ReceiptLong'
 import CleaningServicesIcon from '@mui/icons-material/CleaningServices'
 import EventAvailableIcon from '@mui/icons-material/EventAvailable'
 import DirectionsCarIcon from '@mui/icons-material/DirectionsCar'
+import StorefrontIcon from '@mui/icons-material/Storefront'
 import LogoutIcon from '@mui/icons-material/Logout'
 
 const NAV_ITEMS = [
@@ -19,6 +20,7 @@ const NAV_ITEMS = [
   { label: 'Serviços', path: '/servicos', icon: CleaningServicesIcon },
   { label: 'Disponibilidade', path: '/disponibilidade', icon: EventAvailableIcon },
   { label: 'Veículos', path: '/veiculos', icon: DirectionsCarIcon },
+  { label: 'Minha empresa', path: '/minha-empresa', icon: StorefrontIcon },
 ]
 
 function Sidebar({ onSair }) {

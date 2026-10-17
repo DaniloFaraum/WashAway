@@ -9,6 +9,7 @@ import PainelPedidos from './pages/painel-pedidos/PainelPedidos.jsx'
 import Servicos from './pages/servicos/Servicos.jsx'
 import Disponibilidade from './pages/disponibilidade/Disponibilidade.jsx'
 import Veiculos from './pages/veiculos/Veiculos.jsx'
+import MinhaEmpresa from './pages/minha-empresa/MinhaEmpresa.jsx'
 
 function App() {
   const {
@@ -54,6 +55,7 @@ function App() {
         <Route path="/servicos" element={<Servicos />} />
         <Route path="/disponibilidade" element={<Disponibilidade empresaLogada={empresaLogada} onHorarioSalvo={recarregarEmpresa} />} />
         <Route path="/veiculos" element={<Veiculos />} />
+        <Route path="/minha-empresa" element={<MinhaEmpresa empresaLogada={empresaLogada} />} />
       </Routes>
     </AppShell>
   )
