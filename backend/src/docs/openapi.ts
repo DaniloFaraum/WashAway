@@ -547,12 +547,22 @@ export const openApiDocument = {
     '/lavaRapidos': {
       get: {
         tags: ['lavaRapidos'],
-        summary: 'Lista todos os lava-rápidos',
+        summary: 'Lista os lava-rápidos (todos, ou só os abertos num horário)',
+        parameters: [
+          {
+            name: 'horario',
+            in: 'query',
+            required: false,
+            schema: { type: 'string', format: 'date-time', example: '2026-10-20T10:00:00-03:00' },
+            description: 'Busca por horário (I9): ISO 8601 com fuso, de agora (tolerância de 1 min) até 30 dias à frente. Com ele, só vêm os lava-rápidos abertos naquele instante (horário de funcionamento, sem intercorrência de dia inteiro nem parcial cobrindo o instante, e coluna isOpen ligada). O isOpen da resposta continua sendo "aberto agora".',
+          },
+        ],
         responses: {
           200: {
             description: 'Lista de lava-rápidos (isOpen calculado pelo horário de funcionamento e pelas intercorrências; sem intercorrenciaAtiva).',
             content: { 'application/json': { schema: { type: 'array', items: { $ref: '#/components/schemas/LavaRapido' } } } },
           },
+          400: { description: 'horario inválido (sem fuso ou malformado), no passado ou além de 30 dias à frente.', content: { 'application/json': { schema: { $ref: '#/components/schemas/Erro' } } } },
         },
       },
     },

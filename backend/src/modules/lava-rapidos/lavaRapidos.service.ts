@@ -38,14 +38,25 @@ async function getPrecosAPartirDe(lavaRapidoIds?: string[]) {
 
 // `isOpen` = coluna `isOpen` E `estaAberto(agora)` — horário de funcionamento
 // (I19) e intercorrências, pela função compartilhada de disponibilidade.
-export async function listLavaRapidos() {
+//
+// Busca por horário (I9): com `horario`, devolve só quem está aberto naquele
+// instante pela mesma regra (coluna `isOpen` E `listarAbertos(ids, horario)`).
+// O `isOpen` da resposta continua sendo "aberto agora".
+export async function listLavaRapidos(horario?: Date) {
   const [lavaRapidos, precos] = await Promise.all([prisma.lavaRapido.findMany(), getPrecosAPartirDe()])
-  const disponibilidades = await listarAbertos(
-    lavaRapidos.map((lavaRapido) => lavaRapido.id),
-    new Date(),
-  )
+  const ids = lavaRapidos.map((lavaRapido) => lavaRapido.id)
+  const [disponibilidades, disponibilidadesNoHorario] = await Promise.all([
+    listarAbertos(ids, new Date()),
+    horario ? listarAbertos(ids, horario) : null,
+  ])
 
-  return lavaRapidos.map((lavaRapido) => ({
+  const visiveis = disponibilidadesNoHorario
+    ? lavaRapidos.filter(
+        (lavaRapido) => lavaRapido.isOpen && (disponibilidadesNoHorario.get(lavaRapido.id)?.aberto ?? true),
+      )
+    : lavaRapidos
+
+  return visiveis.map((lavaRapido) => ({
     ...lavaRapido,
     price: precos.get(lavaRapido.id) ?? null,
     isOpen: lavaRapido.isOpen && (disponibilidades.get(lavaRapido.id)?.aberto ?? true),

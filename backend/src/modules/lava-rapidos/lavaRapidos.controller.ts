@@ -6,14 +6,29 @@ import {
   listLavaRapidos,
   sessaoDoLavaRapido,
 } from './lavaRapidos.service.js'
-import { isValidCnpj } from './lavaRapidos.validation.js'
+import { getStringQueryParam } from '../../utils/queryParam.js'
+import { isValidCnpj, validarHorarioBusca } from './lavaRapidos.validation.js'
 
 // I17: `POST /lavaRapidos` (cadastro legado com senha "admin") e
 // `DELETE /lavaRapidos/:id` foram removidos — empresa nova só pelo onboarding;
 // a exclusão passa a ser por solicitação (i17-interno-exclusao).
 
-export async function index(_req: Request, res: Response) {
-  const lavaRapidos = await listLavaRapidos()
+/**
+ * GET /lavaRapidos[?horario=<ISO com fuso>] — com `horario` (I9), só os
+ * lava-rápidos abertos naquele instante; sem ele, todos.
+ */
+export async function index(req: Request, res: Response) {
+  let horario: Date | undefined
+  if (req.query.horario !== undefined) {
+    const validacao = validarHorarioBusca(getStringQueryParam(req.query.horario) ?? '', new Date())
+    if ('erro' in validacao) {
+      res.status(400).json({ error: validacao.erro })
+      return
+    }
+    horario = validacao.horario
+  }
+
+  const lavaRapidos = await listLavaRapidos(horario)
   res.json(lavaRapidos.map(dadosPublicos))
 }
 
