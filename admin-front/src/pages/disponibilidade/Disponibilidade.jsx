@@ -22,6 +22,7 @@ import PageHeader from '../../components/layout/PageHeader.jsx'
 import HorarioFuncionamento from './components/HorarioFuncionamento.jsx'
 import { useFetch } from '../../hooks/useFetch.js'
 import { useToast } from '../../hooks/useToast.js'
+import { formatarDataBr } from './horarioFuncionamento.js'
 
 function DiaComIntercorrencia(props) {
   const { diasComIntercorrencia, day, outsideCurrentMonth, ...other } = props
@@ -109,7 +110,7 @@ function Disponibilidade({ empresaLogada, onHorarioSalvo }) {
       </Stack>
 
       <Dialog open={Boolean(diaSelecionado)} onClose={() => setDiaSelecionado(null)} fullWidth maxWidth="xs">
-        <DialogTitle>Intercorrência — {diaSelecionado}</DialogTitle>
+        <DialogTitle>Intercorrência — {formatarDataBr(diaSelecionado)}</DialogTitle>
         <DialogContent>
           {intercorrenciaSelecionada ? (
             <Stack spacing={1} sx={{ mt: 1 }}>

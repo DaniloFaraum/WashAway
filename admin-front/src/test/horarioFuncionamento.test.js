@@ -2,11 +2,17 @@ import { describe, expect, it } from 'vitest'
 import {
   diaSemanaNoFuso,
   edicaoParaDias,
+  formatarDataBr,
   horariosParaEdicao,
 } from '../pages/disponibilidade/horarioFuncionamento.js'
 import { normalizeLavaRapido } from '../login/service/lavaRapidos.model.js'
 
 describe('horarioFuncionamento', () => {
+  it('formatarDataBr mostra a data como dia/mês/ano', () => {
+    expect(formatarDataBr('2026-11-20')).toBe('20/11/2026')
+    expect(formatarDataBr('')).toBe('')
+  })
+
   it('diaSemanaNoFuso usa o fuso de São Paulo, não o UTC', () => {
     // 2026-10-11T02:30Z ainda é sábado (10/10, 23:30) em São Paulo.
     expect(diaSemanaNoFuso(new Date('2026-10-11T02:30:00Z'))).toBe(6)

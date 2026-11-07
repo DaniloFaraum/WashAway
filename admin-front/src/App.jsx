@@ -2,6 +2,7 @@ import { Routes, Route } from 'react-router-dom'
 import Box from '@mui/material/Box'
 import CircularProgress from '@mui/material/CircularProgress'
 import AppShell from './components/layout/AppShell.jsx'
+import NaoEncontrado from './components/layout/NaoEncontrado.jsx'
 import Login from './login/Login.jsx'
 import OnboardingContrato from './login/OnboardingContrato.jsx'
 import DefinirNovaSenha from './login/DefinirNovaSenha.jsx'
@@ -72,6 +73,7 @@ function App() {
         <Route path="/disponibilidade" element={<Disponibilidade empresaLogada={empresaLogada} onHorarioSalvo={recarregarEmpresa} />} />
         <Route path="/veiculos" element={<Veiculos />} />
         <Route path="/minha-empresa" element={<MinhaEmpresa empresaLogada={empresaLogada} />} />
+        <Route path="*" element={<NaoEncontrado />} />
       </Routes>
     </AppShell>
   )
