@@ -1099,21 +1099,39 @@ export const openApiDocument = {
     '/intercorrencias/{id}': {
       patch: {
         tags: ['intercorrencias'],
-        summary: 'Reabre manualmente (reverte o fechamento automático do isOpen) (painel)',
+        summary: 'Reabre manualmente (reverte o fechamento automático do isOpen) ou edita o fechamento (painel)',
+        description:
+          'Dois usos. `{ reaberta: true }` reabre: a intercorrência deixa de contar no isOpen. Os mesmos campos do POST (data, motivo, diaInteiro e, se parcial, horaInicio/horaFim) editam o fechamento; dia inteiro limpa o período. Intercorrência já reaberta não pode ser editada (409): cadastre um novo fechamento.',
         security: segurancaPainel,
         parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
         requestBody: {
           required: true,
           content: {
             'application/json': {
-              schema: { type: 'object', required: ['reaberta'], properties: { reaberta: { type: 'boolean', enum: [true] } } },
+              schema: {
+                oneOf: [
+                  { type: 'object', required: ['reaberta'], properties: { reaberta: { type: 'boolean', enum: [true] } } },
+                  {
+                    type: 'object',
+                    required: ['data', 'motivo', 'diaInteiro'],
+                    properties: {
+                      data: { type: 'string', example: '2026-10-12' },
+                      motivo: { type: 'string' },
+                      diaInteiro: { type: 'boolean' },
+                      horaInicio: { type: 'string', example: '14:00' },
+                      horaFim: { type: 'string', example: '16:00' },
+                    },
+                  },
+                ],
+              },
             },
           },
         },
         responses: {
-          200: { description: 'Reaberta.', content: { 'application/json': { schema: { $ref: '#/components/schemas/Intercorrencia' } } } },
-          400: { description: 'body inválido — só aceita { reaberta: true }.', content: { 'application/json': { schema: { $ref: '#/components/schemas/Erro' } } } },
+          200: { description: 'Reaberta ou editada.', content: { 'application/json': { schema: { $ref: '#/components/schemas/Intercorrencia' } } } },
+          400: { description: 'body inválido — envie { reaberta: true } ou os campos da intercorrência.', content: { 'application/json': { schema: { $ref: '#/components/schemas/Erro' } } } },
           404: { description: 'Intercorrência não encontrada ou de outra empresa.', content: { 'application/json': { schema: { $ref: '#/components/schemas/Erro' } } } },
+          409: { description: 'Edição de uma intercorrência já reaberta.', content: { 'application/json': { schema: { $ref: '#/components/schemas/Erro' } } } },
           ...erroAutenticacaoPainel,
         },
       },

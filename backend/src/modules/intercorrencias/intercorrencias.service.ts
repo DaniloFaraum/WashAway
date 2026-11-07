@@ -21,6 +21,33 @@ export async function reabrirIntercorrencia(id: string, lavaRapidoId: string) {
   return prisma.intercorrencia.findUnique({ where: { id } })
 }
 
+export type ResultadoEdicao =
+  | { tipo: 'editada'; intercorrencia: Intercorrencia }
+  | { tipo: 'nao_encontrada' }
+  | { tipo: 'ja_reaberta' }
+
+/**
+ * Edita data, motivo e horário de um fechamento da empresa. Um fechamento já
+ * reaberto não volta a valer por edição (cadastre um novo): `ja_reaberta`.
+ */
+export async function editarIntercorrencia(
+  id: string,
+  lavaRapidoId: string,
+  input: IntercorrenciaInput
+): Promise<ResultadoEdicao> {
+  const { count } = await prisma.intercorrencia.updateMany({
+    where: { id, lavaRapidoId, reaberta: false },
+    // Dia inteiro limpa o período (undefined não limparia a coluna).
+    data: { data: input.data, motivo: input.motivo, diaInteiro: input.diaInteiro, horaInicio: input.horaInicio ?? null, horaFim: input.horaFim ?? null },
+  })
+  if (count === 0) {
+    const existe = await prisma.intercorrencia.findFirst({ where: { id, lavaRapidoId } })
+    return existe ? { tipo: 'ja_reaberta' } : { tipo: 'nao_encontrada' }
+  }
+  const intercorrencia = await prisma.intercorrencia.findUniqueOrThrow({ where: { id } })
+  return { tipo: 'editada', intercorrencia }
+}
+
 export async function getIntercorrenciaAtiva(
   lavaRapidoId: string,
   agora: Date
