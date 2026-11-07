@@ -10,10 +10,11 @@ import Snackbar from '@mui/material/Snackbar'
 import CircularProgress from '@mui/material/CircularProgress'
 import {
   PEDIDO_STATUS,
+  PROXIMOS_STATUS,
   descreverVeiculo,
   formatarHorario,
   formatarPreco,
-  separarPendentes,
+  separarPorEtapa,
 } from './service/pedidos.model.js'
 import { usePedidos } from './usePedidos.js'
 import PedidoDetalhe from './components/PedidoDetalhe.jsx'
@@ -50,9 +51,10 @@ function CardPedido({ pedido, destaque, onAbrir, onAcao, salvando }) {
           </Stack>
         </CardContent>
       </CardActionArea>
-      {/* Aceitar/Recusar direto no card só para os pendentes (I15); fora do
+      {/* Ações direto no card (I15): Aceitar/Recusar nos pendentes, Iniciar
+          atendimento nos aceitos e Concluir nos em andamento; fora do
           CardActionArea, para não aninhar botões. */}
-      {destaque && (
+      {(PROXIMOS_STATUS[pedido.status] ?? []).length > 0 && (
         <CardContent sx={{ pt: 0 }}>
           <AcoesPedido pedido={pedido} onAcao={onAcao} disabled={salvando} size="small" />
         </CardContent>
@@ -94,7 +96,7 @@ function PainelPedidos() {
     return <Alert severity="error">Não foi possível carregar os pedidos: {error}</Alert>
   }
 
-  const { pendentes, demais } = separarPendentes(pedidos)
+  const { pendentes, emAtendimento, historico } = separarPorEtapa(pedidos)
 
   function renderCard(pedido, destaque) {
     return (
@@ -123,10 +125,20 @@ function PainelPedidos() {
           </Stack>
         )}
 
-        {demais.length > 0 && (
+        {emAtendimento.length > 0 && (
           <Stack spacing={2}>
-            {pendentes.length > 0 && <Typography variant="h6">Demais pedidos</Typography>}
-            {demais.map((pedido) => renderCard(pedido, false))}
+            <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+              <Typography variant="h6">Em atendimento</Typography>
+              <Chip label={emAtendimento.length} color="primary" size="small" />
+            </Stack>
+            {emAtendimento.map((pedido) => renderCard(pedido, false))}
+          </Stack>
+        )}
+
+        {historico.length > 0 && (
+          <Stack spacing={2}>
+            {(pendentes.length > 0 || emAtendimento.length > 0) && <Typography variant="h6">Histórico</Typography>}
+            {historico.map((pedido) => renderCard(pedido, false))}
           </Stack>
         )}
       </Stack>

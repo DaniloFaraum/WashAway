@@ -17,11 +17,14 @@ import Switch from '@mui/material/Switch'
 import Alert from '@mui/material/Alert'
 import Snackbar from '@mui/material/Snackbar'
 import CircularProgress from '@mui/material/CircularProgress'
-import { getIntercorrencias, createIntercorrencia } from './service/disponibilidade.service.js'
+import { getIntercorrencias, createIntercorrencia, editarIntercorrencia } from './service/disponibilidade.service.js'
 import PageHeader from '../../components/layout/PageHeader.jsx'
 import HorarioFuncionamento from './components/HorarioFuncionamento.jsx'
 import { useFetch } from '../../hooks/useFetch.js'
 import { useToast } from '../../hooks/useToast.js'
+import { formatarDataBr } from './horarioFuncionamento.js'
+import { intercorrenciasAtivasDoDia } from './service/disponibilidade.model.js'
+import { reabrirIntercorrencia } from '../../login/service/intercorrencias.service.js'
 
 function DiaComIntercorrencia(props) {
   const { diasComIntercorrencia, day, outsideCurrentMonth, ...other } = props
@@ -48,19 +51,23 @@ function Disponibilidade({ empresaLogada, onHorarioSalvo }) {
   const [horaInicio, setHoraInicio] = useState('')
   const [horaFim, setHoraFim] = useState('')
   const [salvando, setSalvando] = useState(false)
+  // Id do fechamento em edição (o formulário abaixo é o mesmo do cadastro).
+  const [editandoId, setEditandoId] = useState(null)
 
+  // Só os fechamentos que ainda valem: o reaberto some do calendário.
   const diasComIntercorrencia = useMemo(
-    () => new Set((intercorrencias ?? []).map((item) => item.data)),
+    () => new Set((intercorrencias ?? []).filter((item) => !item.reaberta).map((item) => item.data)),
     [intercorrencias],
   )
 
-  const intercorrenciaSelecionada = useMemo(
-    () => (intercorrencias ?? []).find((item) => item.data === diaSelecionado) ?? null,
+  const intercorrenciasDoDia = useMemo(
+    () => intercorrenciasAtivasDoDia(intercorrencias ?? [], diaSelecionado),
     [intercorrencias, diaSelecionado],
   )
 
   function handleSelecionarDia(novoDia) {
     setDiaSelecionado(novoDia.format('YYYY-MM-DD'))
+    setEditandoId(null)
     setMotivo('')
     setDiaInteiro(true)
     setHoraInicio('')
@@ -86,6 +93,51 @@ function Disponibilidade({ empresaLogada, onHorarioSalvo }) {
     }
   }
 
+  function handleEditar(intercorrencia) {
+    setEditandoId(intercorrencia.id)
+    setMotivo(intercorrencia.motivo)
+    setDiaInteiro(intercorrencia.diaInteiro)
+    setHoraInicio(intercorrencia.horaInicio ?? '')
+    setHoraFim(intercorrencia.horaFim ?? '')
+  }
+
+  async function handleSalvarEdicao() {
+    setSalvando(true)
+    try {
+      const editada = await editarIntercorrencia(editandoId, {
+        data: diaSelecionado,
+        motivo,
+        diaInteiro,
+        ...(diaInteiro ? {} : { horaInicio, horaFim }),
+      })
+      setIntercorrencias((atuais) => atuais.map((item) => (item.id === editada.id ? editada : item)))
+      setEditandoId(null)
+      showToast('Fechamento atualizado.')
+      // O selo Aberto/Fechado do menu depende do fechamento quando o dia é hoje.
+      await onHorarioSalvo?.()
+    } catch (err) {
+      showToast(`Erro ao editar o fechamento: ${err.message}`, 'error')
+    } finally {
+      setSalvando(false)
+    }
+  }
+
+  // Reabrir vale para qualquer dia (inclusive futuro).
+  async function handleReabrir(intercorrencia) {
+    setSalvando(true)
+    try {
+      await reabrirIntercorrencia(intercorrencia.id)
+      setIntercorrencias((atuais) => atuais.map((item) => (item.id === intercorrencia.id ? { ...item, reaberta: true } : item)))
+      showToast('Fechamento reaberto.')
+      // O selo Aberto/Fechado do menu lateral depende disso quando o dia é hoje.
+      await onHorarioSalvo?.()
+    } catch (err) {
+      showToast(`Erro ao reabrir: ${err.message}`, 'error')
+    } finally {
+      setSalvando(false)
+    }
+  }
+
   if (loading) {
     return <CircularProgress />
   }
@@ -97,7 +149,7 @@ function Disponibilidade({ empresaLogada, onHorarioSalvo }) {
   return (
     <>
       <PageHeader title="Disponibilidade" />
-      <Stack direction={{ xs: 'column', md: 'row' }} spacing={3} alignItems="flex-start">
+      <Stack direction={{ xs: 'column', md: 'row' }} spacing={3} sx={{ alignItems: 'flex-start' }}>
         <HorarioFuncionamento empresa={empresaLogada} onSalvo={onHorarioSalvo} mostrarAviso={showToast} />
         <LocalizationProvider dateAdapter={AdapterDayjs}>
           <DateCalendar
@@ -109,16 +161,28 @@ function Disponibilidade({ empresaLogada, onHorarioSalvo }) {
       </Stack>
 
       <Dialog open={Boolean(diaSelecionado)} onClose={() => setDiaSelecionado(null)} fullWidth maxWidth="xs">
-        <DialogTitle>Intercorrência — {diaSelecionado}</DialogTitle>
+        <DialogTitle>Intercorrência — {formatarDataBr(diaSelecionado)}</DialogTitle>
         <DialogContent>
-          {intercorrenciaSelecionada ? (
-            <Stack spacing={1} sx={{ mt: 1 }}>
-              <Typography variant="body1">Motivo: {intercorrenciaSelecionada.motivo}</Typography>
-              <Typography variant="body2" color="text.secondary">
-                {intercorrenciaSelecionada.diaInteiro
-                  ? 'Fechado o dia inteiro'
-                  : `Fechado das ${intercorrenciaSelecionada.horaInicio} às ${intercorrenciaSelecionada.horaFim}`}
-              </Typography>
+          {intercorrenciasDoDia.length > 0 && !editandoId ? (
+            <Stack spacing={2} sx={{ mt: 1 }}>
+              {intercorrenciasDoDia.map((intercorrencia) => (
+                <Stack key={intercorrencia.id} spacing={1}>
+                  <Typography variant="body1">Motivo: {intercorrencia.motivo}</Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    {intercorrencia.diaInteiro
+                      ? 'Fechado o dia inteiro'
+                      : `Fechado das ${intercorrencia.horaInicio} às ${intercorrencia.horaFim}`}
+                  </Typography>
+                  <Stack direction="row" spacing={1}>
+                    <Button onClick={() => handleEditar(intercorrencia)} disabled={salvando} variant="outlined" size="small">
+                      Editar
+                    </Button>
+                    <Button onClick={() => handleReabrir(intercorrencia)} disabled={salvando} variant="outlined" size="small">
+                      Reabrir neste dia
+                    </Button>
+                  </Stack>
+                </Stack>
+              ))}
             </Stack>
           ) : (
             <Stack spacing={2} sx={{ mt: 1 }}>
@@ -156,9 +220,19 @@ function Disponibilidade({ empresaLogada, onHorarioSalvo }) {
           )}
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setDiaSelecionado(null)}>Fechar</Button>
-          {!intercorrenciaSelecionada && (
-            <Button onClick={handleSalvarIntercorrencia} disabled={salvando || !motivo} variant="contained">
+          {editandoId ? (
+            <Button onClick={() => setEditandoId(null)} disabled={salvando}>
+              Cancelar edição
+            </Button>
+          ) : (
+            <Button onClick={() => setDiaSelecionado(null)}>Fechar</Button>
+          )}
+          {(editandoId || intercorrenciasDoDia.length === 0) && (
+            <Button
+              onClick={editandoId ? handleSalvarEdicao : handleSalvarIntercorrencia}
+              disabled={salvando || !motivo || (!diaInteiro && (!horaInicio || !horaFim))}
+              variant="contained"
+            >
               Salvar
             </Button>
           )}

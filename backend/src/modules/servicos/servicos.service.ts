@@ -56,6 +56,23 @@ export async function findItemIdsInvalidos(itemIds: string[]) {
   return itemIds.filter((id) => !idsValidos.has(id))
 }
 
+/** O serviço existe e é da empresa? (404 antes de qualquer conflito de nome, para não revelar serviço alheio.) */
+export async function servicoDaEmpresa(id: string, lavaRapidoId: string) {
+  return (await prisma.servico.findFirst({ where: { id, lavaRapidoId }, select: { id: true } })) !== null
+}
+
+/**
+ * Já existe outro serviço (ativo ou não) da empresa com esse nome? Compara sem
+ * diferenciar maiúsculas; `ignorarId` deixa o serviço editado manter o próprio nome.
+ */
+export async function existeServicoComNome(lavaRapidoId: string, nome: string, ignorarId?: string) {
+  const outro = await prisma.servico.findFirst({
+    where: { lavaRapidoId, nome: { equals: nome.trim(), mode: 'insensitive' }, ...(ignorarId ? { NOT: { id: ignorarId } } : {}) },
+    select: { id: true },
+  })
+  return outro !== null
+}
+
 export type DadosServico = {
   nome: string
   preco: number

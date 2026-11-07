@@ -65,7 +65,7 @@ function HorarioFuncionamento({ empresa, onSalvo, mostrarAviso }) {
 
   return (
     <Paper variant="outlined" sx={{ p: 2, maxWidth: 520 }}>
-      <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1 }}>
+      <Stack direction="row" spacing={1} sx={{ alignItems: 'center', mb: 1 }}>
         <Typography variant="subtitle1">Horário de funcionamento</Typography>
         <Chip
           size="small"
@@ -78,30 +78,51 @@ function HorarioFuncionamento({ empresa, onSalvo, mostrarAviso }) {
           Nenhum horário cadastrado: até você salvar, só as intercorrências fecham o lava-rápido.
         </Alert>
       )}
-      <Table size="small">
+      {/* Em tela estreita cada dia vira um bloco (nome + interruptor, e os horários
+          embaixo); a partir de `sm` volta a ser tabela. */}
+      <Table
+        size="small"
+        sx={{ display: { xs: 'block', sm: 'table' }, '& tbody': { display: { xs: 'block', sm: 'table-row-group' } } }}
+      >
         <TableBody>
           {ORDEM_SEMANA.map((diaSemana) => {
             const dia = edicao[diaSemana]
             const ehHoje = diaSemana === hoje
             return (
-              <TableRow key={diaSemana} selected={ehHoje}>
-                <TableCell sx={{ fontWeight: ehHoje ? 'bold' : 'normal', whiteSpace: 'nowrap' }}>
+              <TableRow
+                key={diaSemana}
+                selected={ehHoje}
+                sx={{
+                  display: { xs: 'flex', sm: 'table-row' },
+                  flexWrap: 'wrap',
+                  alignItems: 'center',
+                  borderBottom: { xs: '1px solid rgba(224, 224, 224, 1)', sm: 'none' },
+                }}
+              >
+                <TableCell sx={{ fontWeight: ehHoje ? 'bold' : 'normal', whiteSpace: 'nowrap', borderBottom: { xs: 'none', sm: undefined } }}>
                   {NOMES_DIAS[diaSemana]}
                   {ehHoje && ' (hoje)'}
                 </TableCell>
-                <TableCell>
+                <TableCell sx={{ borderBottom: { xs: 'none', sm: undefined } }}>
                   <FormControlLabel
                     control={
                       <Switch
                         size="small"
-                        checked={dia.fechado}
-                        onChange={(event) => alterarDia(diaSemana, { fechado: event.target.checked })}
+                        checked={!dia.fechado}
+                        onChange={(event) => alterarDia(diaSemana, { fechado: !event.target.checked })}
                       />
                     }
-                    label="Fechado"
+                    label={dia.fechado ? 'Fechado' : 'Aberto'}
                   />
                 </TableCell>
-                <TableCell>
+                <TableCell
+                  sx={{
+                    borderBottom: { xs: 'none', sm: undefined },
+                    display: { xs: dia.fechado ? 'none' : 'block', sm: 'table-cell' },
+                    flexBasis: { xs: '100%' },
+                    pt: { xs: 0, sm: undefined },
+                  }}
+                >
                   {!dia.fechado && (
                     <Stack direction="row" spacing={1}>
                       <TextField
@@ -128,7 +149,7 @@ function HorarioFuncionamento({ empresa, onSalvo, mostrarAviso }) {
           })}
         </TableBody>
       </Table>
-      <Stack direction="row" justifyContent="flex-end" sx={{ mt: 2 }}>
+      <Stack direction="row" sx={{ justifyContent: 'flex-end', mt: 2 }}>
         <Button variant="contained" onClick={handleSalvar} disabled={salvando}>
           Salvar horário
         </Button>

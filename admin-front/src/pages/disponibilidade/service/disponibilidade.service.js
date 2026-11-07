@@ -29,6 +29,27 @@ export async function createIntercorrencia(novaIntercorrencia) {
 }
 
 /**
+ * Edita um fechamento da empresa (`PATCH /intercorrencias/:id` com os mesmos campos do cadastro).
+ * Em erro, a mensagem do backend vem no `Error` (ex.: 409 "Intercorrência já reaberta — cadastre um novo fechamento").
+ * @param {string} id
+ * @param {{ data: string, motivo: string, diaInteiro: boolean, horaInicio?: string, horaFim?: string }} dados
+ * @param {string} [baseUrl] usado nos testes para apontar a um backend de teste isolado
+ * @returns {Promise<import('./disponibilidade.model.js').Intercorrencia>}
+ */
+export async function editarIntercorrencia(id, dados, baseUrl = BASE_URL) {
+  const response = await fetchComToken(`${baseUrl}${INTERCORRENCIAS_ROUTES.detail(id)}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(dados),
+  })
+  if (!response.ok) {
+    const data = await response.json().catch(() => null)
+    throw new Error(data?.error ?? `Não foi possível editar o fechamento (${response.status}).`)
+  }
+  return normalizeIntercorrencia(await response.json())
+}
+
+/**
  * Substitui o horário semanal da empresa logada (`PUT /lavaRapidos/:id/horarios`, com token).
  * Em erro, a mensagem do backend (ex.: "Abertura de segunda deve ser antes do fechamento")
  * vem no `Error`.

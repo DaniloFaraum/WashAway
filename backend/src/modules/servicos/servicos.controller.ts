@@ -4,8 +4,10 @@ import { existeLavaRapido } from '../lava-rapidos/lavaRapidos.service.js'
 import {
   atualizarServico,
   criarServico,
+  existeServicoComNome,
   findItemIdsInvalidos,
   listServicos,
+  servicoDaEmpresa,
   updateServicoAtivo,
 } from './servicos.service.js'
 import { toDadosServico, validarDadosServico } from './servicos.validation.js'
@@ -13,6 +15,8 @@ import { toDadosServico, validarDadosServico } from './servicos.validation.js'
 // Leitura pública (app do cliente, D3): `GET /servicos?lavaRapidoId=`.
 // Escrita só pelo painel (autenticar('lavaRapido')): a empresa é `req.auth.id`
 // (`body.lavaRapidoId` é ignorado) e serviço de outra empresa = 404.
+
+const MENSAGEM_NOME_REPETIDO = 'Já existe um serviço com esse nome'
 
 export async function index(req: Request, res: Response) {
   const servicos = await listServicos(getStringQueryParam(req.query.lavaRapidoId))
@@ -65,14 +69,30 @@ export async function create(req: Request, res: Response) {
     return
   }
 
-  const servico = await criarServico(lavaRapidoId, toDadosServico(req.body))
+  const dados = toDadosServico(req.body)
+  if (await existeServicoComNome(lavaRapidoId, dados.nome)) {
+    res.status(409).json({ error: MENSAGEM_NOME_REPETIDO })
+    return
+  }
+
+  const servico = await criarServico(lavaRapidoId, dados)
   res.status(201).json(servico)
 }
 
 export async function update(req: Request, res: Response) {
   if (!(await validarBody(req, res))) return
 
-  const servico = await atualizarServico(req.params.id, req.auth!.id, toDadosServico(req.body))
+  const dados = toDadosServico(req.body)
+  if (!(await servicoDaEmpresa(req.params.id, req.auth!.id))) {
+    res.status(404).json({ error: 'Serviço não encontrado' })
+    return
+  }
+  if (await existeServicoComNome(req.auth!.id, dados.nome, req.params.id)) {
+    res.status(409).json({ error: MENSAGEM_NOME_REPETIDO })
+    return
+  }
+
+  const servico = await atualizarServico(req.params.id, req.auth!.id, dados)
   if (!servico) {
     res.status(404).json({ error: 'Serviço não encontrado' })
     return

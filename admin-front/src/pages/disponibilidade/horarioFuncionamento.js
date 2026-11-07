@@ -63,3 +63,13 @@ export function edicaoParaDias(edicao) {
     fechado ? { diaSemana, fechado } : { diaSemana, fechado, abertura, fechamento },
   )
 }
+
+/**
+ * "2026-11-20" → "20/11/2026" (a data do dia clicado no calendário vem em ISO).
+ * @param {string} data
+ * @returns {string}
+ */
+export function formatarDataBr(data) {
+  const [ano, mes, dia] = String(data).split('-')
+  return ano && mes && dia ? `${dia}/${mes}/${ano}` : String(data)
+}

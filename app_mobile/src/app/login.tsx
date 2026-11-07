@@ -15,6 +15,7 @@ import { CampoFormulario } from '@/components/CampoFormulario';
 import { colors } from '@/constants/colors';
 import { authStyles } from '@/features/auth/authStyles';
 import { useSessaoCliente } from '@/features/auth/SessaoClienteProvider';
+import { validarLogin } from '@/features/auth/validarLogin';
 import { CredenciaisInvalidasError, MuitasTentativasError } from '@/features/auth/service/auth.service';
 import { ErroRede } from '@/services/httpClient';
 
@@ -38,8 +39,9 @@ export default function LoginScreen() {
 
   async function handleEntrar() {
     if (enviandoRef.current) return;
-    if (email.trim() === '' || senha === '') {
-      setErro('Informe e-mail e senha');
+    const erroDeCampo = validarLogin(email, senha);
+    if (erroDeCampo) {
+      setErro(erroDeCampo);
       return;
     }
 

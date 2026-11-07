@@ -29,12 +29,16 @@
  * @property {string[]} fotos
  */
 
+// Mesmo fuso fixo do backend e do app (`America/Sao_Paulo`): o pedido mostra a mesma
+// hora no painel e no app, qualquer que seja o fuso do navegador (refinamento T12).
+const FUSO_LAVA_RAPIDOS = 'America/Sao_Paulo'
+
 /**
  * @param {string} horario
  * @returns {string}
  */
 export function formatarHorario(horario) {
-  return new Date(horario).toLocaleString('pt-BR')
+  return new Date(horario).toLocaleString('pt-BR', { timeZone: FUSO_LAVA_RAPIDOS })
 }
 
 /**
@@ -43,16 +47,18 @@ export function formatarHorario(horario) {
  * @returns {string}
  */
 export function formatarDataHora(dataIso) {
-  return new Date(dataIso).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })
+  return new Date(dataIso).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short', timeZone: FUSO_LAVA_RAPIDOS })
 }
 
 /**
- * 110.5 → "R$ 110,50"; `null` (pedido antigo sem preço) → "—".
+ * 110.5 → "R$ 110,50"; 5000 → "R$ 5.000,00"; `null` (pedido antigo sem preço) → "—".
  * @param {number | null} valor
  * @returns {string}
  */
 export function formatarPreco(valor) {
-  return valor == null ? '—' : `R$ ${valor.toFixed(2).replace('.', ',')}`
+  return valor == null
+    ? '—'
+    : `R$ ${valor.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 }
 
 /**
@@ -103,6 +109,25 @@ export function separarPendentes(pedidos) {
     .filter((pedido) => pedido.status === 'pendente')
     .sort((a, b) => new Date(a.horario).getTime() - new Date(b.horario).getTime())
   return { pendentes, demais: pedidos.filter((pedido) => pedido.status !== 'pendente') }
+}
+
+/**
+ * Três etapas para o painel: o que espera resposta (pendentes, do horário mais
+ * próximo ao mais distante), o que está em atendimento (aceitos e em andamento,
+ * também do mais próximo ao mais distante) e o histórico (concluídos e recusados,
+ * na ordem recebida do backend). Quem tem ação a fazer fica em cima.
+ * @param {Pedido[]} pedidos
+ * @returns {{ pendentes: Pedido[], emAtendimento: Pedido[], historico: Pedido[] }}
+ */
+export function separarPorEtapa(pedidos) {
+  const porHorario = (a, b) => new Date(a.horario).getTime() - new Date(b.horario).getTime()
+  return {
+    pendentes: pedidos.filter((pedido) => pedido.status === 'pendente').sort(porHorario),
+    emAtendimento: pedidos
+      .filter((pedido) => pedido.status === 'aceito' || pedido.status === 'em_andamento')
+      .sort(porHorario),
+    historico: pedidos.filter((pedido) => pedido.status === 'concluido' || pedido.status === 'recusado'),
+  }
 }
 
 function numeroOuNull(valor) {

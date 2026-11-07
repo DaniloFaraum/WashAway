@@ -160,6 +160,136 @@ describe('/intercorrencias', () => {
     })
   })
 
+  describe('PATCH /intercorrencias/:id (editar)', () => {
+    async function criar(extra: Partial<{ data: string; motivo: string; diaInteiro: boolean; horaInicio: string; horaFim: string; reaberta: boolean }> = {}) {
+      return prisma.intercorrencia.create({
+        data: { lavaRapidoId, data: '2027-02-01', motivo: 'Original', diaInteiro: true, ...extra },
+      })
+    }
+
+    it('troca motivo e passa de dia inteiro para um período', async () => {
+      const criada = await criar()
+
+      const response = await comToken(supertest(app).patch(`/intercorrencias/${criada.id}`), token).send({
+        data: '2027-02-01',
+        motivo: 'Manutenção da bomba',
+        diaInteiro: false,
+        horaInicio: '14:00',
+        horaFim: '16:00',
+      })
+
+      expect(response.status).toBe(200)
+      expect(response.body).toMatchObject({
+        id: criada.id,
+        motivo: 'Manutenção da bomba',
+        diaInteiro: false,
+        horaInicio: '14:00',
+        horaFim: '16:00',
+        reaberta: false,
+      })
+      expect(await prisma.intercorrencia.findUnique({ where: { id: criada.id } })).toMatchObject({ motivo: 'Manutenção da bomba', horaInicio: '14:00' })
+
+      await prisma.intercorrencia.delete({ where: { id: criada.id } })
+    })
+
+    it('passa de período para dia inteiro e limpa horaInicio/horaFim', async () => {
+      const criada = await criar({ diaInteiro: false, horaInicio: '08:00', horaFim: '10:00' })
+
+      const response = await comToken(supertest(app).patch(`/intercorrencias/${criada.id}`), token).send({
+        data: '2027-02-01',
+        motivo: 'Agora o dia todo',
+        diaInteiro: true,
+      })
+
+      expect(response.status).toBe(200)
+      expect(response.body).toMatchObject({ diaInteiro: true, horaInicio: null, horaFim: null })
+      expect(await prisma.intercorrencia.findUnique({ where: { id: criada.id } })).toMatchObject({ horaInicio: null, horaFim: null })
+
+      await prisma.intercorrencia.delete({ where: { id: criada.id } })
+    })
+
+    it('muda a data do fechamento', async () => {
+      const criada = await criar()
+
+      const response = await comToken(supertest(app).patch(`/intercorrencias/${criada.id}`), token).send({
+        data: '2027-02-03',
+        motivo: 'Original',
+        diaInteiro: true,
+      })
+
+      expect(response.status).toBe(200)
+      expect(response.body).toMatchObject({ data: '2027-02-03' })
+
+      await prisma.intercorrencia.delete({ where: { id: criada.id } })
+    })
+
+    it('rejeita body inválido (período sem horários, motivo vazio, campos que faltam) sem alterar nada', async () => {
+      const criada = await criar()
+      const corpos = [
+        { data: '2027-02-01', motivo: 'Sem horários', diaInteiro: false },
+        { data: '2027-02-01', motivo: '', diaInteiro: true },
+        { data: '2027-02-01', diaInteiro: true },
+        { reaberta: false },
+        {},
+      ]
+
+      for (const corpo of corpos) {
+        const response = await comToken(supertest(app).patch(`/intercorrencias/${criada.id}`), token).send(corpo)
+        expect(response.status).toBe(400)
+      }
+      expect(await prisma.intercorrencia.findUnique({ where: { id: criada.id } })).toMatchObject({ motivo: 'Original', diaInteiro: true })
+
+      await prisma.intercorrencia.delete({ where: { id: criada.id } })
+    })
+
+    it('retorna 409 quando a intercorrência já foi reaberta (cadastre um novo fechamento)', async () => {
+      const criada = await criar({ reaberta: true })
+
+      const response = await comToken(supertest(app).patch(`/intercorrencias/${criada.id}`), token).send({
+        data: '2027-02-01',
+        motivo: 'Tentativa',
+        diaInteiro: true,
+      })
+
+      expect(response.status).toBe(409)
+      expect(await prisma.intercorrencia.findUnique({ where: { id: criada.id } })).toMatchObject({ motivo: 'Original' })
+
+      await prisma.intercorrencia.delete({ where: { id: criada.id } })
+    })
+
+    it('retorna 404 pra intercorrência de outra empresa, sem editar', async () => {
+      const outra = await criarLavaRapidoTeste()
+      const deOutra = await prisma.intercorrencia.create({
+        data: { lavaRapidoId: outra.id, data: '2027-02-02', motivo: 'De outra empresa', diaInteiro: true },
+      })
+
+      const response = await comToken(supertest(app).patch(`/intercorrencias/${deOutra.id}`), token).send({
+        data: '2027-02-02',
+        motivo: 'Invadido',
+        diaInteiro: true,
+      })
+
+      expect(response.status).toBe(404)
+      expect(await prisma.intercorrencia.findUnique({ where: { id: deOutra.id } })).toMatchObject({ motivo: 'De outra empresa' })
+    })
+
+    it('retorna 404 pra id inexistente', async () => {
+      const response = await comToken(supertest(app).patch('/intercorrencias/id-que-nao-existe'), token).send({
+        data: '2027-02-02',
+        motivo: 'Qualquer',
+        diaInteiro: true,
+      })
+
+      expect(response.status).toBe(404)
+    })
+
+    it('exige token de lava-rápido', async () => {
+      const response = await supertest(app).patch(`/intercorrencias/${intercorrenciaId}`).send({ data: '2026-10-12', motivo: 'Sem token', diaInteiro: true })
+
+      expect(response.status).toBe(401)
+    })
+  })
+
   describe('getIntercorrenciaAtiva usa data e hora no fuso dos lava-rápidos (America/Sao_Paulo)', () => {
     it('às 02:30Z (23:30 em São Paulo) a intercorrência parcial de "hoje" local ainda vale', async () => {
       const parcial = await prisma.intercorrencia.create({

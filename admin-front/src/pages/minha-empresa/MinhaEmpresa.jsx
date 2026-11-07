@@ -18,7 +18,7 @@ import {
 } from './service/minhaEmpresa.service.js'
 
 function formatarData(iso) {
-  return iso ? new Date(iso).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) : ''
+  return iso ? new Date(iso).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short', timeZone: 'America/Sao_Paulo' }) : ''
 }
 
 /** Aviso sobre a última solicitação que já foi decidida (recusada ou cancelada). */

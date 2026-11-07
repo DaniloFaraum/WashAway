@@ -3,6 +3,7 @@ export const INTERCORRENCIAS_ROUTES = {
   list: (lavaRapidoId) => `/intercorrencias${lavaRapidoId ? `?lavaRapidoId=${encodeURIComponent(lavaRapidoId)}` : ''}`,
   // Escrita: a empresa vem do token (I17), sem lavaRapidoId no body.
   create: '/intercorrencias',
+  detail: (id) => `/intercorrencias/${encodeURIComponent(id)}`,
 }
 
 export const HORARIOS_ROUTES = {

@@ -13,6 +13,7 @@ import Checkbox from '@mui/material/Checkbox'
 import InputAdornment from '@mui/material/InputAdornment'
 import { somarDuracao } from '../service/servicos.model.js'
 import { formatarDuracao } from '../formatarDuracao.js'
+import { erroDoPreco, precoParaNumero, sanitizarPreco } from '../preco.js'
 
 const NOME_MAX = 60
 
@@ -35,8 +36,10 @@ function ServicoFormDialog({ open, servico, itensCatalogo, salvando, onClose, on
   const [preco, setPreco] = useState(servico ? String(servico.preco) : '')
   const [itemIds, setItemIds] = useState(() => new Set(servico?.itens.map((item) => item.id) ?? []))
 
-  const precoNumero = Number(preco.replace(',', '.'))
-  const valido = nome.trim() !== '' && precoNumero > 0 && itemIds.size > 0
+  const precoNumero = precoParaNumero(preco)
+  // Só avisa depois que a pessoa digitou alguma coisa (campo novo não nasce com erro).
+  const erroPreco = preco === '' ? null : erroDoPreco(precoNumero)
+  const valido = nome.trim() !== '' && erroDoPreco(precoNumero) === null && itemIds.size > 0
   const duracaoMinutos = somarDuracao(itensCatalogo.filter((item) => itemIds.has(item.id)))
 
   function toggleItem(id) {
@@ -66,17 +69,21 @@ function ServicoFormDialog({ open, servico, itensCatalogo, salvando, onClose, on
               onChange={(event) => setNome(event.target.value)}
               required
               fullWidth
-              inputProps={{ maxLength: NOME_MAX }}
+              slotProps={{ htmlInput: { maxLength: NOME_MAX } }}
               helperText="Nome comercial, ex.: Lavagem completa"
             />
             <TextField
               label="Preço"
               value={preco}
-              onChange={(event) => setPreco(event.target.value.replace(/[^\d.,]/g, ''))}
+              onChange={(event) => setPreco(sanitizarPreco(event.target.value))}
               required
               fullWidth
-              inputProps={{ inputMode: 'decimal' }}
-              InputProps={{ startAdornment: <InputAdornment position="start">R$</InputAdornment> }}
+              error={Boolean(erroPreco)}
+              helperText={erroPreco ?? 'Até R$ 5.000,00, com no máximo 2 casas decimais'}
+              slotProps={{
+                htmlInput: { inputMode: 'decimal' },
+                input: { startAdornment: <InputAdornment position="start">R$</InputAdornment> },
+              }}
             />
             <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'baseline' }}>
               <Typography variant="subtitle2">O que este serviço inclui</Typography>

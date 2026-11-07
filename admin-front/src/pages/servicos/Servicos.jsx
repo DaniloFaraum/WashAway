@@ -24,6 +24,7 @@ import { formatarDuracao } from './formatarDuracao.js'
 import PageHeader from '../../components/layout/PageHeader.jsx'
 import { useFetch } from '../../hooks/useFetch.js'
 import { useToast } from '../../hooks/useToast.js'
+import { formatarPreco } from '../painel-pedidos/service/pedidos.model.js'
 
 function Servicos() {
   const { data: servicos, setData: setServicos, loading, error } = useFetch(getServicos)
@@ -47,7 +48,7 @@ function Servicos() {
       }
       setFormulario(null)
     } catch (err) {
-      showToast(`Erro ao salvar serviço: ${err.message}`, 'error')
+      showToast(`Erro ao salvar serviço: ${err.mensagemBackend ?? err.message}`, 'error')
     } finally {
       setSalvandoFormulario(false)
     }
@@ -102,7 +103,7 @@ function Servicos() {
                 <Stack spacing={0.5}>
                   <Typography variant="subtitle1">{servico.nome}</Typography>
                   <Typography variant="body2" color="text.secondary">
-                    R$ {servico.preco.toFixed(2)} · ~{formatarDuracao(servico.duracaoMinutos)}
+                    {formatarPreco(servico.preco)} · ~{formatarDuracao(servico.duracaoMinutos)}
                   </Typography>
                   <Stack direction="row" sx={{ flexWrap: 'wrap', gap: 0.5 }}>
                     {servico.itens.map((item) => (
