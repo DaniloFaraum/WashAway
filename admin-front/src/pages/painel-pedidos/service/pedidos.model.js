@@ -105,6 +105,25 @@ export function separarPendentes(pedidos) {
   return { pendentes, demais: pedidos.filter((pedido) => pedido.status !== 'pendente') }
 }
 
+/**
+ * Três etapas para o painel: o que espera resposta (pendentes, do horário mais
+ * próximo ao mais distante), o que está em atendimento (aceitos e em andamento,
+ * também do mais próximo ao mais distante) e o histórico (concluídos e recusados,
+ * na ordem recebida do backend). Quem tem ação a fazer fica em cima.
+ * @param {Pedido[]} pedidos
+ * @returns {{ pendentes: Pedido[], emAtendimento: Pedido[], historico: Pedido[] }}
+ */
+export function separarPorEtapa(pedidos) {
+  const porHorario = (a, b) => new Date(a.horario).getTime() - new Date(b.horario).getTime()
+  return {
+    pendentes: pedidos.filter((pedido) => pedido.status === 'pendente').sort(porHorario),
+    emAtendimento: pedidos
+      .filter((pedido) => pedido.status === 'aceito' || pedido.status === 'em_andamento')
+      .sort(porHorario),
+    historico: pedidos.filter((pedido) => pedido.status === 'concluido' || pedido.status === 'recusado'),
+  }
+}
+
 function numeroOuNull(valor) {
   if (valor == null || valor === '') return null
   const numero = Number(valor)

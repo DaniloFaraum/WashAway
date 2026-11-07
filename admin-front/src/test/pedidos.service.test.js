@@ -6,6 +6,7 @@ import {
   formatarPreco,
   normalizePedido,
   separarPendentes,
+  separarPorEtapa,
 } from '../pages/painel-pedidos/service/pedidos.model.js'
 import { limparSessao, setEmpresaLogadaId } from '../login/sessao.storage.js'
 
@@ -84,6 +85,20 @@ describe('pedidos.service', () => {
     const { pendentes, demais } = separarPendentes(pedidos)
     expect(pendentes.map((pedido) => pedido.id)).toEqual(['c', 'b'])
     expect(demais.map((pedido) => pedido.id)).toEqual(['a', 'd'])
+  })
+
+  it('separarPorEtapa: pendentes, em atendimento (aceito e em andamento) e histórico', () => {
+    const pedidos = [
+      { id: 'a', status: 'recusado', horario: '2026-09-17T10:00:00Z' },
+      { id: 'b', status: 'em_andamento', horario: '2026-09-18T10:00:00Z' },
+      { id: 'c', status: 'pendente', horario: '2026-09-19T10:00:00Z' },
+      { id: 'd', status: 'aceito', horario: '2026-09-16T10:00:00Z' },
+      { id: 'e', status: 'concluido', horario: '2026-09-15T10:00:00Z' },
+    ]
+    const { pendentes, emAtendimento, historico } = separarPorEtapa(pedidos)
+    expect(pendentes.map((pedido) => pedido.id)).toEqual(['c'])
+    expect(emAtendimento.map((pedido) => pedido.id)).toEqual(['d', 'b'])
+    expect(historico.map((pedido) => pedido.id)).toEqual(['a', 'e'])
   })
 
   it('normalizePedido e formatação: sem serviços vira lista vazia; preço nulo vira "—"', () => {
