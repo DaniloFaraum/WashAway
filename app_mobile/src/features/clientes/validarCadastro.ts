@@ -7,7 +7,7 @@ export const SENHA_MINIMA = 6
 export const SENHA_MAXIMA = 72
 export const NOME_MAXIMO = 100
 export const EMAIL_MAXIMO = 254
-const FORMATO_EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+export const FORMATO_EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
 export interface FormCadastro {
   nome: string
