@@ -23,6 +23,8 @@ import HorarioFuncionamento from './components/HorarioFuncionamento.jsx'
 import { useFetch } from '../../hooks/useFetch.js'
 import { useToast } from '../../hooks/useToast.js'
 import { formatarDataBr } from './horarioFuncionamento.js'
+import { intercorrenciasAtivasDoDia } from './service/disponibilidade.model.js'
+import { reabrirIntercorrencia } from '../../login/service/intercorrencias.service.js'
 
 function DiaComIntercorrencia(props) {
   const { diasComIntercorrencia, day, outsideCurrentMonth, ...other } = props
@@ -50,13 +52,14 @@ function Disponibilidade({ empresaLogada, onHorarioSalvo }) {
   const [horaFim, setHoraFim] = useState('')
   const [salvando, setSalvando] = useState(false)
 
+  // Só os fechamentos que ainda valem: o reaberto some do calendário.
   const diasComIntercorrencia = useMemo(
-    () => new Set((intercorrencias ?? []).map((item) => item.data)),
+    () => new Set((intercorrencias ?? []).filter((item) => !item.reaberta).map((item) => item.data)),
     [intercorrencias],
   )
 
-  const intercorrenciaSelecionada = useMemo(
-    () => (intercorrencias ?? []).find((item) => item.data === diaSelecionado) ?? null,
+  const intercorrenciasDoDia = useMemo(
+    () => intercorrenciasAtivasDoDia(intercorrencias ?? [], diaSelecionado),
     [intercorrencias, diaSelecionado],
   )
 
@@ -87,6 +90,23 @@ function Disponibilidade({ empresaLogada, onHorarioSalvo }) {
     }
   }
 
+  // Reabrir vale para qualquer dia (inclusive futuro). Não há edição no backend:
+  // para corrigir o motivo ou o horário, reabre e cadastra o fechamento de novo.
+  async function handleReabrir(intercorrencia) {
+    setSalvando(true)
+    try {
+      await reabrirIntercorrencia(intercorrencia.id)
+      setIntercorrencias((atuais) => atuais.map((item) => (item.id === intercorrencia.id ? { ...item, reaberta: true } : item)))
+      showToast('Fechamento reaberto.')
+      // O selo Aberto/Fechado do menu lateral depende disso quando o dia é hoje.
+      await onHorarioSalvo?.()
+    } catch (err) {
+      showToast(`Erro ao reabrir: ${err.message}`, 'error')
+    } finally {
+      setSalvando(false)
+    }
+  }
+
   if (loading) {
     return <CircularProgress />
   }
@@ -112,13 +132,29 @@ function Disponibilidade({ empresaLogada, onHorarioSalvo }) {
       <Dialog open={Boolean(diaSelecionado)} onClose={() => setDiaSelecionado(null)} fullWidth maxWidth="xs">
         <DialogTitle>Intercorrência — {formatarDataBr(diaSelecionado)}</DialogTitle>
         <DialogContent>
-          {intercorrenciaSelecionada ? (
-            <Stack spacing={1} sx={{ mt: 1 }}>
-              <Typography variant="body1">Motivo: {intercorrenciaSelecionada.motivo}</Typography>
-              <Typography variant="body2" color="text.secondary">
-                {intercorrenciaSelecionada.diaInteiro
-                  ? 'Fechado o dia inteiro'
-                  : `Fechado das ${intercorrenciaSelecionada.horaInicio} às ${intercorrenciaSelecionada.horaFim}`}
+          {intercorrenciasDoDia.length > 0 ? (
+            <Stack spacing={2} sx={{ mt: 1 }}>
+              {intercorrenciasDoDia.map((intercorrencia) => (
+                <Stack key={intercorrencia.id} spacing={1}>
+                  <Typography variant="body1">Motivo: {intercorrencia.motivo}</Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    {intercorrencia.diaInteiro
+                      ? 'Fechado o dia inteiro'
+                      : `Fechado das ${intercorrencia.horaInicio} às ${intercorrencia.horaFim}`}
+                  </Typography>
+                  <Button
+                    onClick={() => handleReabrir(intercorrencia)}
+                    disabled={salvando}
+                    variant="outlined"
+                    size="small"
+                    sx={{ alignSelf: 'flex-start' }}
+                  >
+                    Reabrir neste dia
+                  </Button>
+                </Stack>
+              ))}
+              <Typography variant="caption" color="text.secondary">
+                Para corrigir o motivo ou o horário, reabra e cadastre o fechamento de novo.
               </Typography>
             </Stack>
           ) : (
@@ -158,7 +194,7 @@ function Disponibilidade({ empresaLogada, onHorarioSalvo }) {
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setDiaSelecionado(null)}>Fechar</Button>
-          {!intercorrenciaSelecionada && (
+          {intercorrenciasDoDia.length === 0 && (
             <Button onClick={handleSalvarIntercorrencia} disabled={salvando || !motivo} variant="contained">
               Salvar
             </Button>

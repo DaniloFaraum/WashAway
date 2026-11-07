@@ -5,6 +5,7 @@ import {
   createIntercorrencia,
   salvarHorarios,
 } from '../pages/disponibilidade/service/disponibilidade.service.js'
+import { intercorrenciasAtivasDoDia, normalizeIntercorrencia } from '../pages/disponibilidade/service/disponibilidade.model.js'
 import { limparSessao, setEmpresaLogadaId, setToken } from '../login/sessao.storage.js'
 import { TEST_SERVER_URL } from './setup/testServerConfig.js'
 
@@ -156,5 +157,22 @@ describe('disponibilidade.service — salvarHorarios', () => {
     setToken('token-do-lava-rapido')
 
     await expect(salvarHorarios(semana, baseUrl)).rejects.toThrow('Lava-rápido não encontrado')
+  })
+})
+
+describe('disponibilidade.model — intercorrências reabertas', () => {
+  it('normalizeIntercorrencia guarda reaberta (padrão false)', () => {
+    expect(normalizeIntercorrencia({ id: 1, data: '2026-11-20', motivo: 'Obra', diaInteiro: true }).reaberta).toBe(false)
+    expect(normalizeIntercorrencia({ id: 2, data: '2026-11-20', motivo: 'Obra', diaInteiro: true, reaberta: true }).reaberta).toBe(true)
+  })
+
+  it('intercorrenciasAtivasDoDia ignora outros dias e os fechamentos reabertos', () => {
+    const lista = [
+      { id: 'a', data: '2026-11-20', reaberta: false },
+      { id: 'b', data: '2026-11-20', reaberta: true },
+      { id: 'c', data: '2026-11-21', reaberta: false },
+    ]
+    expect(intercorrenciasAtivasDoDia(lista, '2026-11-20').map((item) => item.id)).toEqual(['a'])
+    expect(intercorrenciasAtivasDoDia(lista, null)).toEqual([])
   })
 })
