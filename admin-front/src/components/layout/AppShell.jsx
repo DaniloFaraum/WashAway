@@ -33,7 +33,7 @@ function AppShell({ children, empresaLogada, onSair, onReabrir }) {
           <Typography variant="caption" color="text.secondary" noWrap>
             {empresaLogada.name}
           </Typography>
-          <Stack direction="row" spacing={1} alignItems="center" sx={{ mt: 0.5 }}>
+          <Stack direction="row" spacing={1} sx={{ alignItems: 'center', mt: 0.5 }}>
             <Chip
               size="small"
               label={empresaLogada.isOpen ? 'Aberto' : 'Fechado'}

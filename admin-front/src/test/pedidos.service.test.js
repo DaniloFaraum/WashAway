@@ -3,6 +3,8 @@ import { getPedidos, updatePedidoStatus } from '../pages/painel-pedidos/service/
 import {
   PROXIMOS_STATUS,
   descreverVeiculo,
+  formatarDataHora,
+  formatarHorario,
   formatarPreco,
   normalizePedido,
   separarPendentes,
@@ -101,9 +103,18 @@ describe('pedidos.service', () => {
     expect(historico.map((pedido) => pedido.id)).toEqual(['a', 'e'])
   })
 
+  it('formatarHorario e formatarDataHora usam o fuso de Brasília, não o do navegador', () => {
+    // 12:00Z = 09:00 em São Paulo (UTC-3, sem horário de verão).
+    expect(formatarHorario('2026-11-14T12:00:00.000Z')).toBe('14/11/2026, 09:00:00')
+    expect(formatarDataHora('2026-11-14T12:00:00.000Z')).toBe('14/11/2026, 09:00')
+    // 02:30Z ainda é o dia anterior em São Paulo.
+    expect(formatarHorario('2026-10-11T02:30:00Z')).toBe('10/10/2026, 23:30:00')
+  })
+
   it('normalizePedido e formatação: sem serviços vira lista vazia; preço nulo vira "—"', () => {
     expect(normalizePedido({ id: 9 })).toMatchObject({ id: '9', cliente: null, servicos: [], precoTotal: null })
     expect(formatarPreco(110.5)).toBe('R$ 110,50')
+    expect(formatarPreco(5000)).toBe('R$ 5.000,00')
     expect(formatarPreco(null)).toBe('—')
     expect(descreverVeiculo({ marca: 'Fiat', modelo: 'Argo', placa: 'ABC1D23' })).toBe('Fiat Argo — ABC1D23')
     expect(descreverVeiculo({ marca: null, modelo: 'Gol', placa: '' })).toBe('Gol')

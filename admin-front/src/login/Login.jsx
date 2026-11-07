@@ -134,7 +134,7 @@ function Login({ onEntrar, onCadastrar, aviso = null }) {
                           onChange={(event) => setCep(event.target.value.replace(/\D/g, ''))}
                           required
                           fullWidth
-                          inputProps={{ maxLength: 8, inputMode: 'numeric' }}
+                          slotProps={{ htmlInput: { maxLength: 8, inputMode: 'numeric' } }}
                           helperText="Só números, 8 dígitos"
                         />
                         <Button
@@ -195,7 +195,7 @@ function Login({ onEntrar, onCadastrar, aviso = null }) {
                     onChange={(event) => setCnpj(event.target.value.replace(/\D/g, ''))}
                     required
                     fullWidth
-                    inputProps={{ maxLength: 14, inputMode: 'numeric' }}
+                    slotProps={{ htmlInput: { maxLength: 14, inputMode: 'numeric' } }}
                     helperText="Só números, 14 dígitos"
                   />
 

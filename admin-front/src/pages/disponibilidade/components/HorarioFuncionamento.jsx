@@ -65,7 +65,7 @@ function HorarioFuncionamento({ empresa, onSalvo, mostrarAviso }) {
 
   return (
     <Paper variant="outlined" sx={{ p: 2, maxWidth: 520 }}>
-      <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1 }}>
+      <Stack direction="row" spacing={1} sx={{ alignItems: 'center', mb: 1 }}>
         <Typography variant="subtitle1">Horário de funcionamento</Typography>
         <Chip
           size="small"
@@ -108,11 +108,11 @@ function HorarioFuncionamento({ empresa, onSalvo, mostrarAviso }) {
                     control={
                       <Switch
                         size="small"
-                        checked={dia.fechado}
-                        onChange={(event) => alterarDia(diaSemana, { fechado: event.target.checked })}
+                        checked={!dia.fechado}
+                        onChange={(event) => alterarDia(diaSemana, { fechado: !event.target.checked })}
                       />
                     }
-                    label="Fechado"
+                    label={dia.fechado ? 'Fechado' : 'Aberto'}
                   />
                 </TableCell>
                 <TableCell
@@ -149,7 +149,7 @@ function HorarioFuncionamento({ empresa, onSalvo, mostrarAviso }) {
           })}
         </TableBody>
       </Table>
-      <Stack direction="row" justifyContent="flex-end" sx={{ mt: 2 }}>
+      <Stack direction="row" sx={{ justifyContent: 'flex-end', mt: 2 }}>
         <Button variant="contained" onClick={handleSalvar} disabled={salvando}>
           Salvar horário
         </Button>

@@ -149,7 +149,7 @@ function Disponibilidade({ empresaLogada, onHorarioSalvo }) {
   return (
     <>
       <PageHeader title="Disponibilidade" />
-      <Stack direction={{ xs: 'column', md: 'row' }} spacing={3} alignItems="flex-start">
+      <Stack direction={{ xs: 'column', md: 'row' }} spacing={3} sx={{ alignItems: 'flex-start' }}>
         <HorarioFuncionamento empresa={empresaLogada} onSalvo={onHorarioSalvo} mostrarAviso={showToast} />
         <LocalizationProvider dateAdapter={AdapterDayjs}>
           <DateCalendar
