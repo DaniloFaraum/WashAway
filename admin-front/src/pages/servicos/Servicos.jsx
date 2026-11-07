@@ -48,7 +48,7 @@ function Servicos() {
       }
       setFormulario(null)
     } catch (err) {
-      showToast(`Erro ao salvar serviço: ${err.message}`, 'error')
+      showToast(`Erro ao salvar serviço: ${err.mensagemBackend ?? err.message}`, 'error')
     } finally {
       setSalvandoFormulario(false)
     }
