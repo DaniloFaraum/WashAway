@@ -23,7 +23,7 @@ const NAV_ITEMS = [
   { label: 'Minha empresa', path: '/minha-empresa', icon: StorefrontIcon },
 ]
 
-function Sidebar({ onSair }) {
+function Sidebar({ onSair, onNavegar }) {
   const location = useLocation()
 
   return (
@@ -47,7 +47,7 @@ function Sidebar({ onSair }) {
 
           return (
             <ListItem key={label} disablePadding>
-              <ListItemButton component={NavLink} to={path} selected={location.pathname === path}>
+              <ListItemButton component={NavLink} to={path} selected={location.pathname === path} onClick={onNavegar}>
                 <ListItemIcon>
                   <Icon />
                 </ListItemIcon>
@@ -61,7 +61,12 @@ function Sidebar({ onSair }) {
       <Divider />
       <List>
         <ListItem disablePadding>
-          <ListItemButton onClick={onSair}>
+          <ListItemButton
+            onClick={() => {
+              onNavegar?.()
+              onSair()
+            }}
+          >
             <ListItemIcon>
               <LogoutIcon />
             </ListItemIcon>
