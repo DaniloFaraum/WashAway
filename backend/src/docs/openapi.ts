@@ -217,7 +217,7 @@ const itemServicoSchema = {
 
 const dadosServicoProperties = {
   nome: { type: 'string', maxLength: 60 },
-  preco: { type: 'number', exclusiveMinimum: 0 },
+  preco: { type: 'number', exclusiveMinimum: 0, maximum: 5000, multipleOf: 0.01, description: 'Em reais, no máximo R$ 5.000,00 e até 2 casas decimais.' },
   itemIds: { type: 'array', minItems: 1, items: { type: 'string' }, description: 'Ids de itens ativos do catálogo (GET /itensServico), sem repetição.' },
 }
 
@@ -999,6 +999,7 @@ export const openApiDocument = {
         responses: {
           201: { description: 'Criado.', content: { 'application/json': { schema: { $ref: '#/components/schemas/Servico' } } } },
           400: { description: 'Body inválido ou itens inexistentes/inativos no catálogo (`itemIdsInvalidos`).', content: { 'application/json': { schema: { $ref: '#/components/schemas/Erro' } } } },
+          409: { description: 'Já existe outro serviço da empresa com esse nome (sem diferenciar maiúsculas).', content: { 'application/json': { schema: { $ref: '#/components/schemas/Erro' } } } },
           ...erroAutenticacaoPainel,
         },
       },
@@ -1020,6 +1021,7 @@ export const openApiDocument = {
         responses: {
           200: { description: 'Atualizado.', content: { 'application/json': { schema: { $ref: '#/components/schemas/Servico' } } } },
           400: { description: 'Body inválido ou itens inexistentes/inativos no catálogo (`itemIdsInvalidos`).', content: { 'application/json': { schema: { $ref: '#/components/schemas/Erro' } } } },
+          409: { description: 'Já existe outro serviço da empresa com esse nome (sem diferenciar maiúsculas).', content: { 'application/json': { schema: { $ref: '#/components/schemas/Erro' } } } },
           404: { description: 'Serviço não encontrado ou de outra empresa.', content: { 'application/json': { schema: { $ref: '#/components/schemas/Erro' } } } },
           ...erroAutenticacaoPainel,
         },

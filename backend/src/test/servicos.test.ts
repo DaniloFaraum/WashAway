@@ -119,10 +119,61 @@ describe('/servicos', () => {
     ['preço zero', { nome: 'X', preco: 0, itemIds: ['qualquer'] }],
     ['nome vazio', { nome: ' ', preco: 10, itemIds: ['qualquer'] }],
     ['itens repetidos', { nome: 'X', preco: 10, itemIds: ['a', 'a'] }],
+    ['preço acima do teto de R$ 5.000,00', { nome: 'X', preco: 5000.01, itemIds: ['qualquer'] }],
+    ['preço absurdo', { nome: 'X', preco: 99999999, itemIds: ['qualquer'] }],
+    ['preço com 3 casas decimais', { nome: 'X', preco: 10.555, itemIds: ['qualquer'] }],
   ])('POST /servicos rejeita %s com 400', async (_caso, body) => {
     const response = await comToken(supertest(app).post('/servicos'), token).send(body)
 
     expect(response.status).toBe(400)
+  })
+
+  it('POST /servicos aceita o preço no teto (R$ 5.000,00) e com 2 casas decimais', async () => {
+    const teto = await comToken(supertest(app).post('/servicos'), token).send({ nome: 'Combo no teto', preco: 5000, itemIds: [itemLavagemId] })
+    const centavos = await comToken(supertest(app).post('/servicos'), token).send({ nome: 'Combo com centavos', preco: 49.9, itemIds: [itemLavagemId] })
+
+    expect(teto.status).toBe(201)
+    expect(centavos.status).toBe(201)
+    expect(centavos.body.preco).toBe(49.9)
+  })
+
+  it('POST /servicos recusa nome repetido na mesma empresa (sem diferenciar maiúsculas nem espaços nas pontas) com 409', async () => {
+    const criado = await comToken(supertest(app).post('/servicos'), token).send({ nome: 'Combo único', preco: 20, itemIds: [itemLavagemId] })
+    const repetido = await comToken(supertest(app).post('/servicos'), token).send({ nome: '  COMBO ÚNICO ', preco: 25, itemIds: [itemLavagemId] })
+
+    expect(criado.status).toBe(201)
+    expect(repetido.status).toBe(409)
+    expect(repetido.body.error).toBe('Já existe um serviço com esse nome')
+    expect(await prisma.servico.count({ where: { lavaRapidoId, nome: { equals: 'Combo único', mode: 'insensitive' } } })).toBe(1)
+  })
+
+  it('POST /servicos aceita um nome que só existe em outra empresa', async () => {
+    const response = await comToken(supertest(app).post('/servicos'), token)
+      .send({ nome: 'Serviço de outra empresa', preco: 30, itemIds: [itemLavagemId] })
+
+    expect(response.status).toBe(201)
+  })
+
+  it('PUT /servicos/:id recusa o nome de outro serviço da empresa (409), mas deixa salvar mantendo o próprio nome', async () => {
+    const a = await comToken(supertest(app).post('/servicos'), token).send({ nome: 'Combo A (nomes)', preco: 20, itemIds: [itemLavagemId] })
+    const b = await comToken(supertest(app).post('/servicos'), token).send({ nome: 'Combo B (nomes)', preco: 20, itemIds: [itemLavagemId] })
+
+    const roubando = await comToken(supertest(app).put(`/servicos/${b.body.id}`), token)
+      .send({ nome: 'combo a (nomes)', preco: 20, itemIds: [itemLavagemId] })
+    const mesmoNome = await comToken(supertest(app).put(`/servicos/${a.body.id}`), token)
+      .send({ nome: 'Combo A (nomes)', preco: 22, itemIds: [itemLavagemId] })
+
+    expect(roubando.status).toBe(409)
+    expect(await prisma.servico.findUnique({ where: { id: b.body.id } })).toMatchObject({ nome: 'Combo B (nomes)' })
+    expect(mesmoNome.status).toBe(200)
+    expect(mesmoNome.body.preco).toBe(22)
+  })
+
+  it('PUT /servicos/:id de outra empresa responde 404 mesmo com um nome que já existe na minha empresa', async () => {
+    const response = await comToken(supertest(app).put(`/servicos/${servicoDeOutraEmpresaId}`), token)
+      .send({ nome: 'Combo único', preco: 20, itemIds: [itemLavagemId] })
+
+    expect(response.status).toBe(404)
   })
 
   it('POST /servicos rejeita item inexistente ou inativo no catálogo, listando os ids inválidos', async () => {
