@@ -3,6 +3,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest'
 import {
   getIntercorrencias,
   createIntercorrencia,
+  editarIntercorrencia,
   salvarHorarios,
 } from '../pages/disponibilidade/service/disponibilidade.service.js'
 import { intercorrenciasAtivasDoDia, normalizeIntercorrencia } from '../pages/disponibilidade/service/disponibilidade.model.js'
@@ -90,6 +91,12 @@ function startStubBackend(requisicoes) {
           })),
         )
       }
+      if (req.method === 'PATCH' && req.url === '/intercorrencias/int-1') {
+        return send(200, { id: 'int-1', ...payload, horaInicio: payload.horaInicio ?? null, horaFim: payload.horaFim ?? null, reaberta: false })
+      }
+      if (req.method === 'PATCH' && req.url === '/intercorrencias/int-reaberta') {
+        return send(409, { error: 'Intercorrência já reaberta — cadastre um novo fechamento' })
+      }
       if (req.method === 'PUT') return send(404, { error: 'Lava-rápido não encontrado' })
       send(404, { error: 'not found' })
     })
@@ -157,6 +164,48 @@ describe('disponibilidade.service — salvarHorarios', () => {
     setToken('token-do-lava-rapido')
 
     await expect(salvarHorarios(semana, baseUrl)).rejects.toThrow('Lava-rápido não encontrado')
+  })
+})
+
+describe('disponibilidade.service — editarIntercorrencia', () => {
+  const requisicoes = []
+  let server
+  let baseUrl
+
+  beforeAll(async () => {
+    ;({ server, baseUrl } = await startStubBackend(requisicoes))
+  })
+
+  afterAll(() => {
+    server.close()
+  })
+
+  afterEach(() => {
+    limparSessao()
+    requisicoes.length = 0
+  })
+
+  it('faz PATCH /intercorrencias/:id com o token e os campos do fechamento', async () => {
+    setToken('token-do-lava-rapido')
+    const dados = { data: '2026-11-20', motivo: 'Manutenção', diaInteiro: false, horaInicio: '14:00', horaFim: '16:00' }
+
+    const editada = await editarIntercorrencia('int-1', dados, baseUrl)
+
+    expect(requisicoes[0]).toMatchObject({
+      method: 'PATCH',
+      url: '/intercorrencias/int-1',
+      authorization: 'Bearer token-do-lava-rapido',
+      payload: dados,
+    })
+    expect(editada).toMatchObject({ id: 'int-1', motivo: 'Manutenção', diaInteiro: false, horaInicio: '14:00', horaFim: '16:00', reaberta: false })
+  })
+
+  it('repassa a mensagem do backend quando a intercorrência já foi reaberta (409)', async () => {
+    setToken('token-do-lava-rapido')
+
+    await expect(
+      editarIntercorrencia('int-reaberta', { data: '2026-11-20', motivo: 'x', diaInteiro: true }, baseUrl),
+    ).rejects.toThrow('Intercorrência já reaberta — cadastre um novo fechamento')
   })
 })
 
